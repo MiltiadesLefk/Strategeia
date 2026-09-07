@@ -44,3 +44,13 @@ def test_get_analysis_display_range_trims_view_not_indicators():
     # trend/rsi are computed off the full fetched history either way
     assert full.trend == trimmed.trend
     assert full.rsi14 == trimmed.rsi14
+
+
+def test_get_analysis_intraday_range_uses_full_datetime_strings():
+    """1D/1W ranges take a different code path (no display-window trimming,
+    full ISO datetime instead of a bare date) — the frontend chart relies on
+    this to distinguish intraday from daily bars."""
+    result = get_analysis("AAPL", FakeProvider(), NullLLMProvider(), range_="1d")
+    assert len(result.candles) == 80  # fake ignores period/interval, returns all fetched bars
+    assert "T" in result.candles[0].date
+    assert "T" in result.ema20_series[0].date

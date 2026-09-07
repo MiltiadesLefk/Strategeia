@@ -9,37 +9,53 @@ from app.llm_providers.factory import generate_with_fallback
 from app.llm_providers.prompts import build_chart_insight_prompt
 from app.schemas.analysis_schemas import AnalysisResponse, CandleSchema, SeriesPoint
 
-# Trading-day counts per UI range tab. Indicators are always computed over a
-# full 1y fetch regardless of the selected range (EMA50 needs ~50+ bars to be
-# meaningful) — the range only trims how much of that history is *displayed*.
+# Trading-day counts per daily-bar UI range tab. Indicators are always
+# computed over a full 1y fetch regardless of the selected range (EMA50
+# needs ~50+ bars to be meaningful) — the range only trims how much of that
+# history is *displayed*.
 RANGE_TO_DISPLAY_DAYS = {"1mo": 21, "3mo": 63, "6mo": 126, "1y": 252}
 
+# 1D/1W use real intraday bars instead — fetched and displayed in full, no
+# separate lookback/display split needed at this granularity. Best-effort
+# only: yfinance is the sole free source with intraday coverage (stooq and
+# Finnhub's free tier don't implement it), so a Yahoo outage means these two
+# ranges specifically have no fallback — see notes/Issues.md.
+INTRADAY_PARAMS = {"1d": ("1d", "5m"), "1w": ("5d", "15m")}
 
-def _date_str(value) -> str:
+
+def _date_str(value, intraday: bool) -> str:
+    if intraday:
+        return value.isoformat()
     return str(value.date()) if hasattr(value, "date") else str(value)
 
 
 def get_analysis(
     symbol: str, data_provider: DataProvider, llm_provider: LLMProvider, range_: str = "3mo"
 ) -> AnalysisResponse:
-    ohlcv = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
-    chart = analyze_chart(ohlcv)
+    intraday = range_ in INTRADAY_PARAMS
 
+    if intraday:
+        period, interval = INTRADAY_PARAMS[range_]
+        ohlcv = data_provider.get_ohlcv(symbol, period=period, interval=interval)
+        view = ohlcv
+    else:
+        ohlcv = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
+        display_days = RANGE_TO_DISPLAY_DAYS.get(range_, RANGE_TO_DISPLAY_DAYS["3mo"])
+        view = ohlcv.tail(display_days)
+
+    chart = analyze_chart(ohlcv)
     ema20_full = ema(ohlcv["close"], 20)
     ema50_full = ema(ohlcv["close"], 50)
+    ema20_view = ema20_full.loc[view.index]
+    ema50_view = ema50_full.loc[view.index]
 
     fallback_text = chart_insight_text(symbol, chart)
     prompt = build_chart_insight_prompt(symbol, chart)
     llm_result = generate_with_fallback(llm_provider, prompt, fallback_text)
 
-    display_days = RANGE_TO_DISPLAY_DAYS.get(range_, RANGE_TO_DISPLAY_DAYS["3mo"])
-    view = ohlcv.tail(display_days)
-    ema20_view = ema20_full.tail(display_days)
-    ema50_view = ema50_full.tail(display_days)
-
     candles = [
         CandleSchema(
-            date=_date_str(row.date),
+            date=_date_str(row.date, intraday),
             open=float(row.open),
             high=float(row.high),
             low=float(row.low),
@@ -48,7 +64,7 @@ def get_analysis(
         )
         for row in view.itertuples()
     ]
-    dates = [_date_str(d) for d in view["date"]]
+    dates = [_date_str(d, intraday) for d in view["date"]]
     ema20_series = [SeriesPoint(date=d, value=float(v)) for d, v in zip(dates, ema20_view)]
     ema50_series = [SeriesPoint(date=d, value=float(v)) for d, v in zip(dates, ema50_view)]
 

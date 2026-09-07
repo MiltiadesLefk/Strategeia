@@ -1,41 +1,11 @@
 import { useState } from 'react';
 
-// Best-effort mapping to Simple Icons (simpleicons.org) slugs for tickers in
-// our bundled universe. Unmapped tickers, and any slug that 404s, silently
-// fall back to a colored monogram below — never a broken-image icon.
-const ICON_SLUGS: Record<string, string> = {
-  AAPL: 'apple',
-  MSFT: 'microsoft',
-  GOOGL: 'google',
-  AMZN: 'amazon',
-  NVDA: 'nvidia',
-  META: 'meta',
-  TSLA: 'tesla',
-  V: 'visa',
-  WMT: 'walmart',
-  MA: 'mastercard',
-  KO: 'cocacola',
-  PEP: 'pepsi',
-  AVGO: 'broadcom',
-  ADBE: 'adobe',
-  CRM: 'salesforce',
-  MCD: 'mcdonalds',
-  CSCO: 'cisco',
-  ACN: 'accenture',
-  NKE: 'nike',
-  AMD: 'amd',
-  INTC: 'intel',
-  VZ: 'verizon',
-  CMCSA: 'comcast',
-  INTU: 'intuit',
-  IBM: 'ibm',
-  NOW: 'servicenow',
-  QCOM: 'qualcomm',
-  SPGI: 'spglobal',
-  GE: 'generalelectric',
-  CAT: 'caterpillar',
-};
-
+// Automated logo lookup by ticker symbol via Elbstream's free Stock Logo API
+// (api.elbstream.com) — no key, no per-ticker mapping to maintain, so it
+// keeps working as the bundled universe (sp500.csv) grows. Falls back to a
+// deterministic colored monogram only if that request itself fails (unknown
+// ticker, network hiccup) — never a broken-image icon.
+// Free-tier requires visible attribution: see Sidebar.tsx's footer link.
 const MONOGRAM_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
 
 function colorFor(symbol: string): string {
@@ -45,10 +15,9 @@ function colorFor(symbol: string): string {
 }
 
 export function CompanyIcon({ symbol, size = 28 }: { symbol: string; size?: number }) {
-  const slug = ICON_SLUGS[symbol];
   const [failed, setFailed] = useState(false);
 
-  if (!slug || failed) {
+  if (failed) {
     return (
       <div
         style={{
@@ -81,11 +50,12 @@ export function CompanyIcon({ symbol, size = 28 }: { symbol: string; size?: numb
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        padding: size * 0.16,
+        padding: size * 0.14,
+        overflow: 'hidden',
       }}
     >
       <img
-        src={`https://cdn.simpleicons.org/${slug}`}
+        src={`https://api.elbstream.com/logos/symbol/${symbol}`}
         alt={symbol}
         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
         onError={() => setFailed(true)}

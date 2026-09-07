@@ -66,6 +66,16 @@ export function Sidebar() {
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
         Trading Bot Online
       </div>
+      {/* Required attribution for Elbstream's free ticker-logo API (CompanyIcon.tsx) */}
+      <a
+        href="https://elbstream.com/logos"
+        target="_blank"
+        rel="noreferrer"
+        className="text-muted"
+        style={{ fontSize: 12, textAlign: 'center', marginTop: 10 }}
+      >
+        Logos by Elbstream
+      </a>
     </aside>
   );
 }

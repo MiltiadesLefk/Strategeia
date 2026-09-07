@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 @router.get("/{symbol}", response_model=AnalysisResponse)
 def analysis(
     symbol: str,
-    range: str = Query("3mo", pattern="^(1mo|3mo|6mo|1y)$"),
+    range: str = Query("3mo", pattern="^(1d|1w|1mo|3mo|6mo|1y)$"),
     data_provider: DataProvider = Depends(get_data_provider),
     llm_provider: LLMProvider = Depends(get_llm_provider),
 ) -> AnalysisResponse:

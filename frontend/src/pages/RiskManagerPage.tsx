@@ -46,7 +46,7 @@ export function RiskManagerPage() {
   const levels: PriceLevel[] =
     result && entry !== null && stop !== null
       ? [
-          { price: entry, color: '#3b82f6', title: 'Entry' },
+          { price: entry, color: '#2563eb', title: 'Entry' },
           { price: stop, color: '#ef4444', title: 'Stop' },
           { price: result.tp1, color: '#10b981', title: 'TP1' },
           { price: result.tp2, color: '#10b981', title: 'TP2' },

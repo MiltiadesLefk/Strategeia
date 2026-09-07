@@ -1,9 +1,21 @@
 import { useEffect, useRef } from 'react';
-import { CandlestickSeries, LineSeries, createChart, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+import {
+  CandlestickSeries,
+  HistogramSeries,
+  LineSeries,
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
+  type UTCTimestamp,
+} from 'lightweight-charts';
 import type { Candle, SeriesPoint } from '../../api/types';
 
 function toTime(date: string): UTCTimestamp {
-  return (new Date(`${date}T00:00:00Z`).getTime() / 1000) as UTCTimestamp;
+  // Daily bars arrive as a bare "YYYY-MM-DD"; intraday bars (1D/1W ranges)
+  // arrive as a full ISO datetime with time-of-day and offset already
+  // included — only the bare-date form needs a time appended.
+  const iso = date.includes('T') ? date : `${date}T00:00:00Z`;
+  return (new Date(iso).getTime() / 1000) as UTCTimestamp;
 }
 
 export interface PriceLevel {
@@ -23,16 +35,19 @@ interface Props {
 export function CandlestickChart({ candles, ema20Series, ema50Series, levels, height = 380 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  // Intraday bars (1D/1W ranges) carry a full ISO datetime; show time-of-day
+  // on the axis for those instead of just the date.
+  const intraday = candles.length > 0 && candles[0].date.includes('T');
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
       height,
-      layout: { background: { color: '#12141d' }, textColor: '#8b8fa3', attributionLogo: false },
-      grid: { vertLines: { color: '#1c1f29' }, horzLines: { color: '#1c1f29' } },
-      timeScale: { borderColor: '#23262f' },
-      rightPriceScale: { borderColor: '#23262f' },
+      layout: { background: { color: '#12151e' }, textColor: '#8b8fa3', attributionLogo: false },
+      grid: { vertLines: { color: '#1c202c' }, horzLines: { color: '#1c202c' } },
+      timeScale: { borderColor: '#1e2332', timeVisible: intraday, secondsVisible: false },
+      rightPriceScale: { borderColor: '#1e2332', scaleMargins: { top: 0.08, bottom: 0.22 } },
     });
     chartRef.current = chart;
 
@@ -47,12 +62,25 @@ export function CandlestickChart({ candles, ema20Series, ema50Series, levels, he
       candles.map((c) => ({ time: toTime(c.date), open: c.open, high: c.high, low: c.low, close: c.close })),
     );
 
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+    });
+    volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    volumeSeries.setData(
+      candles.map((c) => ({
+        time: toTime(c.date),
+        value: c.volume,
+        color: c.close >= c.open ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)',
+      })),
+    );
+
     if (ema20Series?.length) {
-      const s = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 2, title: 'EMA20' });
+      const s = chart.addSeries(LineSeries, { color: '#38bdf8', lineWidth: 2, title: 'EMA20' });
       s.setData(ema20Series.map((p) => ({ time: toTime(p.date), value: p.value })));
     }
     if (ema50Series?.length) {
-      const s = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2, title: 'EMA50' });
+      const s = chart.addSeries(LineSeries, { color: '#a78bfa', lineWidth: 2, title: 'EMA50' });
       s.setData(ema50Series.map((p) => ({ time: toTime(p.date), value: p.value })));
     }
     for (const level of levels ?? []) {

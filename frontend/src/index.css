@@ -1,12 +1,14 @@
 :root {
-  --navy: #0a0b10;
+  --navy: #0b0d13;
   --navy-dark: #06070a;
-  --indigo: #3b82f6;
-  --indigo-light: #60a5fa;
-  --canvas: #0b0d14;
-  --card: #12141d;
+  --indigo: #2563eb;
+  --indigo-light: #3b82f6;
+  --sky: #38bdf8;
+  --purple: #a78bfa;
+  --canvas: #0b0d13;
+  --card: #12151e;
   --card-alt: #171a25;
-  --border: #23262f;
+  --border: #1e2332;
   --text: #e8eaf0;
   --text-muted: #8b8fa3;
   --text-inverse: #ffffff;
