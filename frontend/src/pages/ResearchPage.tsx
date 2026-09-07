@@ -1,8 +1,9 @@
 import { useSearchParams } from 'react-router-dom';
 import { useResearch } from '../api/hooks';
 import { SymbolPicker } from '../components/SymbolPicker';
+import { CompanyDropdown } from '../components/CompanyDropdown';
 import { RevenueChart } from '../components/chart/RevenueChart';
-import { ErrorBanner, LoadingSpinner, EmptyState, formatMoney } from '../components/common';
+import { ErrorBanner, LoadingSpinner, EmptyState, formatMoney, isSafeHttpUrl } from '../components/common';
 import type { ApiError } from '../api/client';
 
 export function ResearchPage() {
@@ -14,7 +15,10 @@ export function ResearchPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: 22 }}>Research</h1>
-        <SymbolPicker value={symbol} onChange={(s) => setParams({ symbol: s })} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <CompanyDropdown value={symbol} onChange={(s) => setParams({ symbol: s })} />
+          <SymbolPicker value={symbol} onChange={(s) => setParams({ symbol: s })} />
+        </div>
       </div>
 
       {isLoading && <LoadingSpinner label={`Loading ${symbol}…`} />}
@@ -101,14 +105,23 @@ export function ResearchPage() {
               <EmptyState>No recent news found.</EmptyState>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {data.news.map((n) => (
-                  <a key={n.url} href={n.url} target="_blank" rel="noreferrer" style={{ color: 'var(--text)' }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{n.headline}</div>
-                    <div className="text-muted" style={{ fontSize: 12 }}>
-                      {n.source} · {new Date(n.published_at).toLocaleString()}
-                    </div>
-                  </a>
-                ))}
+                {data.news.map((n) => {
+                  const body = (
+                    <>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{n.headline}</div>
+                      <div className="text-muted" style={{ fontSize: 12 }}>
+                        {n.source} · {new Date(n.published_at).toLocaleString()}
+                      </div>
+                    </>
+                  );
+                  return isSafeHttpUrl(n.url) ? (
+                    <a key={n.url || n.headline} href={n.url} target="_blank" rel="noreferrer" style={{ color: 'var(--text)' }}>
+                      {body}
+                    </a>
+                  ) : (
+                    <div key={n.headline}>{body}</div>
+                  );
+                })}
               </div>
             )}
           </div>

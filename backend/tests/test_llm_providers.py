@@ -11,6 +11,7 @@ from app.llm_providers.claude_code_cli_provider import ClaudeCodeCLIProvider
 from app.llm_providers.factory import generate_with_fallback, get_llm_provider
 from app.llm_providers.null_provider import NullLLMProvider
 from app.llm_providers.openrouter_provider import OpenRouterProvider
+from app.llm_providers.orcarouter_provider import OrcaRouterProvider
 
 
 class FakeCompletedProcess:
@@ -106,5 +107,20 @@ def test_get_llm_provider_selects_by_settings():
     provider = get_llm_provider(settings)
     assert isinstance(provider, OpenRouterProvider)
 
+    settings = AppSettings(llm_provider="orcarouter", orcarouter_api_key="key456")
+    provider = get_llm_provider(settings)
+    assert isinstance(provider, OrcaRouterProvider)
+
     settings = AppSettings(llm_provider="none")
     assert isinstance(get_llm_provider(settings), NullLLMProvider)
+
+
+def test_orcarouter_not_configured_without_key():
+    provider = OrcaRouterProvider(api_key="")
+    assert provider.is_configured() is False
+    result = provider.generate("prompt")
+    assert result.error == "OrcaRouter API key not configured"
+
+
+def test_orcarouter_default_model_is_adaptive_router():
+    assert OrcaRouterProvider(api_key="x")._model == "orcarouter/auto"

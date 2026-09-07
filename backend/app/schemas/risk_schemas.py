@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class RiskCalculateRequest(BaseModel):
     symbol: str
-    account_size: float
-    risk_pct: float
-    entry: float
-    stop: float
-    direction: str = "long"
+    account_size: float = Field(gt=0)
+    risk_pct: float = Field(gt=0, le=100)
+    entry: float = Field(gt=0)
+    stop: float = Field(gt=0)
+    direction: Literal["long", "short"] = "long"
 
 
 class RiskCalculateResponse(BaseModel):

@@ -40,3 +40,15 @@ export function formatNumber(value: number | null | undefined, digits = 2): stri
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
   return value.toFixed(digits);
 }
+
+/** Only http(s) URLs are safe to render as a clickable <a href>. News/link
+ * fields come from third-party data providers (yfinance/Finnhub) — an
+ * unvalidated `javascript:`/`data:` URL there would execute on click. */
+export function isSafeHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}

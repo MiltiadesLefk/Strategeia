@@ -7,6 +7,7 @@ from app.llm_providers.gemini_provider import GeminiProvider
 from app.llm_providers.null_provider import NullLLMProvider
 from app.llm_providers.openai_provider import OpenAIProvider
 from app.llm_providers.openrouter_provider import OpenRouterProvider
+from app.llm_providers.orcarouter_provider import OrcaRouterProvider
 
 
 def get_llm_provider(settings: AppSettings) -> LLMProvider:
@@ -14,6 +15,8 @@ def get_llm_provider(settings: AppSettings) -> LLMProvider:
         return ClaudeCodeCLIProvider()
     if settings.llm_provider == "openrouter":
         return OpenRouterProvider(settings.openrouter_api_key, settings.openrouter_model)
+    if settings.llm_provider == "orcarouter":
+        return OrcaRouterProvider(settings.orcarouter_api_key, settings.orcarouter_model)
     if settings.llm_provider == "openai":
         return OpenAIProvider(settings.openai_api_key, settings.openai_model)
     if settings.llm_provider == "gemini":

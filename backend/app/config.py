@@ -39,19 +39,21 @@ class InfraSettings(BaseSettings):
         return BASE_DIR / self.settings_path
 
 
-LlmProviderName = Literal["none", "claude_code_cli", "openrouter", "openai", "gemini"]
+LlmProviderName = Literal["none", "claude_code_cli", "openrouter", "orcarouter", "openai", "gemini"]
 
 
 class AppSettings(BaseModel):
     """Runtime-editable config — provider choice, API keys, paper account.
 
-    Persisted to data/settings.json (gitignored). Contains secrets: never log
-    this model's contents, never echo api keys back in API responses.
+    Persisted to runtime/settings.json (gitignored). Contains secrets: never
+    log this model's contents, never echo api keys back in API responses.
     """
 
     llm_provider: LlmProviderName = "none"
     openrouter_api_key: str = ""
     openrouter_model: str = "anthropic/claude-3.5-haiku"
+    orcarouter_api_key: str = ""
+    orcarouter_model: str = "orcarouter/auto"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str = ""
@@ -69,7 +71,7 @@ class AppSettings(BaseModel):
     def redacted(self) -> dict:
         """Copy safe to return over the API — keys collapsed to a presence flag."""
         data = self.model_dump()
-        for key in ("openrouter_api_key", "openai_api_key", "gemini_api_key", "finnhub_api_key"):
+        for key in ("openrouter_api_key", "orcarouter_api_key", "openai_api_key", "gemini_api_key", "finnhub_api_key"):
             data[key] = bool(data[key])
         return data
 

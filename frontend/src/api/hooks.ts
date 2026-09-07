@@ -14,6 +14,7 @@ import type {
   SettingsUpdateRequest,
   TestConnectionResponse,
   TradePlan,
+  UniverseEntry,
 } from './types';
 
 export const qk = {
@@ -32,6 +33,14 @@ export function useScan(symbols?: string) {
   return useQuery({
     queryKey: qk.scan(symbols),
     queryFn: () => api.get<ScanResponse>(`/api/scan${symbols ? `?symbols=${symbols}` : ''}`),
+  });
+}
+
+export function useUniverse() {
+  return useQuery({
+    queryKey: ['universe'] as const,
+    queryFn: () => api.get<UniverseEntry[]>('/api/universe'),
+    staleTime: Infinity, // static bundled list, never changes at runtime
   });
 }
 

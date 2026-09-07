@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TradePlanGenerateRequest(BaseModel):
     symbol: str
-    account_size: float | None = None
-    risk_pct: float | None = None
+    account_size: float | None = Field(default=None, gt=0)
+    risk_pct: float | None = Field(default=None, gt=0, le=100)
 
 
 class TradePlanResponse(BaseModel):

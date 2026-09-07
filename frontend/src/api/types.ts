@@ -1,3 +1,9 @@
+export interface UniverseEntry {
+  symbol: string;
+  name: string;
+  sector: string;
+}
+
 export interface ScanResult {
   symbol: string;
   price: number;
@@ -173,6 +179,8 @@ export interface AppSettings {
   llm_provider: string;
   openrouter_api_key: boolean;
   openrouter_model: string;
+  orcarouter_api_key: boolean;
+  orcarouter_model: string;
   openai_api_key: boolean;
   openai_model: string;
   gemini_api_key: boolean;
@@ -189,6 +197,8 @@ export interface SettingsUpdateRequest {
   llm_provider?: string;
   openrouter_api_key?: string;
   openrouter_model?: string;
+  orcarouter_api_key?: string;
+  orcarouter_model?: string;
   openai_api_key?: string;
   openai_model?: string;
   gemini_api_key?: string;

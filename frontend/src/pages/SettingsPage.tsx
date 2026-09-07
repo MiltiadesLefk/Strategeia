@@ -6,6 +6,7 @@ const LLM_OPTIONS = [
   { value: 'none', label: 'None (rule-based text)' },
   { value: 'claude_code_cli', label: 'Claude Code CLI (uses your existing login, no key)' },
   { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'orcarouter', label: 'OrcaRouter' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Google Gemini' },
 ];
@@ -18,6 +19,8 @@ export function SettingsPage() {
   const [llmProvider, setLlmProvider] = useState('none');
   const [openrouterKey, setOpenrouterKey] = useState('');
   const [openrouterModel, setOpenrouterModel] = useState('');
+  const [orcarouterKey, setOrcarouterKey] = useState('');
+  const [orcarouterModel, setOrcarouterModel] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [finnhubEnabled, setFinnhubEnabled] = useState(false);
@@ -30,6 +33,7 @@ export function SettingsPage() {
     if (!settings) return;
     setLlmProvider(settings.llm_provider);
     setOpenrouterModel(settings.openrouter_model);
+    setOrcarouterModel(settings.orcarouter_model);
     setFinnhubEnabled(settings.finnhub_enabled);
     setStartingCash(settings.paper_starting_cash);
     setDefaultRiskPct(settings.default_risk_pct);
@@ -41,6 +45,8 @@ export function SettingsPage() {
       llm_provider: llmProvider,
       ...(openrouterKey ? { openrouter_api_key: openrouterKey } : {}),
       openrouter_model: openrouterModel,
+      ...(orcarouterKey ? { orcarouter_api_key: orcarouterKey } : {}),
+      orcarouter_model: orcarouterModel,
       ...(openaiKey ? { openai_api_key: openaiKey } : {}),
       ...(geminiKey ? { gemini_api_key: geminiKey } : {}),
     });
@@ -81,6 +87,22 @@ export function SettingsPage() {
             <div>
               <label>Model</label>
               <input type="text" value={openrouterModel} onChange={(e) => setOpenrouterModel(e.target.value)} />
+            </div>
+          </>
+        )}
+        {llmProvider === 'orcarouter' && (
+          <>
+            <div>
+              <label>OrcaRouter API Key {settings?.orcarouter_api_key && '(configured — leave blank to keep)'}</label>
+              <input type="text" value={orcarouterKey} onChange={(e) => setOrcarouterKey(e.target.value)} placeholder="orca-..." />
+            </div>
+            <div>
+              <label>Model</label>
+              <input type="text" value={orcarouterModel} onChange={(e) => setOrcarouterModel(e.target.value)} />
+              <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Default <code>orcarouter/auto</code> lets the gateway pick a model per request. Or pin one, e.g.{' '}
+                <code>openai/gpt-4o-mini</code>, <code>anthropic/claude-opus-4.7</code>.
+              </div>
             </div>
           </>
         )}

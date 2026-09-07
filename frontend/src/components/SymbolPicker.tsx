@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function SymbolPicker({ value, onChange }: { value: string; onChange: (symbol: string) => void }) {
   const [draft, setDraft] = useState(value);
+
+  // `value` can change without this component unmounting (e.g. picked from
+  // CompanyDropdown, or a Link changes ?symbol= while staying on the same
+  // route) — useState(value) only seeds the initial render, so without this
+  // the input silently shows a stale symbol while the page loads a new one.
+  useEffect(() => setDraft(value), [value]);
 
   return (
     <form
