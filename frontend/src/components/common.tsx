@@ -1,0 +1,42 @@
+import type { ReactNode } from 'react';
+
+export function LoadingSpinner({ label = 'Loading…' }: { label?: string }) {
+  return <div className="text-muted" style={{ padding: 24, textAlign: 'center' }}>{label}</div>;
+}
+
+export function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div
+      className="badge-red"
+      style={{ borderRadius: 8, padding: '12px 16px', fontWeight: 500, fontSize: 14 }}
+    >
+      {message}
+    </div>
+  );
+}
+
+export function EmptyState({ children }: { children: ReactNode }) {
+  return (
+    <div className="text-muted" style={{ padding: '32px 16px', textAlign: 'center' }}>
+      {children}
+    </div>
+  );
+}
+
+export function formatMoney(value: number | null | undefined, opts?: { compact?: boolean }): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  if (opts?.compact) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(value);
+  }
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
+}
+
+export function formatPct(value: number | null | undefined, digits = 1): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`;
+}
+
+export function formatNumber(value: number | null | undefined, digits = 2): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return value.toFixed(digits);
+}

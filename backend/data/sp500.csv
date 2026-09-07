@@ -1,0 +1,62 @@
+symbol,name,sector
+AAPL,Apple Inc.,Technology
+MSFT,Microsoft Corporation,Technology
+GOOGL,Alphabet Inc.,Technology
+AMZN,Amazon.com Inc.,Consumer Discretionary
+NVDA,NVIDIA Corporation,Technology
+META,Meta Platforms Inc.,Technology
+TSLA,Tesla Inc.,Consumer Discretionary
+JPM,JPMorgan Chase & Co.,Financials
+V,Visa Inc.,Financials
+UNH,UnitedHealth Group Inc.,Healthcare
+XOM,Exxon Mobil Corporation,Energy
+JNJ,Johnson & Johnson,Healthcare
+WMT,Walmart Inc.,Consumer Staples
+MA,Mastercard Inc.,Financials
+PG,Procter & Gamble Co.,Consumer Staples
+HD,Home Depot Inc.,Consumer Discretionary
+CVX,Chevron Corporation,Energy
+MRK,Merck & Co. Inc.,Healthcare
+ABBV,AbbVie Inc.,Healthcare
+KO,Coca-Cola Co.,Consumer Staples
+PEP,PepsiCo Inc.,Consumer Staples
+COST,Costco Wholesale Corp.,Consumer Staples
+AVGO,Broadcom Inc.,Technology
+ADBE,Adobe Inc.,Technology
+CRM,Salesforce Inc.,Technology
+BAC,Bank of America Corp.,Financials
+TMO,Thermo Fisher Scientific Inc.,Healthcare
+MCD,McDonald's Corp.,Consumer Discretionary
+CSCO,Cisco Systems Inc.,Technology
+ACN,Accenture plc,Technology
+ABT,Abbott Laboratories,Healthcare
+DHR,Danaher Corp.,Healthcare
+LIN,Linde plc,Materials
+NKE,Nike Inc.,Consumer Discretionary
+DIS,Walt Disney Co.,Communication Services
+WFC,Wells Fargo & Co.,Financials
+TXN,Texas Instruments Inc.,Technology
+NEE,NextEra Energy Inc.,Utilities
+PM,Philip Morris International Inc.,Consumer Staples
+AMD,Advanced Micro Devices Inc.,Technology
+INTC,Intel Corp.,Technology
+VZ,Verizon Communications Inc.,Communication Services
+CMCSA,Comcast Corp.,Communication Services
+UNP,Union Pacific Corp.,Industrials
+RTX,RTX Corp.,Industrials
+HON,Honeywell International Inc.,Industrials
+LOW,Lowe's Companies Inc.,Consumer Discretionary
+INTU,Intuit Inc.,Technology
+IBM,International Business Machines Corp.,Technology
+GE,GE Aerospace,Industrials
+AMGN,Amgen Inc.,Healthcare
+CAT,Caterpillar Inc.,Industrials
+SPGI,S&P Global Inc.,Financials
+BA,Boeing Co.,Industrials
+GS,Goldman Sachs Group Inc.,Financials
+DE,Deere & Co.,Industrials
+BLK,BlackRock Inc.,Financials
+NOW,ServiceNow Inc.,Technology
+PLD,Prologis Inc.,Real Estate
+ELV,Elevance Health Inc.,Healthcare
+QCOM,Qualcomm Inc.,Technology

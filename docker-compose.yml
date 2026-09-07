@@ -1,0 +1,28 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_runtime:/app/runtime
+    environment:
+      # For a real VPS deploy, set this to your public frontend origin
+      # (e.g. https://strategeia.example.com) so the browser isn't blocked by CORS.
+      - CORS_ORIGINS=http://localhost:5173
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # For a real VPS deploy, set this to your public backend URL
+        # (baked in at build time — Vite env vars aren't runtime-configurable).
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_runtime:
