@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useScan } from '../api/hooks';
 import { SignalBadge, TrendBadge } from '../components/Badge';
+import { CompanyIcon } from '../components/CompanyIcon';
 import { Sparkline } from '../components/Sparkline';
 import { ErrorBanner, LoadingSpinner, formatMoney, formatPct } from '../components/common';
 import type { ApiError } from '../api/client';
@@ -77,7 +78,12 @@ export function MarketScanPage() {
                 .sort((a, b) => b.score - a.score)
                 .map((r) => (
                   <tr key={r.symbol}>
-                    <td style={{ fontWeight: 600 }}>{r.symbol}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <CompanyIcon symbol={r.symbol} size={26} />
+                        {r.symbol}
+                      </div>
+                    </td>
                     <td className="tabular-nums">{formatMoney(r.price)}</td>
                     <td className={`tabular-nums ${r.change_pct_24h >= 0 ? 'text-green' : 'text-red'}`}>{formatPct(r.change_pct_24h)}</td>
                     <td>

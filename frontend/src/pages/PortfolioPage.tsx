@@ -1,6 +1,7 @@
 import { useEquityCurve, useClosePosition, usePortfolioStats, usePositions } from '../api/hooks';
 import { StatCard } from '../components/StatCard';
 import { DirectionBadge, PositionStatusBadge } from '../components/Badge';
+import { CompanyIcon } from '../components/CompanyIcon';
 import { EquityCurveChart } from '../components/chart/EquityCurveChart';
 import { EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct } from '../components/common';
 
@@ -51,7 +52,12 @@ export function PortfolioPage() {
             <tbody>
               {positions.map((p) => (
                 <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.symbol}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <CompanyIcon symbol={p.symbol} size={24} />
+                      {p.symbol}
+                    </div>
+                  </td>
                   <td>
                     <DirectionBadge direction={p.direction} />
                   </td>

@@ -2,6 +2,9 @@ import { Line } from 'react-chartjs-2';
 import './chartSetup';
 import type { EquityPoint } from '../../api/types';
 
+const MUTED = '#8b8fa3';
+const GRID = '#1c1f29';
+
 export function EquityCurveChart({ points }: { points: EquityPoint[] }) {
   const data = {
     labels: points.map((p) => new Date(p.timestamp).toLocaleDateString()),
@@ -9,8 +12,8 @@ export function EquityCurveChart({ points }: { points: EquityPoint[] }) {
       {
         label: 'Portfolio Value',
         data: points.map((p) => p.equity_value),
-        borderColor: '#0e9f6e',
-        backgroundColor: 'rgba(14, 159, 110, 0.12)',
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.14)',
         tension: 0.3,
         pointRadius: 0,
         fill: true,
@@ -33,10 +36,13 @@ export function EquityCurveChart({ points }: { points: EquityPoint[] }) {
           },
         },
         scales: {
+          x: { ticks: { color: MUTED }, grid: { color: GRID } },
           y: {
             ticks: {
+              color: MUTED,
               callback: (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact' }).format(Number(value)),
             },
+            grid: { color: GRID },
           },
         },
       }}

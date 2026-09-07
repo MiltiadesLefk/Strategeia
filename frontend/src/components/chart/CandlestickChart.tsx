@@ -29,30 +29,30 @@ export function CandlestickChart({ candles, ema20Series, ema50Series, levels, he
 
     const chart = createChart(containerRef.current, {
       height,
-      layout: { background: { color: '#ffffff' }, textColor: '#0d253d', attributionLogo: false },
-      grid: { vertLines: { color: '#f0f1f5' }, horzLines: { color: '#f0f1f5' } },
-      timeScale: { borderColor: '#e6e8f0' },
-      rightPriceScale: { borderColor: '#e6e8f0' },
+      layout: { background: { color: '#12141d' }, textColor: '#8b8fa3', attributionLogo: false },
+      grid: { vertLines: { color: '#1c1f29' }, horzLines: { color: '#1c1f29' } },
+      timeScale: { borderColor: '#23262f' },
+      rightPriceScale: { borderColor: '#23262f' },
     });
     chartRef.current = chart;
 
     const candleSeries: ISeriesApi<'Candlestick'> = chart.addSeries(CandlestickSeries, {
-      upColor: '#0e9f6e',
-      downColor: '#e02424',
+      upColor: '#10b981',
+      downColor: '#ef4444',
       borderVisible: false,
-      wickUpColor: '#0e9f6e',
-      wickDownColor: '#e02424',
+      wickUpColor: '#10b981',
+      wickDownColor: '#ef4444',
     });
     candleSeries.setData(
       candles.map((c) => ({ time: toTime(c.date), open: c.open, high: c.high, low: c.low, close: c.close })),
     );
 
     if (ema20Series?.length) {
-      const s = chart.addSeries(LineSeries, { color: '#533afd', lineWidth: 2, title: 'EMA20' });
+      const s = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 2, title: 'EMA20' });
       s.setData(ema20Series.map((p) => ({ time: toTime(p.date), value: p.value })));
     }
     if (ema50Series?.length) {
-      const s = chart.addSeries(LineSeries, { color: '#b45309', lineWidth: 2, title: 'EMA50' });
+      const s = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2, title: 'EMA50' });
       s.setData(ema50Series.map((p) => ({ time: toTime(p.date), value: p.value })));
     }
     for (const level of levels ?? []) {

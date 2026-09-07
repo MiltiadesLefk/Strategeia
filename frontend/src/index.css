@@ -1,24 +1,25 @@
 :root {
-  --navy: #0d253d;
-  --navy-dark: #1c1e54;
-  --indigo: #533afd;
-  --indigo-light: #6f57ff;
-  --canvas: #f6f7fb;
-  --card: #ffffff;
-  --border: #e6e8f0;
-  --text: #0d253d;
-  --text-muted: #6b7280;
+  --navy: #0a0b10;
+  --navy-dark: #06070a;
+  --indigo: #3b82f6;
+  --indigo-light: #60a5fa;
+  --canvas: #0b0d14;
+  --card: #12141d;
+  --card-alt: #171a25;
+  --border: #23262f;
+  --text: #e8eaf0;
+  --text-muted: #8b8fa3;
   --text-inverse: #ffffff;
-  --text-inverse-muted: #9aa4c4;
-  --green: #0e9f6e;
-  --green-bg: #e7f9f1;
-  --red: #e02424;
-  --red-bg: #fdecec;
-  --amber: #b45309;
-  --amber-bg: #fef3e2;
-  --radius: 12px;
-  --radius-sm: 6px;
-  --shadow: 0 1px 2px rgba(13, 37, 61, 0.06), 0 1px 6px rgba(13, 37, 61, 0.05);
+  --text-inverse-muted: #8b8fa3;
+  --green: #10b981;
+  --green-bg: rgba(16, 185, 129, 0.14);
+  --red: #ef4444;
+  --red-bg: rgba(239, 68, 68, 0.14);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245, 158, 11, 0.14);
+  --radius: 16px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 * {
@@ -52,6 +53,7 @@ h4 {
   margin: 0;
   font-weight: 700;
   letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 p {
@@ -59,7 +61,7 @@ p {
 }
 
 a {
-  color: var(--indigo);
+  color: var(--indigo-light);
   text-decoration: none;
 }
 
@@ -92,7 +94,7 @@ select {
   border: 1px solid transparent;
   font-size: 14px;
   font-weight: 600;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, background 0.15s ease;
 }
 
 .btn:disabled {
@@ -110,13 +112,13 @@ select {
 }
 
 .btn-secondary {
-  background: var(--card);
+  background: var(--card-alt);
   color: var(--text);
   border-color: var(--border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--canvas);
+  background: #1d212c;
 }
 
 .badge {
@@ -145,7 +147,7 @@ select {
 }
 
 .badge-neutral {
-  background: #eef0f6;
+  background: #1d212c;
   color: var(--text-muted);
 }
 
@@ -187,6 +189,10 @@ tr:last-child td {
   border-bottom: none;
 }
 
+tbody tr:hover {
+  background: var(--card-alt);
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -211,12 +217,23 @@ select {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--card);
+  background: var(--card-alt);
   color: var(--text);
+}
+
+input::placeholder {
+  color: var(--text-muted);
 }
 
 input:focus,
 select:focus {
-  outline: 2px solid var(--indigo-light);
+  outline: 2px solid var(--indigo);
   outline-offset: -1px;
+}
+
+code {
+  background: var(--card-alt);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
 }

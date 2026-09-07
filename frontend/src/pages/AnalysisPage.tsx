@@ -4,6 +4,7 @@ import { useAnalysis } from '../api/hooks';
 import { SymbolPicker } from '../components/SymbolPicker';
 import { RangeTabs } from '../components/RangeTabs';
 import { TrendBadge } from '../components/Badge';
+import { CompanyIcon } from '../components/CompanyIcon';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
 import { ErrorBanner, LoadingSpinner, formatMoney, formatNumber } from '../components/common';
 import type { ApiError } from '../api/client';
@@ -16,10 +17,19 @@ export function AnalysisPage() {
 
   const levels: PriceLevel[] = data
     ? [
-        ...data.support.map((price) => ({ price, color: '#0e9f6e', title: 'Support' })),
-        ...data.resistance.map((price) => ({ price, color: '#e02424', title: 'Resistance' })),
+        ...data.support.map((price) => ({ price, color: '#10b981', title: 'Support' })),
+        ...data.resistance.map((price) => ({ price, color: '#ef4444', title: 'Resistance' })),
       ]
     : [];
+
+  // Same 2% proximity threshold the backend's scanner uses to score
+  // "near a key level" — narrated here as a breakout callout, not a new signal.
+  const nearestResistance = data?.resistance[0];
+  const nearestSupport = data?.support[0];
+  const isPotentialBreakout =
+    !!data &&
+    ((data.trend === 'Bullish' && nearestResistance !== undefined && Math.abs(nearestResistance - data.price) / data.price <= 0.02) ||
+      (data.trend === 'Bearish' && nearestSupport !== undefined && Math.abs(nearestSupport - data.price) / data.price <= 0.02));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -34,13 +44,19 @@ export function AnalysisPage() {
       {data && (
         <>
           <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{data.symbol}</div>
-              <div className="tabular-nums" style={{ fontSize: 15 }}>
-                {formatMoney(data.price)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <CompanyIcon symbol={data.symbol} size={36} />
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>{data.symbol}</div>
+                <div className="tabular-nums" style={{ fontSize: 15 }}>
+                  {formatMoney(data.price)}
+                </div>
               </div>
             </div>
-            <TrendBadge trend={data.trend} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {isPotentialBreakout && <span className="badge badge-amber">Potential Breakout</span>}
+              <TrendBadge trend={data.trend} />
+            </div>
           </div>
 
           <div className="card">

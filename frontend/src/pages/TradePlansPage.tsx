@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useGenerateTradePlan, useOpenPosition, useTradePlans } from '../api/hooks';
 import { DirectionBadge } from '../components/Badge';
 import { PipelineSteps } from '../components/PipelineSteps';
+import { CompanyIcon } from '../components/CompanyIcon';
+import { RatioGauge } from '../components/RatioGauge';
+import { IconBadge } from '../components/IconBadge';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber } from '../components/common';
 import type { ApiError } from '../api/client';
 import type { TradePlan } from '../api/types';
@@ -20,17 +23,16 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <CompanyIcon symbol={plan.symbol} size={32} />
           <span style={{ fontWeight: 700, fontSize: 16 }}>{plan.symbol}</span>
           <DirectionBadge direction={plan.direction} />
         </div>
-        <div className="text-muted" style={{ fontSize: 12 }}>
-          Confidence {plan.confidence_score}%
-        </div>
+        <RatioGauge ratio={plan.rr1 ?? 0} label="R:R Ratio" size={68} />
       </div>
 
-      <div className="grid stat-grid" style={{ marginBottom: 12 }}>
+      <div className="grid stat-grid" style={{ marginBottom: 16 }}>
         <div>
           <div className="text-muted" style={{ fontSize: 11 }}>
             Entry
@@ -53,12 +55,6 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
         </div>
         <div>
           <div className="text-muted" style={{ fontSize: 11 }}>
-            R:R
-          </div>
-          <div className="tabular-nums">{formatNumber(plan.rr1)}:1</div>
-        </div>
-        <div>
-          <div className="text-muted" style={{ fontSize: 11 }}>
             Position Size
           </div>
           <div className="tabular-nums">{plan.suggested_shares} shares</div>
@@ -68,6 +64,45 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
             Account Risk
           </div>
           <div className="tabular-nums">{formatMoney(plan.account_risk_dollars)}</div>
+        </div>
+      </div>
+
+      <div className="grid stat-grid" style={{ marginBottom: 16 }}>
+        <div className="card" style={{ background: 'var(--card-alt)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <IconBadge variant="up" />
+          <div>
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              Potential Gain
+            </div>
+            <div className="tabular-nums text-green" style={{ fontWeight: 700 }}>
+              {formatMoney(plan.potential_gain)}
+            </div>
+          </div>
+        </div>
+        <div className="card" style={{ background: 'var(--card-alt)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <IconBadge variant="down" />
+          <div>
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              Potential Risk
+            </div>
+            <div className="tabular-nums text-red" style={{ fontWeight: 700 }}>
+              {formatMoney(plan.potential_risk)}
+            </div>
+          </div>
+        </div>
+        <div className="card" style={{ background: 'var(--card-alt)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <IconBadge variant="info" />
+          <div>
+            {/* Deliberately "Confidence", not "Win Probability" — this is a
+                rule-based scanner score, not a backtested win rate. See
+                notes/Decisions.md on not fabricating historical stats. */}
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              Confidence
+            </div>
+            <div className="tabular-nums" style={{ fontWeight: 700 }}>
+              {plan.confidence_score}%
+            </div>
+          </div>
         </div>
       </div>
 
@@ -136,7 +171,12 @@ export function TradePlansPage() {
             <tbody>
               {history.map((p) => (
                 <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.symbol}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <CompanyIcon symbol={p.symbol} size={24} />
+                      {p.symbol}
+                    </div>
+                  </td>
                   <td>
                     <DirectionBadge direction={p.direction} />
                   </td>

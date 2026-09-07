@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useResearch } from '../api/hooks';
 import { SymbolPicker } from '../components/SymbolPicker';
 import { CompanyDropdown } from '../components/CompanyDropdown';
+import { CompanyIcon } from '../components/CompanyIcon';
 import { RevenueChart } from '../components/chart/RevenueChart';
 import { ErrorBanner, LoadingSpinner, EmptyState, formatMoney, isSafeHttpUrl } from '../components/common';
 import type { ApiError } from '../api/client';
@@ -28,9 +29,12 @@ export function ResearchPage() {
         <>
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{data.name}</div>
-                <div className="text-muted">{data.symbol}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <CompanyIcon symbol={data.symbol} size={36} />
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{data.name}</div>
+                  <div className="text-muted">{data.symbol}</div>
+                </div>
               </div>
               <div className="tabular-nums" style={{ fontSize: 20, fontWeight: 700 }}>
                 {formatMoney(data.price)}

@@ -51,12 +51,16 @@ export function Sidebar() {
         style={{
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'center',
           gap: 8,
           padding: '10px 12px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
           marginTop: 12,
           fontSize: 13,
-          color: 'var(--text-inverse-muted)',
+          fontWeight: 600,
+          color: 'var(--green)',
+          background: 'var(--green-bg)',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          borderRadius: 9999,
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />

@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
-import { useDashboardSummary } from '../api/hooks';
+import { useDashboardSummary, useEquityCurve } from '../api/hooks';
 import { StatCard } from '../components/StatCard';
 import { SignalBadge } from '../components/Badge';
+import { CompanyIcon } from '../components/CompanyIcon';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct } from '../components/common';
 import type { ApiError } from '../api/client';
 
 export function DashboardPage() {
   const { data, isLoading, error } = useDashboardSummary();
+  const { data: equity } = useEquityCurve();
 
   if (isLoading) return <LoadingSpinner label="Loading dashboard…" />;
   if (error) return <ErrorBanner message={(error as ApiError).message} />;
@@ -15,6 +17,7 @@ export function DashboardPage() {
   const { stats, markets_scanned, potential_setups, top_setups, latest_trade_plan } = data;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const equityTrend = equity?.map((p) => p.equity_value);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -27,14 +30,19 @@ export function DashboardPage() {
       </div>
 
       <div className="grid stat-grid">
-        <StatCard label="Total Return" value={formatPct(stats.total_return)} positive={stats.total_return > 0 ? true : stats.total_return < 0 ? false : null} />
+        <StatCard
+          label="Total Return"
+          value={formatPct(stats.total_return)}
+          positive={stats.total_return > 0 ? true : stats.total_return < 0 ? false : null}
+          trend={equityTrend}
+        />
         <StatCard label="Win Rate" value={`${formatNumber(stats.win_rate, 0)}%`} />
         <StatCard label="Total Trades" value={String(stats.total_trades)} />
         <StatCard label="Avg R:R" value={stats.avg_rr !== null ? `${formatNumber(stats.avg_rr)}:1` : '—'} />
         <StatCard label="Markets Scanned" value={String(markets_scanned)} />
         <StatCard label="Potential Setups" value={String(potential_setups)} />
         <StatCard label="Active Positions" value={String(stats.active_positions)} />
-        <StatCard label="Portfolio Value" value={formatMoney(stats.portfolio_value)} />
+        <StatCard label="Portfolio Value" value={formatMoney(stats.portfolio_value)} trend={equityTrend} />
       </div>
 
       <div className="card">
@@ -60,7 +68,10 @@ export function DashboardPage() {
               {top_setups.map((r) => (
                 <tr key={r.symbol}>
                   <td style={{ fontWeight: 600 }}>
-                    <Link to={`/analysis?symbol=${r.symbol}`}>{r.symbol}</Link>
+                    <Link to={`/analysis?symbol=${r.symbol}`} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text)' }}>
+                      <CompanyIcon symbol={r.symbol} size={26} />
+                      {r.symbol}
+                    </Link>
                   </td>
                   <td className="tabular-nums">{formatMoney(r.price)}</td>
                   <td className={`tabular-nums ${r.change_pct_24h >= 0 ? 'text-green' : 'text-red'}`}>{formatPct(r.change_pct_24h)}</td>

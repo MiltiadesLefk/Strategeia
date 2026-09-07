@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { useAnalysis, useCalculateRisk } from '../api/hooks';
 import { SymbolPicker } from '../components/SymbolPicker';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
-import { ErrorBanner, LoadingSpinner, formatMoney, formatNumber } from '../components/common';
+import { RatioGauge } from '../components/RatioGauge';
+import { IconBadge } from '../components/IconBadge';
+import { ErrorBanner, LoadingSpinner, formatMoney } from '../components/common';
 import type { ApiError } from '../api/client';
 
 export function RiskManagerPage() {
@@ -44,10 +46,10 @@ export function RiskManagerPage() {
   const levels: PriceLevel[] =
     result && entry !== null && stop !== null
       ? [
-          { price: entry, color: '#533afd', title: 'Entry' },
-          { price: stop, color: '#e02424', title: 'Stop' },
-          { price: result.tp1, color: '#0e9f6e', title: 'TP1' },
-          { price: result.tp2, color: '#0e9f6e', title: 'TP2' },
+          { price: entry, color: '#3b82f6', title: 'Entry' },
+          { price: stop, color: '#ef4444', title: 'Stop' },
+          { price: result.tp1, color: '#10b981', title: 'TP1' },
+          { price: result.tp2, color: '#10b981', title: 'TP2' },
         ]
       : [];
 
@@ -93,7 +95,11 @@ export function RiskManagerPage() {
           {analysisLoading && <LoadingSpinner label={`Loading ${symbol}…`} />}
           {analysis && (
             <div className="card">
-              <CandlestickChart candles={analysis.candles} levels={levels} height={320} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <h3 style={{ fontSize: 15 }}>Risk:Reward Visualization</h3>
+                {result && <RatioGauge ratio={result.rr1} label="R:R Ratio" size={72} />}
+              </div>
+              <CandlestickChart candles={analysis.candles} levels={levels} height={300} />
             </div>
           )}
 
@@ -120,21 +126,26 @@ export function RiskManagerPage() {
                   {formatMoney(result.account_risk_dollars)}
                 </div>
               </div>
-              <div className="card">
-                <div className="text-muted" style={{ fontSize: 12 }}>
-                  Risk:Reward (TP1)
-                </div>
-                <div className="tabular-nums" style={{ fontWeight: 700, fontSize: 20 }}>
-                  {formatNumber(result.rr1)}:1
+              <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <IconBadge variant="up" />
+                <div>
+                  <div className="text-muted" style={{ fontSize: 12 }}>
+                    Potential Gain
+                  </div>
+                  <div className="tabular-nums text-green" style={{ fontWeight: 700, fontSize: 18 }}>
+                    {formatMoney(result.potential_gain)}
+                  </div>
                 </div>
               </div>
-              <div className="card">
-                <div className="text-muted" style={{ fontSize: 12 }}>
-                  Potential Gain / Risk
-                </div>
-                <div className="tabular-nums" style={{ fontWeight: 700, fontSize: 16 }}>
-                  <span className="text-green">{formatMoney(result.potential_gain)}</span> /{' '}
-                  <span className="text-red">{formatMoney(result.potential_risk)}</span>
+              <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <IconBadge variant="down" />
+                <div>
+                  <div className="text-muted" style={{ fontSize: 12 }}>
+                    Potential Risk
+                  </div>
+                  <div className="tabular-nums text-red" style={{ fontWeight: 700, fontSize: 18 }}>
+                    {formatMoney(result.potential_risk)}
+                  </div>
                 </div>
               </div>
             </div>
