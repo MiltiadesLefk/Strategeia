@@ -62,4 +62,8 @@ def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
         ai_provider=record.ai_provider,
         status=record.status,
         created_at=record.created_at,
+        technical_score=record.technical_score,
+        fundamental_score=record.fundamental_score,
+        news_score=record.news_score,
+        signal_reasons=record.signal_reasons,
     )

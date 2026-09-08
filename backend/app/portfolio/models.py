@@ -30,6 +30,13 @@ class TradePlanRecord(SQLModel, table=True):
     time_horizon: str = "1-4 weeks"
     status: str = "pending"
     created_at: datetime = Field(default_factory=utcnow_naive)
+    # "Smart" signal breakdown, added alongside the technical scanner score —
+    # see analysis/fundamental_scoring.py. Nullable so old rows (generated
+    # before this field existed) just read back as None, not an error.
+    technical_score: Optional[int] = None
+    fundamental_score: Optional[int] = None
+    news_score: Optional[int] = None
+    signal_reasons: Optional[str] = None  # "; "-joined, human-readable — not JSON, kept simple
 
 
 class PaperPosition(SQLModel, table=True):

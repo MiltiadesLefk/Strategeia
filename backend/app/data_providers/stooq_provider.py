@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import httpx
 import pandas as pd
 
-from app.data_providers.base import CompanyOverview, DataProviderError, FinancialsData, NewsItem, QuoteData
+from app.data_providers.base import CompanyOverview, DataProviderError, EarningsEstimate, FinancialsData, NewsItem, QuoteData
 from app.data_providers.cache import cached
 
 STOOQ_URL = "https://stooq.com/q/d/l/"
@@ -76,3 +76,6 @@ class StooqProvider:
 
     def get_earnings_date(self, symbol: str) -> date | None:
         raise NotImplementedError("stooq provider does not support earnings dates")
+
+    def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None:
+        raise NotImplementedError("stooq provider does not support earnings estimates")

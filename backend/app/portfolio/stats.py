@@ -39,7 +39,12 @@ def compute_portfolio_stats(session: Session, data_provider: DataProvider, defau
             price = data_provider.get_quote(position.symbol).price
         except AllProvidersFailedError:
             price = position.entry_price
-        mark_value += position.shares * price
+        # See PaperTradingEngine._record_equity_snapshot: a short's cash was
+        # already increased by shares*entry at open, so its mark-to-market
+        # contribution here is the (negative) cost to buy back and cover —
+        # summing shares*price for both directions double-counts a short's
+        # notional and wildly inflates portfolio_value/total_return.
+        mark_value += position.shares * price if position.direction == "long" else -(position.shares * price)
 
     portfolio_value = current_cash + mark_value
     total_return = ((portfolio_value - starting_cash) / starting_cash * 100) if starting_cash else 0.0

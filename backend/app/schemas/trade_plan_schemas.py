@@ -32,3 +32,7 @@ class TradePlanResponse(BaseModel):
     ai_provider: str | None = None
     status: str | None = None
     created_at: datetime | None = None
+    technical_score: int | None = None
+    fundamental_score: int | None = None
+    news_score: int | None = None
+    signal_reasons: str | None = None

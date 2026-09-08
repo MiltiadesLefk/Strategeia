@@ -9,6 +9,7 @@ from app.data_providers.base import (
     CompanyOverview,
     DataProvider,
     DataProviderError,
+    EarningsEstimate,
     FinancialsData,
     NewsItem,
     QuoteData,
@@ -61,5 +62,11 @@ class CompositeDataProvider:
     def get_earnings_date(self, symbol: str) -> date | None:
         try:
             return self._try_each("get_earnings_date", symbol)
+        except AllProvidersFailedError:
+            return None
+
+    def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None:
+        try:
+            return self._try_each("get_earnings_estimate", symbol)
         except AllProvidersFailedError:
             return None

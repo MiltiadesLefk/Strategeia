@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlmodel import Session
@@ -8,7 +9,10 @@ from sqlmodel import Session
 from app.config import load_app_settings
 from app.data_providers.factory import get_data_provider
 from app.database import engine
+from app.llm_providers.factory import get_llm_provider
 from app.portfolio.engine import PaperTradingEngine
+from app.services.automation_service import run_auto_scan
+from app.services.health_monitor import check_and_alert
 
 logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
@@ -24,6 +28,28 @@ def _mark_to_market_job() -> None:
             logger.exception("Scheduled mark-to-market tick failed")
 
 
+def _health_check_job() -> None:
+    settings = load_app_settings()
+    data_provider = get_data_provider(settings)
+    try:
+        check_and_alert(settings, data_provider)
+    except Exception:
+        logger.exception("Scheduled health-check tick failed")
+
+
+def _auto_scan_job() -> None:
+    settings = load_app_settings()
+    if not settings.auto_scan_enabled:
+        return
+    data_provider = get_data_provider(settings)
+    llm_provider = get_llm_provider(settings)
+    with Session(engine) as session:
+        try:
+            run_auto_scan(settings, data_provider, llm_provider, session)
+        except Exception:
+            logger.exception("Scheduled auto-scan tick failed")
+
+
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -35,6 +61,19 @@ def start_scheduler() -> BackgroundScheduler:
         "interval",
         minutes=settings.mark_to_market_interval_minutes,
         id="mark_to_market",
+    )
+    _scheduler.add_job(
+        _health_check_job,
+        "interval",
+        minutes=settings.mark_to_market_interval_minutes,
+        id="health_check",
+        next_run_time=datetime.now(),  # catch a broken provider right at startup, not just after the first interval
+    )
+    _scheduler.add_job(
+        _auto_scan_job,
+        "interval",
+        minutes=settings.auto_scan_interval_minutes,
+        id="auto_scan",
     )
     _scheduler.start()
     return _scheduler

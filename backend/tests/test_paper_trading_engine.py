@@ -5,7 +5,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.data_providers.base import QuoteData
-from app.portfolio.engine import PaperTradingEngine
+from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, PaperTradingEngine
 from app.portfolio.models import TradePlanRecord
 from app.portfolio.stats import compute_portfolio_stats
 
@@ -81,6 +81,50 @@ def test_open_position_deducts_cash_for_long(session: Session):
     assert dumped["shares"] == 10
 
 
+def test_open_position_raises_when_cash_cant_afford_one_share(session: Session):
+    """Regression: opening used to silently floor to 0 shares and create a
+    phantom position — a real trade that shows up as 'open' but represents
+    no actual exposure. That's the bug behind trades users couldn't
+    meaningfully see: cash mutated by $0, nothing to track."""
+    plan = make_plan(session, entry=100.0, suggested_shares=10)
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, 50.0)  # can't afford even 1 share at $100
+
+    with pytest.raises(InsufficientCashError):
+        engine.open_position(plan)
+
+    account = engine.get_account_state()
+    assert account.current_cash == 50.0  # untouched, no phantom position created
+
+
+def test_open_position_raises_for_zero_suggested_shares(session: Session):
+    plan = make_plan(session, direction="short", suggested_shares=0)
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, STARTING_CASH)
+
+    with pytest.raises(InsufficientCashError):
+        engine.open_position(plan)
+
+
+def test_open_position_raises_for_symbol_that_already_has_an_open_position(session: Session):
+    """Regression: nothing stopped a second 'Generate Trade Plan' + execute
+    (manual or auto) for a symbol that already had an open position, silently
+    pyramiding into it — the v1 exit rule (mark_to_market closes a position
+    fully, all-or-nothing) has no concept of which fill a stop/TP hit
+    belongs to once there are two."""
+    first_plan = make_plan(session)
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, STARTING_CASH)
+    engine.open_position(first_plan)
+
+    second_plan = make_plan(session, entry=101.0, stop=96.0)
+    with pytest.raises(DuplicatePositionError):
+        engine.open_position(second_plan)
+
+    account = engine.get_account_state()
+    assert account.current_cash == STARTING_CASH - 10 * 100.0  # unchanged by the rejected second open
+
+
 def test_mark_to_market_closes_on_stop_hit(session: Session):
     plan = make_plan(session)
     provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
@@ -146,3 +190,34 @@ def test_portfolio_stats_with_no_trades_yet(session: Session):
     assert stats.win_rate == 0.0
     assert stats.avg_rr is None
     assert stats.total_return == 0.0
+
+
+def test_open_short_position_unrealized_value_when_price_unchanged(session: Session):
+    """Regression: portfolio_value used to sum shares*price for every open
+    position regardless of direction, double-counting a short's notional —
+    opening a short adds shares*entry to cash immediately (proceeds from the
+    sale), then summing +shares*price again inflated portfolio_value/
+    total_return dramatically. With price unchanged since entry, an open
+    short should contribute exactly $0 of *unrealized* value beyond the cash
+    already credited at open."""
+    plan = make_plan(session, direction="short", entry=100.0, stop=105.0, suggested_shares=10)
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, STARTING_CASH)
+    engine.open_position(plan)
+
+    stats = compute_portfolio_stats(session, provider, STARTING_CASH)
+
+    assert stats.portfolio_value == pytest.approx(STARTING_CASH)
+    assert stats.total_return == pytest.approx(0.0)
+
+
+def test_open_short_position_gains_value_as_price_falls(session: Session):
+    plan = make_plan(session, direction="short", entry=100.0, stop=105.0, suggested_shares=10)
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, STARTING_CASH)
+    engine.open_position(plan)
+
+    provider.price = 90.0  # price fell 10 -> short is up $10/share unrealized
+    stats = compute_portfolio_stats(session, provider, STARTING_CASH)
+
+    assert stats.portfolio_value == pytest.approx(STARTING_CASH + 100.0)

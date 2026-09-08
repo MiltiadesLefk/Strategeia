@@ -8,6 +8,7 @@ import yfinance as yf
 from app.data_providers.base import (
     CompanyOverview,
     DataProviderError,
+    EarningsEstimate,
     FinancialsData,
     FinancialYear,
     NewsItem,
@@ -140,3 +141,31 @@ class YFinanceProvider:
         if not upcoming:
             return None
         return min(upcoming).date()
+
+    @cached(EARNINGS_TTL)
+    def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None:
+        # yfinance's own `get_earnings_dates()` carries an "EPS Estimate"
+        # column alongside each date — no separate call needed. Revenue
+        # estimate isn't in this frame; left None rather than guessed at.
+        try:
+            dates_df = yf.Ticker(symbol).get_earnings_dates(limit=8)
+        except Exception:
+            return None
+        if dates_df is None or dates_df.empty:
+            return None
+        upcoming = [ts for ts in dates_df.index if ts.date() >= date.today()]
+        if not upcoming:
+            return None
+        next_ts = min(upcoming)
+        row = dates_df.loc[next_ts]
+        if isinstance(row, pd.DataFrame):  # duplicate index timestamps, rare
+            row = row.iloc[0]
+        eps_estimate = row.get("EPS Estimate")
+        eps_estimate = float(eps_estimate) if eps_estimate is not None and not pd.isna(eps_estimate) else None
+        quarter = (next_ts.month - 1) // 3 + 1
+        return EarningsEstimate(
+            date=next_ts.date(),
+            fiscal_period_label=f"Q{quarter} {next_ts.year}",
+            eps_estimate=eps_estimate,
+            revenue_estimate=None,
+        )

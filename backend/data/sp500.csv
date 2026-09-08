@@ -1,4 +1,7 @@
 symbol,name,sector
+BTC-USD,Bitcoin,Crypto
+ETH-USD,Ethereum,Crypto
+SOL-USD,Solana,Crypto
 AAPL,Apple Inc.,Technology
 MSFT,Microsoft Corporation,Technology
 GOOGL,Alphabet Inc.,Technology

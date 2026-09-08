@@ -41,6 +41,18 @@ export function formatNumber(value: number | null | undefined, digits = 2): stri
   return value.toFixed(digits);
 }
 
+export function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const minutes = Math.round((Date.now() - then) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
 /** Only http(s) URLs are safe to render as a clickable <a href>. News/link
  * fields come from third-party data providers (yfinance/Finnhub) — an
  * unvalidated `javascript:`/`data:` URL there would execute on click. */

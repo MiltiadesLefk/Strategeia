@@ -26,3 +26,7 @@ class ScanJobStatus(BaseModel):
     progress: int
     total: int
     results: list[ScanResultSchema] | None = None
+
+
+class AutoScanResponse(BaseModel):
+    generated: list[str]

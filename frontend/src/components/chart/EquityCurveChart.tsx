@@ -36,7 +36,7 @@ export function EquityCurveChart({ points }: { points: EquityPoint[] }) {
           },
         },
         scales: {
-          x: { ticks: { color: MUTED }, grid: { color: GRID } },
+          x: { ticks: { color: MUTED, maxTicksLimit: 8, autoSkip: true }, grid: { color: GRID } },
           y: {
             ticks: {
               color: MUTED,

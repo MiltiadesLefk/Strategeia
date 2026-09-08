@@ -6,7 +6,13 @@ from app.config import load_app_settings, update_app_settings
 from app.data_providers.finnhub_provider import FinnhubProvider
 from app.data_providers.base import DataProviderError
 from app.llm_providers.factory import get_llm_provider
-from app.schemas.settings_schemas import SettingsUpdateRequest, TestConnectionRequest, TestConnectionResponse
+from app.schemas.settings_schemas import (
+    SettingsUpdateRequest,
+    StatusResponse,
+    TestConnectionRequest,
+    TestConnectionResponse,
+)
+from app.services.telegram_service import send_message as send_telegram_message
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -14,6 +20,28 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 @router.get("")
 def get_settings() -> dict:
     return load_app_settings().redacted()
+
+
+@router.get("/status", response_model=StatusResponse)
+def get_status() -> StatusResponse:
+    """Cheap, poll-friendly status for the sidebar's online indicators.
+
+    Deliberately does NOT make a live network call to the LLM or Finnhub on
+    every poll (that has real latency/cost, especially for a metered LLM
+    key) — "online" here means "configured such that a real call would be
+    attempted", mirroring how CompositeDataProvider/get_llm_provider decide
+    whether to use a provider at all. `none`/NullLLMProvider always reports
+    is_configured() == True (it's the universal fallback) but is explicitly
+    excluded here since it's just an echo, not real AI.
+    """
+    settings = load_app_settings()
+    provider = get_llm_provider(settings)
+    ai_online = provider.name != "none" and provider.is_configured()
+    finnhub_online = bool(settings.finnhub_enabled and settings.finnhub_api_key)
+    telegram_online = bool(settings.telegram_bot_token and settings.telegram_chat_id)
+    return StatusResponse(
+        ai_online=ai_online, ai_provider=provider.name, finnhub_online=finnhub_online, telegram_online=telegram_online
+    )
 
 
 @router.put("")
@@ -44,5 +72,11 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
         except DataProviderError as exc:
             return TestConnectionResponse(ok=False, message=str(exc))
         return TestConnectionResponse(ok=True, message="Finnhub connection OK")
+
+    if req.target == "telegram":
+        result = send_telegram_message(
+            settings.telegram_bot_token, settings.telegram_chat_id, "Strategeia: test connection OK."
+        )
+        return TestConnectionResponse(ok=result.ok, message=result.message)
 
     return TestConnectionResponse(ok=False, message=f"Unknown test target: {req.target}")

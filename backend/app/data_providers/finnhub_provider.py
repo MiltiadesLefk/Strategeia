@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import httpx
 import pandas as pd
 
-from app.data_providers.base import CompanyOverview, DataProviderError, FinancialsData, NewsItem, QuoteData
+from app.data_providers.base import CompanyOverview, DataProviderError, EarningsEstimate, FinancialsData, NewsItem, QuoteData
 from app.data_providers.cache import cached
 from app.timeutil import utc_from_timestamp_naive
 
@@ -115,3 +115,31 @@ class FinnhubProvider:
             return min(datetime.strptime(e["date"], "%Y-%m-%d").date() for e in entries if e.get("date"))
         except (KeyError, ValueError):
             return None
+
+    @cached(EARNINGS_TTL)
+    def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None:
+        today = date.today()
+        data = self._get(
+            "/calendar/earnings",
+            {"symbol": symbol, "from": today.isoformat(), "to": (today + timedelta(days=180)).isoformat()},
+        )
+        upcoming: list[tuple[date, dict]] = []
+        for entry in (data or {}).get("earningsCalendar", []):
+            if not entry.get("date"):
+                continue
+            try:
+                entry_date = datetime.strptime(entry["date"], "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if entry_date >= today:
+                upcoming.append((entry_date, entry))
+        if not upcoming:
+            return None
+        next_date, entry = min(upcoming, key=lambda pair: pair[0])
+        quarter, year = entry.get("quarter"), entry.get("year")
+        return EarningsEstimate(
+            date=next_date,
+            fiscal_period_label=f"Q{quarter} {year}" if quarter and year else None,
+            eps_estimate=entry.get("epsEstimate"),
+            revenue_estimate=entry.get("revenueEstimate"),
+        )

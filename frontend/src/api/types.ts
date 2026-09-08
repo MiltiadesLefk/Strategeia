@@ -21,6 +21,10 @@ export interface ScanResponse {
   errors: string[];
 }
 
+export interface AutoScanResponse {
+  generated: string[];
+}
+
 export interface Candle {
   date: string;
   open: number;
@@ -70,42 +74,27 @@ export interface ResearchResponse {
   symbol: string;
   name: string;
   price: number;
+  change: number | null;
+  change_pct: number | null;
   market_cap: number | null;
   pe_ratio: number | null;
   revenue_ttm: number | null;
   eps_ttm: number | null;
+  revenue_yoy_pct: number | null;
   week52_low: number | null;
   week52_high: number | null;
   financials: FinancialYear[];
   news: NewsItem[];
   catalysts: string[];
   earnings_date: string | null;
+  earnings_days_until: number | null;
+  earnings_fiscal_label: string | null;
+  earnings_eps_estimate: number | null;
+  earnings_revenue_estimate: number | null;
   ai_summary: string;
   ai_provider: string;
   ai_error: string | null;
-}
-
-export interface RiskCalculateRequest {
-  symbol: string;
-  account_size: number;
-  risk_pct: number;
-  entry: number;
-  stop: number;
-  direction: 'long' | 'short';
-}
-
-export interface RiskCalculateResponse {
-  shares: number;
-  risk_per_share: number;
-  account_risk_dollars: number;
-  position_value: number;
-  capped_by_cash: boolean;
-  tp1: number;
-  tp2: number;
-  rr1: number;
-  rr2: number;
-  potential_gain: number;
-  potential_risk: number;
+  generated_at: string;
 }
 
 export interface TradePlan {
@@ -129,6 +118,10 @@ export interface TradePlan {
   ai_provider?: string | null;
   status?: string | null;
   created_at?: string | null;
+  technical_score?: number | null;
+  fundamental_score?: number | null;
+  news_score?: number | null;
+  signal_reasons?: string | null;
 }
 
 export interface Position {
@@ -177,20 +170,27 @@ export interface DashboardSummary {
 
 export interface AppSettings {
   llm_provider: string;
-  openrouter_api_key: boolean;
+  /** Masked hint like "••••ab12", or "" if unset — the real key is never sent to the client. */
+  openrouter_api_key: string;
   openrouter_model: string;
-  orcarouter_api_key: boolean;
+  orcarouter_api_key: string;
   orcarouter_model: string;
-  openai_api_key: boolean;
+  openai_api_key: string;
   openai_model: string;
-  gemini_api_key: boolean;
+  gemini_api_key: string;
   gemini_model: string;
   finnhub_enabled: boolean;
-  finnhub_api_key: boolean;
+  finnhub_api_key: string;
+  telegram_bot_token: string;
+  telegram_chat_id: string;
   scan_universe_size: number;
   paper_starting_cash: number;
   default_risk_pct: number;
   mark_to_market_interval_minutes: number;
+  auto_execute_trade_plans: boolean;
+  auto_scan_enabled: boolean;
+  auto_scan_interval_minutes: number;
+  max_concurrent_positions: number;
 }
 
 export interface SettingsUpdateRequest {
@@ -205,13 +205,26 @@ export interface SettingsUpdateRequest {
   gemini_model?: string;
   finnhub_enabled?: boolean;
   finnhub_api_key?: string;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
   scan_universe_size?: number;
   paper_starting_cash?: number;
   default_risk_pct?: number;
   mark_to_market_interval_minutes?: number;
+  auto_execute_trade_plans?: boolean;
+  auto_scan_enabled?: boolean;
+  auto_scan_interval_minutes?: number;
+  max_concurrent_positions?: number;
 }
 
 export interface TestConnectionResponse {
   ok: boolean;
   message: string;
+}
+
+export interface SettingsStatus {
+  ai_online: boolean;
+  ai_provider: string;
+  finnhub_online: boolean;
+  telegram_online: boolean;
 }

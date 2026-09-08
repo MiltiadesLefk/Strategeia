@@ -45,12 +45,13 @@ export function CompanyIcon({ symbol, size = 28 }: { symbol: string; size?: numb
         width: size,
         height: size,
         borderRadius: '50%',
-        background: '#fff',
+        background: 'transparent',
+        border: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        padding: size * 0.14,
+        padding: size * 0.1,
         overflow: 'hidden',
       }}
     >

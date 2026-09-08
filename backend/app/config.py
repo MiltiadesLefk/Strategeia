@@ -42,6 +42,22 @@ class InfraSettings(BaseSettings):
 LlmProviderName = Literal["none", "claude_code_cli", "openrouter", "orcarouter", "openai", "gemini"]
 
 
+MASK_BULLET_COUNT = 16
+
+
+def _mask_secret(value: str) -> str:
+    """"" when unset; otherwise a masked hint that reveals at most the last
+    4 characters — enough to recognize "yes, that's the right key", never
+    enough to reconstruct it. Always the same number of bullets regardless of
+    the real key's length, so the UI can render a stable-looking masked
+    field without also leaking how long the stored secret is."""
+    if not value:
+        return ""
+    if len(value) <= 4:
+        return "•" * MASK_BULLET_COUNT
+    return f"{'•' * MASK_BULLET_COUNT}{value[-4:]}"
+
+
 class AppSettings(BaseModel):
     """Runtime-editable config — provider choice, API keys, paper account.
 
@@ -62,17 +78,38 @@ class AppSettings(BaseModel):
     finnhub_enabled: bool = False
     finnhub_api_key: str = ""
 
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
     scan_universe_size: int = 50
 
     paper_starting_cash: float = 100_000.0
     default_risk_pct: float = 1.0
     mark_to_market_interval_minutes: int = 15
+    auto_execute_trade_plans: bool = True
+
+    # Unattended scan -> generate -> execute loop. Off by default — unlike
+    # auto-execute (which only acts on a plan you already asked for), this
+    # decides *which* symbols to trade with no human in the loop at all, so
+    # it opts in rather than opting out.
+    auto_scan_enabled: bool = False
+    auto_scan_interval_minutes: int = 60
+    max_concurrent_positions: int = 5
 
     def redacted(self) -> dict:
-        """Copy safe to return over the API — keys collapsed to a presence flag."""
+        """Copy safe to return over the API — secrets collapsed to a masked
+        hint (e.g. "••••ab12") so the UI can show *that* a key is set and
+        confirm it's the right one, without ever echoing the real value."""
         data = self.model_dump()
-        for key in ("openrouter_api_key", "orcarouter_api_key", "openai_api_key", "gemini_api_key", "finnhub_api_key"):
-            data[key] = bool(data[key])
+        for key in (
+            "openrouter_api_key",
+            "orcarouter_api_key",
+            "openai_api_key",
+            "gemini_api_key",
+            "finnhub_api_key",
+            "telegram_bot_token",
+        ):
+            data[key] = _mask_secret(data[key])
         return data
 
 

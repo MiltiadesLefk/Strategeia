@@ -15,16 +15,34 @@ class SettingsUpdateRequest(BaseModel):
     gemini_model: str | None = None
     finnhub_enabled: bool | None = None
     finnhub_api_key: str | None = None
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
     scan_universe_size: int | None = Field(default=None, gt=0)
     paper_starting_cash: float | None = Field(default=None, gt=0)
     default_risk_pct: float | None = Field(default=None, gt=0, le=100)
     mark_to_market_interval_minutes: int | None = Field(default=None, gt=0)
+    auto_execute_trade_plans: bool | None = None
+    auto_scan_enabled: bool | None = None
+    auto_scan_interval_minutes: int | None = Field(default=None, gt=0)
+    max_concurrent_positions: int | None = Field(default=None, gt=0)
 
 
 class TestConnectionRequest(BaseModel):
-    target: str  # "llm" | "finnhub"
+    target: str  # "llm" | "finnhub" | "telegram"
 
 
 class TestConnectionResponse(BaseModel):
     ok: bool
     message: str
+
+
+class StatusResponse(BaseModel):
+    """Mirrors the sidebar's 'Trading Bot Online' indicator shape for three more
+    signals: whether the configured LLM provider is real (not just the
+    NullLLMProvider echo fallback), whether Finnhub is configured, and whether
+    Telegram notifications are configured."""
+
+    ai_online: bool
+    ai_provider: str
+    finnhub_online: bool
+    telegram_online: bool

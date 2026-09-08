@@ -57,6 +57,14 @@ class NewsItem:
     published_at: str
 
 
+@dataclass
+class EarningsEstimate:
+    date: date
+    fiscal_period_label: str | None
+    eps_estimate: float | None
+    revenue_estimate: float | None
+
+
 class DataProvider(Protocol):
     name: str
 
@@ -71,3 +79,5 @@ class DataProvider(Protocol):
     def get_news(self, symbol: str, limit: int = 5) -> list[NewsItem]: ...
 
     def get_earnings_date(self, symbol: str) -> date | None: ...
+
+    def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None: ...

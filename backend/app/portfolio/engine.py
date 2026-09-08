@@ -9,6 +9,21 @@ from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, Tr
 from app.timeutil import utcnow_naive
 
 
+class InsufficientCashError(Exception):
+    """Raised when the account can't afford even 1 share. Opening anyway
+    would create a phantom zero-share position — it clears status checks and
+    shows up in the positions list, but represents no real exposure, so it
+    silently masquerades as an executed trade that never actually happened."""
+
+
+class DuplicatePositionError(Exception):
+    """Raised when a symbol already has an open position. The v1 engine's
+    exit rule (mark_to_market closes a position fully, all-or-nothing — see
+    notes/Decisions.md) assumes one position per symbol at a time; silently
+    allowing a second would pyramid into it with no way to distinguish which
+    fill a later stop/TP hit belongs to."""
+
+
 class PaperTradingEngine:
     def __init__(self, session: Session, data_provider: DataProvider, starting_cash: float = 100_000.0):
         self._session = session
@@ -26,12 +41,28 @@ class PaperTradingEngine:
 
     def open_position(self, trade_plan: TradePlanRecord) -> PaperPosition:
         account = self.get_account_state()
+
+        existing = self._session.exec(
+            select(PaperPosition).where(PaperPosition.symbol == trade_plan.symbol, PaperPosition.status == "open")
+        ).first()
+        if existing is not None:
+            raise DuplicatePositionError(f"{trade_plan.symbol} already has an open position (id={existing.id})")
+
         shares = trade_plan.suggested_shares
 
         if trade_plan.direction == "long":
             required_cash = shares * trade_plan.entry
             if required_cash > account.current_cash:
                 shares = math.floor(account.current_cash / trade_plan.entry) if trade_plan.entry > 0 else 0
+
+        if shares <= 0:
+            raise InsufficientCashError(
+                f"Account can't afford 1 share of {trade_plan.symbol} at ${trade_plan.entry:.2f} "
+                f"(available cash: ${account.current_cash:.2f}). Increase paper starting cash or "
+                "risk % in Settings."
+            )
+
+        if trade_plan.direction == "long":
             account.current_cash -= shares * trade_plan.entry
         else:
             account.current_cash += shares * trade_plan.entry
@@ -128,7 +159,11 @@ class PaperTradingEngine:
                 price = quote.price
             except AllProvidersFailedError:
                 price = position.entry_price
-            mark_value += position.shares * price
+            # Mirrors close_position()'s cash math exactly: a long ADDS
+            # shares*price to cash when closed, a short SUBTRACTS it (you
+            # pay to buy back and cover) — this is "cash if every open
+            # position were closed right now," not a raw notional sum.
+            mark_value += position.shares * price if position.direction == "long" else -(position.shares * price)
 
         snapshot = EquitySnapshot(equity_value=account.current_cash + mark_value, cash_balance=account.current_cash)
         self._session.add(snapshot)

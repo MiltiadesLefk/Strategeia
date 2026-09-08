@@ -3,14 +3,14 @@ import { api } from './client';
 import type {
   AnalysisResponse,
   AppSettings,
+  AutoScanResponse,
   DashboardSummary,
   EquityPoint,
   Position,
   PortfolioStats,
   ResearchResponse,
-  RiskCalculateRequest,
-  RiskCalculateResponse,
   ScanResponse,
+  SettingsStatus,
   SettingsUpdateRequest,
   TestConnectionResponse,
   TradePlan,
@@ -36,6 +36,19 @@ export function useScan(symbols?: string) {
   });
 }
 
+export function useRunAutoScanNow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<AutoScanResponse>('/api/scan/auto-trade'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
+      queryClient.invalidateQueries({ queryKey: qk.positions });
+      queryClient.invalidateQueries({ queryKey: qk.stats });
+      queryClient.invalidateQueries({ queryKey: qk.dashboard });
+    },
+  });
+}
+
 export function useUniverse() {
   return useQuery({
     queryKey: ['universe'] as const,
@@ -57,12 +70,6 @@ export function useResearch(symbol: string | null) {
     queryKey: qk.research(symbol ?? ''),
     queryFn: () => api.get<ResearchResponse>(`/api/research/${symbol}`),
     enabled: !!symbol,
-  });
-}
-
-export function useCalculateRisk() {
-  return useMutation({
-    mutationFn: (req: RiskCalculateRequest) => api.post<RiskCalculateResponse>('/api/risk/calculate', req),
   });
 }
 
@@ -112,6 +119,20 @@ export function usePortfolioStats() {
   return useQuery({ queryKey: qk.stats, queryFn: () => api.get<PortfolioStats>('/api/portfolio/stats') });
 }
 
+export function useResetPortfolio() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<PortfolioStats>('/api/portfolio/reset'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.positions });
+      queryClient.invalidateQueries({ queryKey: qk.stats });
+      queryClient.invalidateQueries({ queryKey: qk.equityCurve });
+      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
+      queryClient.invalidateQueries({ queryKey: qk.dashboard });
+    },
+  });
+}
+
 export function useEquityCurve() {
   return useQuery({ queryKey: qk.equityCurve, queryFn: () => api.get<EquityPoint[]>('/api/portfolio/equity-curve') });
 }
@@ -124,6 +145,14 @@ export function useSettings() {
   return useQuery({ queryKey: qk.settings, queryFn: () => api.get<AppSettings>('/api/settings') });
 }
 
+export function useSettingsStatus() {
+  return useQuery({
+    queryKey: ['settings-status'] as const,
+    queryFn: () => api.get<SettingsStatus>('/api/settings/status'),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -134,6 +163,6 @@ export function useUpdateSettings() {
 
 export function useTestConnection() {
   return useMutation({
-    mutationFn: (target: 'llm' | 'finnhub') => api.post<TestConnectionResponse>('/api/settings/test-connection', { target }),
+    mutationFn: (target: 'llm' | 'finnhub' | 'telegram') => api.post<TestConnectionResponse>('/api/settings/test-connection', { target }),
   });
 }
