@@ -42,10 +42,14 @@ def get_trade_plan(plan_id: int, session: Session = Depends(get_session)) -> Tra
 
 
 def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
+    # No-trade records (status="no_trade") have no entry/tp1/suggested_shares
+    # — nothing to size a potential gain/risk against.
+    has_sizing = record.suggested_shares is not None and record.tp1 is not None and record.entry is not None
     return TradePlanResponse(
         id=record.id,
         symbol=record.symbol,
         direction=record.direction,
+        reason=record.reason,
         entry=record.entry,
         stop=record.stop,
         tp1=record.tp1,
@@ -54,7 +58,7 @@ def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
         rr2=record.rr2,
         suggested_shares=record.suggested_shares,
         account_risk_dollars=record.account_risk_dollars,
-        potential_gain=record.suggested_shares * abs(record.tp1 - record.entry),
+        potential_gain=record.suggested_shares * abs(record.tp1 - record.entry) if has_sizing else None,
         potential_risk=record.account_risk_dollars,
         confidence_score=record.confidence_score,
         time_horizon=record.time_horizon,
@@ -65,5 +69,12 @@ def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
         technical_score=record.technical_score,
         fundamental_score=record.fundamental_score,
         news_score=record.news_score,
+        market_confirmation_score=record.market_confirmation_score,
+        vix_regime_score=record.vix_regime_score,
+        options_score=record.options_score,
         signal_reasons=record.signal_reasons,
+        ai_opinion_stance=record.ai_opinion_stance,
+        ai_opinion_score=record.ai_opinion_score,
+        ai_opinion_text=record.ai_opinion_text,
+        ai_news_assessment=record.ai_news_assessment,
     )

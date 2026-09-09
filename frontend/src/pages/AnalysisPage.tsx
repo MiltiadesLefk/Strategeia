@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAnalysis } from '../api/hooks';
-import { SymbolPicker } from '../components/SymbolPicker';
+import { CompanyDropdown } from '../components/CompanyDropdown';
 import { RangeTabs } from '../components/RangeTabs';
 import { TrendBadge } from '../components/Badge';
 import { CompanyIcon } from '../components/CompanyIcon';
@@ -11,7 +11,7 @@ import type { ApiError } from '../api/client';
 
 export function AnalysisPage() {
   const [params, setParams] = useSearchParams();
-  const symbol = params.get('symbol') || 'AAPL';
+  const symbol = params.get('symbol') || 'NVDA';
   const [range, setRange] = useState('3mo');
   const { data, isLoading, error } = useAnalysis(symbol, range);
 
@@ -35,7 +35,7 @@ export function AnalysisPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: 22 }}>Chart Analysis</h1>
-        <SymbolPicker value={symbol} onChange={(s) => setParams({ symbol: s })} />
+        <CompanyDropdown value={symbol} onChange={(s) => setParams({ symbol: s })} />
       </div>
 
       {isLoading && <LoadingSpinner label={`Loading ${symbol}…`} />}

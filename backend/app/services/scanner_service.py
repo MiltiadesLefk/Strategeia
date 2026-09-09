@@ -16,7 +16,7 @@ def scan_symbols(symbols: list[str], data_provider: DataProvider) -> tuple[list[
 
     for symbol in symbols:
         try:
-            ohlcv = data_provider.get_ohlcv(symbol, period="6mo", interval="1d")
+            ohlcv = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
             quote = data_provider.get_quote(symbol)
         except AllProvidersFailedError as exc:
             errors.append(f"{symbol}: {exc}")

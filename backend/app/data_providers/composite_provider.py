@@ -12,6 +12,7 @@ from app.data_providers.base import (
     EarningsEstimate,
     FinancialsData,
     NewsItem,
+    OptionsSummary,
     QuoteData,
 )
 
@@ -68,5 +69,15 @@ class CompositeDataProvider:
     def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None:
         try:
             return self._try_each("get_earnings_estimate", symbol)
+        except AllProvidersFailedError:
+            return None
+
+    def get_options_summary(self, symbol: str) -> OptionsSummary | None:
+        # Common/expected absence (crypto has no options chain at all, many
+        # smaller names have none either) — same "return None, don't raise"
+        # shape as get_earnings_date/get_earnings_estimate above, not an
+        # error condition callers need to handle specially.
+        try:
+            return self._try_each("get_options_summary", symbol)
         except AllProvidersFailedError:
             return None

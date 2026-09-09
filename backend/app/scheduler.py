@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from sqlmodel import Session
 
 from app.config import load_app_settings
@@ -16,6 +17,19 @@ from app.services.health_monitor import check_and_alert
 
 logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
+
+# Auto-scan runs 3x/day pegged to session opens rather than a fixed
+# interval — "quality over quantity": evaluate every ticker once per
+# session, not every N minutes. UTC hours are approximate fixed points (not
+# DST-adjusted — Asia/Tokyo doesn't observe DST so 00:00 UTC is exact;
+# London/New York drift by an hour across DST, which is fine for a
+# 3x/day cadence, not worth the added complexity of a tz-aware scheduler
+# entry for a personal dashboard).
+AUTO_SCAN_SESSION_TIMES_UTC = [
+    ("asia", 0, 0),  # Tokyo open, ~09:00 JST
+    ("london", 8, 0),  # London open, ~08:00 GMT
+    ("new_york", 13, 30),  # NYSE open, ~09:30 ET
+]
 
 
 def _mark_to_market_job() -> None:
@@ -69,12 +83,12 @@ def start_scheduler() -> BackgroundScheduler:
         id="health_check",
         next_run_time=datetime.now(),  # catch a broken provider right at startup, not just after the first interval
     )
-    _scheduler.add_job(
-        _auto_scan_job,
-        "interval",
-        minutes=settings.auto_scan_interval_minutes,
-        id="auto_scan",
-    )
+    for session_name, hour, minute in AUTO_SCAN_SESSION_TIMES_UTC:
+        _scheduler.add_job(
+            _auto_scan_job,
+            CronTrigger(hour=hour, minute=minute, timezone="UTC"),
+            id=f"auto_scan_{session_name}",
+        )
     _scheduler.start()
     return _scheduler
 

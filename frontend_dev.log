@@ -3,237 +3,36 @@
 > vite
 
 
-  [32m[1mVITE[22m v8.2.2[39m  [2mready in [0m[1m516[22m[2m[0m ms[22m
+  [32m[1mVITE[22m v8.2.2[39m  [2mready in [0m[1m637[22m[2m[0m ms[22m
 
   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
 [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
-[2m3:52:58 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mNo routes matched location "/market-scan" 
-[2m3:52:58 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mNo routes matched location "/market-scan" 
-[2m3:53:05 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mNo routes matched location "/risk-manager" 
-[2m3:53:05 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mNo routes matched location "/risk-manager" 
-[2m4:05:59 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/DashboardLayout.tsx[22m
-[2m4:06:12 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
-[2m4:06:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:06:46 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
-[2m4:07:21 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m4:07:41 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m4:08:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/chart/CandlestickChart.tsx[22m
-[2m4:09:25 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
-[2m4:10:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/CompanyIcon.tsx[22m
-[2m4:11:12 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ResearchPage.tsx[22m
-[2m4:11:13 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ResearchPage.tsx[22m
-[2m4:11:16 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/RiskManagerPage.tsx[22m
-[2m4:11:17 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m4:11:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
-[2m4:18:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/chart/EquityCurveChart.tsx[22m
-[2m4:22:31 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/RiskManagerPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx[22m
-[2m4:22:36 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/RiskManagerPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx[22m
-[2m4:22:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/RiskManagerPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx[22m
-[2m4:22:44 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:22:54 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:24:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m4:24:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:24:47 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m4:24:52 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:24:56 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:25:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:25:10 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:25:40 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mA component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://react.dev/link/controlled-components
-[2m4:26:49 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mA component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://react.dev/link/controlled-components
-[2m4:26:50 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mA component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://react.dev/link/controlled-components
-[2m4:40:32 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:40:38 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:40:44 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mindex.html[22m
-[2m4:43:03 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:44:07 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m4:54:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:54:06 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:54:11 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:54:17 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:54:22 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:54:30 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:54:42 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `true` for a non-boolean attribute `placeholder`.
-
-If you want to write it to the DOM, pass a string instead: placeholder="true" or placeholder={value.toString()}.
-[2m4:54:43 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mReceived `true` for a non-boolean attribute `placeholder`.
-
-If you want to write it to the DOM, pass a string instead: placeholder="true" or placeholder={value.toString()}.
-[2m4:57:28 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:57:29 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: testing is not defined
-[39m > SettingsPage src/pages/SettingsPage.tsx:163:96
-    161 |              {saving ? 'Saving…' : 'Save'}
-    162 |            </button>
-    163 |            <button className="btn btn-secondary" onClick={() => testConnection('llm')} disabled={testing}>
-        |                                                                                                  ^
-    164 |              {testing ? 'Testing…' : 'Test Connection'}
-    165 |            </button>
- > Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25904:19
- > renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:7662:21
- > updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:10166:18
- > beginWork node_modules/react-dom/cjs/react-dom-client.development.js:11778:17
- > runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:871:29
- > performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:17641:21
- > workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:17469:40
- > renderRootSync node_modules/react-dom/cjs/react-dom-client.development.js:17450:10
- > performWorkOnRoot node_modules/react-dom/cjs/react-dom-client.development.js:16583:34
-
-[2m4:57:29 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mAn error occurred in the <SettingsPage> component.
-
-Consider adding an error boundary to your tree to customize error handling behavior.
-Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
-
-[2m4:57:36 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:57:37 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: testing is not defined
-[39m > SettingsPage src/pages/SettingsPage.tsx:227:101
-    225 |              {saving ? 'Saving…' : 'Save'}
-    226 |            </button>
-    227 |            <button className="btn btn-secondary" onClick={() => testConnection('telegram')} disabled={testing}>
-        |                                                                                                       ^
-    228 |              {testing ? 'Testing…' : 'Test Connection'}
-    229 |            </button>
- > Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25904:19
- > renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:7662:21
- > updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:10166:18
- > beginWork node_modules/react-dom/cjs/react-dom-client.development.js:11778:17
- > runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:871:29
- > performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:17641:21
- > workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:17469:40
- > renderRootSync node_modules/react-dom/cjs/react-dom-client.development.js:17450:10
- > performWorkOnRoot node_modules/react-dom/cjs/react-dom-client.development.js:16583:34
-
-[2m4:57:37 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mAn error occurred in the <SettingsPage> component.
-
-Consider adding an error boundary to your tree to customize error handling behavior.
-Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
-
-[2m4:57:44 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:57:45 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: testing is not defined
-[39m > SettingsPage src/pages/SettingsPage.tsx:233:101
-    231 |              {saving ? 'Saving…' : 'Save'}
-    232 |            </button>
-    233 |            <button className="btn btn-secondary" onClick={() => testConnection('telegram')} disabled={testing}>
-        |                                                                                                       ^
-    234 |              {testing ? 'Testing…' : 'Test Connection'}
-    235 |            </button>
- > Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25904:19
- > renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:7662:21
- > updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:10166:18
- > beginWork node_modules/react-dom/cjs/react-dom-client.development.js:11778:17
- > runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:871:29
- > performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:17641:21
- > workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:17469:40
- > renderRootSync node_modules/react-dom/cjs/react-dom-client.development.js:17450:10
- > performWorkOnRoot node_modules/react-dom/cjs/react-dom-client.development.js:16583:34
-
-[2m4:57:45 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mAn error occurred in the <SettingsPage> component.
-
-Consider adding an error boundary to your tree to customize error handling behavior.
-Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
-
-[2m4:57:52 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:57:57 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:58:02 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:58:06 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m4:58:12 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:01:11 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:01:17 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:01:22 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:01:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:01:32 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:01:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:01:42 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:04:11 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:05:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/SecretField.tsx[22m
-[2m5:05:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:05:56 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:06:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:06:06 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:06:11 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:06:16 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:35:24 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/RiskManagerPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx, /src/layout/Sidebar.tsx[22m
-[2m5:35:26 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/RiskManagerPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx, /src/layout/Sidebar.tsx[22m
-[2m5:35:26 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22m[vite] SyntaxError: The requested module '/src/api/hooks.ts?t=1788878126128' does not provide an export named 'useCalculateRisk'
-[2m5:35:26 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22m[vite] Failed to reload /src/pages/RiskManagerPage.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
-[2m5:35:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.tsx[22m
-[2m5:35:28 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: RiskManagerPage is not defined
-[39m > App src/App.tsx:19:37
-    17 |          <Route path="analysis" element={<AnalysisPage />} />
-    18 |          <Route path="research" element={<ResearchPage />} />
-    19 |          <Route path="risk" element={<RiskManagerPage />} />
-       |                                       ^
-    20 |          <Route path="trade-plans" element={<TradePlansPage />} />
-    21 |          <Route path="portfolio" element={<PortfolioPage />} />
- > Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25904:19
- > renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:7662:21
- > updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:10166:18
- > beginWork node_modules/react-dom/cjs/react-dom-client.development.js:11778:17
- > runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:871:29
- > performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:17641:21
- > workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:17469:40
- > renderRootSync node_modules/react-dom/cjs/react-dom-client.development.js:17450:10
- > performWorkOnRoot node_modules/react-dom/cjs/react-dom-client.development.js:16583:34
-
-[2m5:35:28 PM[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mAn error occurred in the <App> component.
-
-Consider adding an error boundary to your tree to customize error handling behavior.
-Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
-
-[2m5:35:28 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.tsx[22m
-[2m5:35:32 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m5:35:34 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/Sidebar.tsx[22m
-[2m5:35:38 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/RiskManagerPage.tsx[22m
-[2m5:35:38 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22m[vite] Failed to reload /src/pages/RiskManagerPage.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
-[2m5:35:42 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
-[2m5:36:34 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/common.tsx[22m
-[2m5:36:34 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [33mhmr invalidate [39m[2m/src/components/common.tsx[22m Could not Fast Refresh (new export)
-[2m5:36:34 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx[22m
-[2m5:37:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ResearchPage.tsx[22m
-[2m5:37:26 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/Badge.tsx[22m
-[2m5:37:26 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [33mhmr invalidate [39m[2m/src/components/Badge.tsx[22m Could not Fast Refresh (new export)
-[2m5:37:26 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx[22m
-[2m5:38:22 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m5:57:02 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx, /src/layout/Sidebar.tsx[22m
-[2m5:57:13 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx, /src/layout/Sidebar.tsx[22m
-[2m5:57:25 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/PortfolioPage.tsx[22m
-[2m5:57:33 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/PortfolioPage.tsx[22m
-[2m5:57:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/PortfolioPage.tsx[22m
-[2m5:57:41 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
-[2m5:57:46 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
-[2m5:57:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m5:58:00 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m5:58:05 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m5:58:18 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m5:58:29 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m5:58:38 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m5:58:43 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m5:58:56 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m5:59:02 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m5:59:09 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m5:59:17 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m5:59:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m5:59:32 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
-[2m5:59:52 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m5:59:56 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:00:00 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:00:06 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:00:14 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:13:45 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:14:20 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/PortfolioPage.tsx[22m
-[2m6:14:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/PortfolioPage.tsx[22m
-[2m6:14:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/Badge.tsx[22m
-[2m6:14:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [33mhmr invalidate [39m[2m/src/components/Badge.tsx[22m Could not Fast Refresh (export removed)
-[2m6:14:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx[22m
-[2m6:19:46 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx, /src/layout/Sidebar.tsx[22m
-[2m6:19:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx, /src/pages/ResearchPage.tsx, /src/pages/DashboardPage.tsx, /src/pages/TradePlansPage.tsx, /src/pages/PortfolioPage.tsx, /src/pages/AnalysisPage.tsx, /src/pages/SettingsPage.tsx, /src/components/CompanyDropdown.tsx, /src/layout/Sidebar.tsx[22m
-[2m6:20:05 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:20:09 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:20:14 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:20:32 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
-[2m6:20:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
-[2m6:20:48 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
-[2m6:20:54 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
-[2m6:21:08 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m6:21:13 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m7:00:44 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m7:06:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
-[2m7:06:09 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
+[2m1:43:41 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/AnalysisPage.tsx[22m
+[2m1:43:45 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/AnalysisPage.tsx[22m
+[2m1:43:46 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/AnalysisPage.tsx[22m
+[2m1:43:50 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ResearchPage.tsx[22m
+[2m1:43:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ResearchPage.tsx[22m
+[2m1:43:52 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ResearchPage.tsx[22m
+[2m1:43:56 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
+[2m1:43:57 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
+[2m1:43:58 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
+[2m1:44:02 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
+[2m1:44:07 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
+[2m1:44:13 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
+[2m1:44:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/SymbolPicker.tsx[22m
+[2m1:44:19 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22m[vite] Failed to reload /src/components/SymbolPicker.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+[2m1:58:53 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
+[2m1:58:57 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
+[2m1:59:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
+[2m1:59:11 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
+[2m1:59:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
+[2m1:59:26 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
+[2m1:59:32 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/MarketScanPage.tsx[22m
+[2m2:00:10 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
+[2m2:00:34 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DashboardPage.tsx[22m
+[2m2:00:46 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
+[2m2:00:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
+[2m2:00:59 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TradePlansPage.tsx[22m
+[2m2:01:05 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/Badge.tsx[22m
+[2m2:01:21 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/CompanyIcon.tsx[22m
+[2m2:01:25 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/CompanyIcon.tsx[22m

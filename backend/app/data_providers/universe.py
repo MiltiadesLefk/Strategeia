@@ -13,7 +13,7 @@ UNIVERSE_FILE = DATA_DIR / "sp500.csv"
 # doesn't burn time/rate-limit budget scanning the full bundled list.
 # `sp500.csv` itself is untouched — set this to None to see the full
 # universe again, nothing to restore.
-DEV_TICKER_FILTER: list[str] | None = ["AAPL", "NVDA", "BTC-USD"]
+DEV_TICKER_FILTER: list[str] | None = ["NVDA", "BTC-USD"]
 
 
 @dataclass

@@ -6,7 +6,15 @@ from datetime import date, timedelta
 import httpx
 import pandas as pd
 
-from app.data_providers.base import CompanyOverview, DataProviderError, EarningsEstimate, FinancialsData, NewsItem, QuoteData
+from app.data_providers.base import (
+    CompanyOverview,
+    DataProviderError,
+    EarningsEstimate,
+    FinancialsData,
+    NewsItem,
+    OptionsSummary,
+    QuoteData,
+)
 from app.data_providers.cache import cached
 
 STOOQ_URL = "https://stooq.com/q/d/l/"
@@ -79,3 +87,6 @@ class StooqProvider:
 
     def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None:
         raise NotImplementedError("stooq provider does not support earnings estimates")
+
+    def get_options_summary(self, symbol: str) -> OptionsSummary:
+        raise NotImplementedError("stooq provider does not support options data")

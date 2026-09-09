@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useRunAutoScanNow, useScan } from '../api/hooks';
+import { useRunAutoScanNow, useScan, useUniverse } from '../api/hooks';
 import { SignalBadge, TrendBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { Sparkline } from '../components/Sparkline';
@@ -45,9 +45,9 @@ function StarButton({ active, onClick }: { active: boolean; onClick: () => void 
 
 export function MarketScanPage() {
   const [symbolsFilter, setSymbolsFilter] = useState<string | undefined>(undefined);
-  const [draft, setDraft] = useState('');
   const [tab, setTab] = useState<Tab>('top');
   const [watchlist, setWatchlist] = useState<string[]>(() => loadWatchlist());
+  const { data: universe } = useUniverse();
   const { data, isLoading, error, refetch, isFetching } = useScan(symbolsFilter);
   const { mutate: runAutoScanNow, isPending: autoTrading, data: autoTradeResult, error: autoTradeError } = useRunAutoScanNow();
 
@@ -92,16 +92,19 @@ export function MarketScanPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            placeholder="Custom symbols, e.g. AAPL,NVDA,TSLA"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value.toUpperCase())}
-            style={{ width: 260 }}
-          />
-          <button className="btn btn-secondary" onClick={() => setSymbolsFilter(draft || undefined)}>
-            Filter
-          </button>
+          <select
+            value={symbolsFilter ?? ''}
+            onChange={(e) => setSymbolsFilter(e.target.value || undefined)}
+            title="Filter the scan to one symbol, or show all"
+            style={{ width: 220 }}
+          >
+            <option value="">All symbols</option>
+            {universe?.map((entry) => (
+              <option key={entry.symbol} value={entry.symbol}>
+                {entry.symbol} — {entry.name}
+              </option>
+            ))}
+          </select>
           <button className="btn btn-primary" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? 'Scanning…' : 'Rescan'}
           </button>
@@ -109,7 +112,7 @@ export function MarketScanPage() {
             className="btn btn-secondary"
             onClick={() => runAutoScanNow()}
             disabled={autoTrading}
-            title="Scan, then generate (and auto-execute, if enabled in Settings) a trade plan for every potential setup found"
+            title="Fully evaluate every symbol in the universe — technicals, fundamentals, news, earnings — and either generate (and auto-execute, if enabled in Settings) a trade plan or record why not"
           >
             {autoTrading ? 'Scanning & Trading…' : 'Scan & Auto-Trade Now'}
           </button>
@@ -119,9 +122,11 @@ export function MarketScanPage() {
       {autoTradeError && <ErrorBanner message={(autoTradeError as ApiError).message} />}
       {autoTradeResult && (
         <div className="text-muted" style={{ fontSize: 13 }}>
-          {autoTradeResult.generated.length === 0
-            ? 'Auto-trade found no new potential setups (or the open-position cap was already reached).'
-            : `Auto-trade generated plans for: ${autoTradeResult.generated.join(', ')}. See Trade Plans for details.`}
+          {autoTradeResult.generated.length === 0 && autoTradeResult.no_trade.length === 0
+            ? 'Auto-trade found nothing to evaluate — is the universe empty?'
+            : autoTradeResult.generated.length === 0
+              ? `Evaluated ${autoTradeResult.no_trade.length} symbol(s), no trade-worthy setups this run. See Trade Plans for the reasons.`
+              : `Generated plans for: ${autoTradeResult.generated.join(', ')}. ${autoTradeResult.no_trade.length} other symbol(s) evaluated with no trade. See Trade Plans for details.`}
         </div>
       )}
 

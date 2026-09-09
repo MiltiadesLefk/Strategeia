@@ -5,7 +5,15 @@ from datetime import date, datetime, timedelta
 import httpx
 import pandas as pd
 
-from app.data_providers.base import CompanyOverview, DataProviderError, EarningsEstimate, FinancialsData, NewsItem, QuoteData
+from app.data_providers.base import (
+    CompanyOverview,
+    DataProviderError,
+    EarningsEstimate,
+    FinancialsData,
+    NewsItem,
+    OptionsSummary,
+    QuoteData,
+)
 from app.data_providers.cache import cached
 from app.timeutil import utc_from_timestamp_naive
 
@@ -143,3 +151,6 @@ class FinnhubProvider:
             eps_estimate=entry.get("epsEstimate"),
             revenue_estimate=entry.get("revenueEstimate"),
         )
+
+    def get_options_summary(self, symbol: str) -> OptionsSummary:
+        raise NotImplementedError("finnhub free tier does not expose options chain data")

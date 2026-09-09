@@ -30,3 +30,4 @@ class ScanJobStatus(BaseModel):
 
 class AutoScanResponse(BaseModel):
     generated: list[str]
+    no_trade: list[str] = []

@@ -3,12 +3,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.config import AppSettings
 from app.data_providers.base import AllProvidersFailedError, QuoteData
 from app.llm_providers.null_provider import NullLLMProvider
-from app.portfolio.models import PaperPosition
+from app.portfolio.models import PaperPosition, TradePlanRecord
 from app.services import automation_service
 
 
@@ -57,6 +57,9 @@ class FakeUniverseProvider:
     def get_earnings_date(self, symbol: str):
         return None
 
+    def get_options_summary(self, symbol: str):
+        return None
+
 
 @pytest.fixture
 def session():
@@ -81,20 +84,29 @@ def test_auto_scan_generates_plans_for_setups(session, monkeypatch):
     )
     settings = _settings()
 
-    generated = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
+    outcome = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
 
-    assert set(generated) == {"AAA", "BBB", "CCC"}
+    assert set(outcome.generated) == {"AAA", "BBB", "CCC"}
+    assert outcome.no_trade == []
 
 
-def test_auto_scan_respects_max_concurrent_positions_slot_count(session, monkeypatch):
+def test_auto_scan_caps_auto_execution_but_still_evaluates_every_symbol(session, monkeypatch):
+    """The position-count cap must only gate EXECUTION, not evaluation —
+    every symbol still gets a full plan (quality over quantity: we never
+    silently skip looking at a name just because the account is full), it's
+    only auto-execute that stops once slots run out."""
     monkeypatch.setattr(
         "app.services.automation_service.get_default_watchlist", lambda n: ["AAA", "BBB", "CCC"]
     )
-    settings = _settings(max_concurrent_positions=2)
+    settings = _settings(max_concurrent_positions=2, auto_execute_trade_plans=True)
 
-    generated = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
+    outcome = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
 
-    assert len(generated) == 2
+    assert set(outcome.generated) == {"AAA", "BBB", "CCC"}
+    records = session.exec(select(TradePlanRecord)).all()
+    statuses = [r.status for r in records]
+    assert statuses.count("executed") == 2
+    assert statuses.count("pending") == 1
 
 
 def test_auto_scan_skips_symbols_with_an_open_position(session, monkeypatch):
@@ -109,13 +121,16 @@ def test_auto_scan_skips_symbols_with_an_open_position(session, monkeypatch):
     session.commit()
     settings = _settings()
 
-    generated = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
+    outcome = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
 
-    assert "AAA" not in generated
-    assert set(generated) == {"BBB", "CCC"}
+    assert "AAA" not in outcome.generated
+    assert set(outcome.generated) == {"BBB", "CCC"}
 
 
-def test_auto_scan_returns_nothing_when_already_at_the_position_cap(session, monkeypatch):
+def test_auto_scan_still_evaluates_every_symbol_when_already_at_the_position_cap(session, monkeypatch):
+    """Regression for the old behavior, which returned [] (never even
+    generated a plan) once at the cap. Now: still evaluate and propose plans
+    for review, just don't auto-execute any of them past the cap."""
     monkeypatch.setattr(
         "app.services.automation_service.get_default_watchlist", lambda n: ["AAA", "BBB", "CCC"]
     )
@@ -127,8 +142,10 @@ def test_auto_scan_returns_nothing_when_already_at_the_position_cap(session, mon
             )
         )
     session.commit()
-    settings = _settings(max_concurrent_positions=3)
+    settings = _settings(max_concurrent_positions=3, auto_execute_trade_plans=True)
 
-    generated = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
+    outcome = automation_service.run_auto_scan(settings, FakeUniverseProvider(), NullLLMProvider(), session)
 
-    assert generated == []
+    assert set(outcome.generated) == {"AAA", "BBB", "CCC"}
+    records = session.exec(select(TradePlanRecord).where(TradePlanRecord.symbol.in_(["AAA", "BBB", "CCC"]))).all()
+    assert all(r.status == "pending" for r in records)

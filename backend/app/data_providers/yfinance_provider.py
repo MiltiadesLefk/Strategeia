@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 import yfinance as yf
@@ -12,6 +12,7 @@ from app.data_providers.base import (
     FinancialsData,
     FinancialYear,
     NewsItem,
+    OptionsSummary,
     QuoteData,
 )
 from app.data_providers.cache import cached
@@ -23,6 +24,12 @@ OVERVIEW_TTL = 24 * 60 * 60
 FINANCIALS_TTL = 24 * 60 * 60
 NEWS_TTL = 30 * 60
 EARNINGS_TTL = 24 * 60 * 60
+OPTIONS_TTL = 30 * 60
+
+# Same-day/next-day expirations carry unreliable implied-volatility quotes
+# on free data (thin/stale prints at the bid-ask floor) — skip ahead to the
+# first expiration at least this many days out.
+OPTIONS_MIN_DAYS_TO_EXPIRATION = 7
 
 
 class YFinanceProvider:
@@ -168,4 +175,44 @@ class YFinanceProvider:
             fiscal_period_label=f"Q{quarter} {next_ts.year}",
             eps_estimate=eps_estimate,
             revenue_estimate=None,
+        )
+
+    @cached(OPTIONS_TTL)
+    def get_options_summary(self, symbol: str) -> OptionsSummary:
+        try:
+            ticker = yf.Ticker(symbol)
+            expirations = ticker.options
+        except Exception as exc:
+            raise DataProviderError(f"yfinance get_options_summary({symbol}) failed: {exc}") from exc
+        if not expirations:
+            raise DataProviderError(f"yfinance has no options chain for {symbol}")
+
+        today = date.today()
+        expiration = next(
+            (e for e in expirations if (datetime.strptime(e, "%Y-%m-%d").date() - today).days >= OPTIONS_MIN_DAYS_TO_EXPIRATION),
+            expirations[-1],  # every expiration is too near-dated — use the furthest one available rather than 0DTE noise
+        )
+
+        try:
+            chain = ticker.option_chain(expiration)
+            calls, puts = chain.calls, chain.puts
+        except Exception as exc:
+            raise DataProviderError(f"yfinance option_chain({symbol}, {expiration}) failed: {exc}") from exc
+
+        call_volume = float(calls["volume"].fillna(0).sum()) if not calls.empty else 0.0
+        put_volume = float(puts["volume"].fillna(0).sum()) if not puts.empty else 0.0
+        put_call_ratio = put_volume / call_volume if call_volume > 0 else None
+
+        atm_iv = None
+        if not calls.empty:
+            try:
+                spot = float(ticker.fast_info["lastPrice"])
+                atm_row = calls.iloc[(calls["strike"] - spot).abs().argsort().iloc[0]]
+                iv = atm_row.get("impliedVolatility")
+                atm_iv = float(iv) if iv is not None and not pd.isna(iv) else None
+            except Exception:
+                atm_iv = None  # best-effort only — never let ATM-strike lookup break the whole options summary
+
+        return OptionsSummary(
+            symbol=symbol, expiration=expiration, put_call_volume_ratio=put_call_ratio, atm_implied_volatility=atm_iv
         )

@@ -23,6 +23,7 @@ export interface ScanResponse {
 
 export interface AutoScanResponse {
   generated: string[];
+  no_trade: string[];
 }
 
 export interface Candle {
@@ -121,7 +122,14 @@ export interface TradePlan {
   technical_score?: number | null;
   fundamental_score?: number | null;
   news_score?: number | null;
+  market_confirmation_score?: number | null;
+  vix_regime_score?: number | null;
+  options_score?: number | null;
   signal_reasons?: string | null;
+  ai_opinion_stance?: 'bullish' | 'bearish' | 'neutral' | null;
+  ai_opinion_score?: number | null;
+  ai_opinion_text?: string | null;
+  ai_news_assessment?: string | null;
 }
 
 export interface Position {
@@ -166,6 +174,7 @@ export interface DashboardSummary {
   potential_setups: number;
   top_setups: ScanResult[];
   latest_trade_plan: TradePlan | null;
+  top_pick_trade_plan: TradePlan | null;
 }
 
 export interface AppSettings {
@@ -189,8 +198,8 @@ export interface AppSettings {
   mark_to_market_interval_minutes: number;
   auto_execute_trade_plans: boolean;
   auto_scan_enabled: boolean;
-  auto_scan_interval_minutes: number;
   max_concurrent_positions: number;
+  ai_trading_overlay_enabled: boolean;
 }
 
 export interface SettingsUpdateRequest {
@@ -213,8 +222,8 @@ export interface SettingsUpdateRequest {
   mark_to_market_interval_minutes?: number;
   auto_execute_trade_plans?: boolean;
   auto_scan_enabled?: boolean;
-  auto_scan_interval_minutes?: number;
   max_concurrent_positions?: number;
+  ai_trading_overlay_enabled?: boolean;
 }
 
 export interface TestConnectionResponse {

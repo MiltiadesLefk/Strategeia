@@ -52,7 +52,7 @@ def _derive_catalysts(overview, financials_years, earnings_date, chart) -> list[
 
 def get_research(symbol: str, data_provider: DataProvider, llm_provider: LLMProvider) -> ResearchResponse:
     overview = data_provider.get_company_overview(symbol)
-    ohlcv = data_provider.get_ohlcv(symbol, period="6mo", interval="1d")
+    ohlcv = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
     chart = analyze_chart(ohlcv)
 
     try:

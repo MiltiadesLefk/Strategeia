@@ -38,10 +38,19 @@ def summary(
 
     latest_plan = session.exec(select(TradePlanRecord).order_by(TradePlanRecord.created_at.desc())).first()
 
+    top_pick_plan = None
+    if top_setups:
+        top_pick_plan = session.exec(
+            select(TradePlanRecord)
+            .where(TradePlanRecord.symbol == top_setups[0].symbol)
+            .order_by(TradePlanRecord.created_at.desc())
+        ).first()
+
     return DashboardSummary(
         stats=PortfolioStatsSchema(**stats.__dict__),
         markets_scanned=len(watchlist),
         potential_setups=potential_setups,
         top_setups=top_setups,
         latest_trade_plan=trade_plan_to_response(latest_plan) if latest_plan else None,
+        top_pick_trade_plan=trade_plan_to_response(top_pick_plan) if top_pick_plan else None,
     )

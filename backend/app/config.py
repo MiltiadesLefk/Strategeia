@@ -78,6 +78,15 @@ class AppSettings(BaseModel):
     finnhub_enabled: bool = False
     finnhub_api_key: str = ""
 
+    # Opt-in, off by default: when on, generate_trade_plan asks the LLM for
+    # its own independent read of ALL the same raw data (technicals,
+    # fundamentals, news, earnings) — stored as ai_opinion_* on the trade
+    # plan, shown alongside (never blended into) the rule-based
+    # confidence_score/decision. Costs one extra LLM call per symbol
+    # evaluated, including ones the rule-based engine rejects — see
+    # notes/Decisions.md.
+    ai_trading_overlay_enabled: bool = False
+
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
@@ -91,9 +100,10 @@ class AppSettings(BaseModel):
     # Unattended scan -> generate -> execute loop. Off by default — unlike
     # auto-execute (which only acts on a plan you already asked for), this
     # decides *which* symbols to trade with no human in the loop at all, so
-    # it opts in rather than opting out.
+    # it opts in rather than opting out. Runs 3x/day at fixed session-open
+    # times (see scheduler.py's AUTO_SCAN_SESSION_TIMES_UTC), not on an
+    # interval — no `_interval_minutes` setting to configure here.
     auto_scan_enabled: bool = False
-    auto_scan_interval_minutes: int = 60
     max_concurrent_positions: int = 5
 
     def redacted(self) -> dict:

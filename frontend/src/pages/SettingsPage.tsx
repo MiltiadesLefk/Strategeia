@@ -35,8 +35,8 @@ export function SettingsPage() {
   const [scanSize, setScanSize] = useState(50);
   const [autoExecute, setAutoExecute] = useState(true);
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
-  const [autoScanInterval, setAutoScanInterval] = useState(60);
   const [maxConcurrentPositions, setMaxConcurrentPositions] = useState(5);
+  const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
@@ -50,8 +50,8 @@ export function SettingsPage() {
     setScanSize(settings.scan_universe_size);
     setAutoExecute(settings.auto_execute_trade_plans);
     setAutoScanEnabled(settings.auto_scan_enabled);
-    setAutoScanInterval(settings.auto_scan_interval_minutes);
     setMaxConcurrentPositions(settings.max_concurrent_positions);
+    setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
   }, [settings]);
 
   function saveLlm() {
@@ -105,16 +105,19 @@ export function SettingsPage() {
   function saveAutomation() {
     update({
       auto_scan_enabled: autoScanEnabled,
-      auto_scan_interval_minutes: autoScanInterval,
       max_concurrent_positions: maxConcurrentPositions,
     });
+  }
+
+  function saveAiOverlay() {
+    update({ ai_trading_overlay_enabled: aiOverlayEnabled });
   }
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 640 }}>
-      <h1 style={{ fontSize: 22 }}>Settings</h1>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 20, alignItems: 'start' }}>
+      <h1 style={{ fontSize: 22, gridColumn: '1 / -1' }}>Settings</h1>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>AI Narrative Provider</h3>
@@ -202,6 +205,35 @@ export function SettingsPage() {
             {llmTestResult.message}
           </div>
         )}
+      </div>
+
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h3>AI Trading Overlay</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          Every trade decision above is made by deterministic, rule-based math — technicals, fundamentals, and news
+          scored by named thresholds, never by an LLM. Turning this on does NOT change that: it adds a second,
+          independent read from the AI provider above, shown alongside the rule-based decision — never blended into
+          it, and never able to override the direction or confidence score. The AI sees the same raw data (price,
+          volume, indicators, fundamentals, full news headlines, earnings date) and gives its own stance and
+          reasoning, which can agree or disagree with the rule-based verdict.
+        </div>
+        <div className="text-muted" style={{ fontSize: 12 }}>
+          Costs one extra AI call per symbol evaluated — including ones the rule-based engine rejects as "no trade,"
+          which normally skip the AI entirely to save tokens. Requires a real provider selected above (has no effect
+          while Provider is "None").
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={aiOverlayEnabled}
+            onChange={(e) => setAiOverlayEnabled(e.target.checked)}
+            style={{ width: 'auto' }}
+          />
+          Enable AI second opinion on every evaluation
+        </label>
+        <button className="btn btn-primary" onClick={saveAiOverlay} disabled={saving} style={{ alignSelf: 'flex-start' }}>
+          Save
+        </button>
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -308,9 +340,11 @@ export function SettingsPage() {
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>Unattended Auto-Scan</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
-          Closes the full loop: on a schedule, scans the bundled universe and generates (and, if Auto-Execute above
-          is on, opens) a trade plan for every symbol flagged as a potential setup — with no click required. Off by
-          default; unlike Auto-Execute, this decides which symbols to trade with no human in the loop at all.
+          Closes the full loop: 3 times a day (Asia, London, and New York session opens), fully evaluates every
+          symbol in the bundled universe — price, volume, indicators, fundamentals, news, earnings — and either
+          generates (and, if Auto-Execute above is on, opens) a trade plan or explicitly records "no trade" with a
+          reason. Off by default; unlike Auto-Execute, this decides which symbols to trade with no human in the loop
+          at all.
         </div>
         <div>
           <label>Auto-Scan</label>
@@ -319,15 +353,9 @@ export function SettingsPage() {
             <option value="enabled">Enabled — scan and trade on a schedule, unattended</option>
           </select>
         </div>
-        <div>
-          <label>Scan Interval</label>
-          <select value={autoScanInterval} onChange={(e) => setAutoScanInterval(Number(e.target.value))}>
-            <option value={15}>Every 15 minutes</option>
-            <option value={30}>Every 30 minutes</option>
-            <option value={60}>Every hour</option>
-            <option value={240}>Every 4 hours</option>
-            <option value={1440}>Once a day</option>
-          </select>
+        <div className="text-muted" style={{ fontSize: 12 }}>
+          Schedule is fixed at 00:00, 08:00, and 13:30 UTC (Asia/London/New York session opens) — not configurable
+          per-account, see the scheduler.
         </div>
         <div>
           <label>Max Concurrent Open Positions</label>
@@ -339,9 +367,9 @@ export function SettingsPage() {
             <option value={20}>20</option>
           </select>
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Auto-scan stops proposing new trades once open positions reach this cap — the guardrail that keeps
-            unattended scanning from opening unlimited simultaneous risk. Applies to auto-scan only, not manual
-            "Execute Trade Plan" clicks.
+            Auto-scan keeps evaluating and proposing plans past this cap — it stops AUTO-EXECUTING new ones once open
+            positions reach it, the guardrail that keeps unattended scanning from opening unlimited simultaneous
+            risk. Applies to auto-scan only, not manual "Execute Trade Plan" clicks.
           </div>
         </div>
         <button className="btn btn-primary" onClick={saveAutomation} disabled={saving} style={{ alignSelf: 'flex-start' }}>

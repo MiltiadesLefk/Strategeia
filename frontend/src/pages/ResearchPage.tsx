@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useResearch } from '../api/hooks';
-import { SymbolPicker } from '../components/SymbolPicker';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { CompanyIcon } from '../components/CompanyIcon';
 import { Tabs } from '../components/Tabs';
@@ -149,7 +148,7 @@ function UpcomingEarningsCard({ data }: { data: ResearchResponse }) {
 
 export function ResearchPage() {
   const [params, setParams] = useSearchParams();
-  const symbol = params.get('symbol') || 'AAPL';
+  const symbol = params.get('symbol') || 'NVDA';
   const [tab, setTab] = useState('overview');
   const { data, isLoading, error } = useResearch(symbol);
 
@@ -159,7 +158,6 @@ export function ResearchPage() {
         <h1 style={{ fontSize: 22 }}>Research</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <CompanyDropdown value={symbol} onChange={(s) => setParams({ symbol: s })} />
-          <SymbolPicker value={symbol} onChange={(s) => setParams({ symbol: s })} />
         </div>
       </div>
 

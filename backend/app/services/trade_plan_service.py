@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+from datetime import date
 
 from sqlmodel import Session, select
 
@@ -11,13 +13,22 @@ from app.analysis.fundamental_scoring import (
     score_news_sentiment,
 )
 from app.analysis.insight_text import trade_plan_take_text
+from app.analysis.market_confirmation import (
+    MARKET_CONFIRMATION_SCORE_CAP,
+    MARKET_PROXY_SYMBOL,
+    VIX_PROXY_SYMBOL,
+    VIX_REGIME_SCORE_CAP,
+    score_market_confirmation,
+    score_vix_regime,
+)
+from app.analysis.options_scoring import OPTIONS_SCORE_CAP, score_options_positioning
 from app.analysis.scanner_scoring import score_symbol
-from app.analysis.trend import analyze_chart
-from app.config import load_app_settings
-from app.data_providers.base import AllProvidersFailedError, CompanyOverview, DataProvider, FinancialYear, NewsItem
+from app.analysis.trend import ChartAnalysis, analyze_chart
+from app.config import AppSettings, load_app_settings
+from app.data_providers.base import AllProvidersFailedError, CompanyOverview, DataProvider, FinancialYear, NewsItem, OptionsSummary
 from app.llm_providers.base import LLMProvider
 from app.llm_providers.factory import generate_with_fallback
-from app.llm_providers.prompts import build_trade_plan_take_prompt
+from app.llm_providers.prompts import build_ai_opinion_prompt, build_trade_plan_take_prompt
 from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, PaperTradingEngine
 from app.portfolio.models import TradePlanRecord
 from app.risk.position_sizing import calculate_position_size, derive_targets
@@ -29,9 +40,25 @@ logger = logging.getLogger(__name__)
 STOP_BUFFER_PCT = 0.01
 FALLBACK_STOP_PCT = 0.03
 TECHNICAL_SCORE_CAP = 6
-MAX_SCORE_FOR_CONFIDENCE = TECHNICAL_SCORE_CAP + FUNDAMENTAL_SCORE_CAP + NEWS_SCORE_CAP
+# Deliberately excludes VIX_REGIME_SCORE_CAP: that check is one-directional
+# (score_vix_regime only ever returns 0 or a penalty, never a bonus — see
+# its docstring), so it can't contribute to the achievable maximum. Including
+# it here would inflate the denominator and deflate every confidence score
+# even when VIX is calm and contributing nothing.
+MAX_SCORE_FOR_CONFIDENCE = (
+    TECHNICAL_SCORE_CAP + FUNDAMENTAL_SCORE_CAP + NEWS_SCORE_CAP + MARKET_CONFIRMATION_SCORE_CAP + OPTIONS_SCORE_CAP
+)
 CONFIDENCE_FLOOR = 20
 CONFIDENCE_CEILING = 90
+
+# "We don't target more trades, but better trades": a symbol clearing the
+# trend check still doesn't get a plan unless the combined technical +
+# fundamental + news confidence clears this bar. Below it (or on a Neutral
+# trend), generate_trade_plan returns/persists an explicit no-trade decision
+# instead of forcing a mediocre plan out the door. Deliberately skips the LLM
+# call in that path too — a low-confidence symbol doesn't need (and
+# shouldn't spend tokens on) an AI narrative, only a rule-based reason.
+MIN_CONFIDENCE_FOR_TRADE = 40
 
 
 def _derive_entry_and_stop(direction: str, price: float, support: list[float], resistance: list[float]) -> tuple[float, float]:
@@ -71,6 +98,103 @@ def _fetch_fundamentals_and_news(
     return overview, financial_years, news
 
 
+def _fetch_confirmation_charts(symbol: str, data_provider: DataProvider) -> tuple[ChartAnalysis | None, ChartAnalysis | None]:
+    """Weekly-timeframe and broad-market (SPY) charts for
+    market_confirmation.score_market_confirmation — both best-effort, same
+    graceful-degradation pattern as fundamentals/news: a fetch failure just
+    means that confirmation check contributes 0, never blocks generation.
+    2y of weekly bars (not 1y) so EMA50 gets enough runway to be meaningful,
+    same reasoning as the 1y-of-daily-bars fix elsewhere in this file."""
+    try:
+        weekly_ohlcv = data_provider.get_ohlcv(symbol, period="2y", interval="1wk")
+        weekly_chart = analyze_chart(weekly_ohlcv)
+    except AllProvidersFailedError:
+        weekly_chart = None
+
+    market_chart = None
+    if symbol != MARKET_PROXY_SYMBOL:
+        try:
+            market_ohlcv = data_provider.get_ohlcv(MARKET_PROXY_SYMBOL, period="1y", interval="1d")
+            market_chart = analyze_chart(market_ohlcv)
+        except AllProvidersFailedError:
+            market_chart = None
+
+    return weekly_chart, market_chart
+
+
+def _fetch_vix_level(symbol: str, data_provider: DataProvider) -> float | None:
+    """Best-effort latest VIX close for market_confirmation.score_vix_regime
+    — a fetch failure (or evaluating the proxy symbol itself) just means
+    that check contributes 0, same graceful-degradation pattern throughout
+    this module."""
+    if symbol == VIX_PROXY_SYMBOL:
+        return None
+    try:
+        vix_ohlcv = data_provider.get_ohlcv(VIX_PROXY_SYMBOL, period="1mo", interval="1d")
+        return float(vix_ohlcv["close"].iloc[-1])
+    except AllProvidersFailedError:
+        return None
+
+
+def _parse_ai_opinion(raw_text: str) -> tuple[str | None, int | None, str, str | None]:
+    """Best-effort parse of the AI overlay's structured JSON response. A
+    provider that ignores the format instruction (or a flaky one that wraps
+    it in prose/markdown) just means no stance/score/news_assessment get
+    extracted — the raw text is always kept as `reasoning` and shown as-is,
+    never dropped, never raises."""
+    try:
+        data = json.loads(raw_text.strip())
+        stance = data.get("stance")
+        if stance not in ("bullish", "bearish", "neutral"):
+            stance = None
+        score = data.get("confidence")
+        score = max(0, min(100, int(score))) if isinstance(score, (int, float)) else None
+        reasoning = data.get("reasoning")
+        text = reasoning.strip() if isinstance(reasoning, str) and reasoning.strip() else raw_text.strip()
+        news_assessment = data.get("news_assessment")
+        news_assessment = news_assessment.strip() if isinstance(news_assessment, str) and news_assessment.strip() else None
+        return stance, score, text, news_assessment
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return None, None, raw_text.strip(), None
+
+
+def _maybe_get_ai_opinion(
+    settings: AppSettings,
+    llm_provider: LLMProvider,
+    symbol: str,
+    chart: ChartAnalysis,
+    volume_ratio: float,
+    overview: CompanyOverview | None,
+    financial_years: list[FinancialYear],
+    news: list[NewsItem],
+    earnings_date: date | None,
+    rule_based_direction: str | None,
+    confidence_score: int,
+    rule_based_news_reasons: list[str],
+) -> tuple[str | None, int | None, str | None, str | None]:
+    """The AI Trading Overlay (Settings, off by default): an independent
+    second read of the SAME raw data, alongside — never blended into — the
+    rule-based decision above. Only actually calls an LLM when the toggle is
+    on AND a real provider is configured; otherwise returns (None, None,
+    None, None) so the fields simply stay empty rather than showing a fake or
+    rule-based-disguised-as-AI opinion. Also returns a dedicated
+    `news_assessment` — the AI actually reads headline substance instead of
+    the rule-based engine's plain keyword matching (see
+    fundamental_scoring.score_news_sentiment), and is explicitly shown that
+    keyword read to contrast against."""
+    if not settings.ai_trading_overlay_enabled or llm_provider.name == "none" or not llm_provider.is_configured():
+        return None, None, None, None
+    prompt = build_ai_opinion_prompt(
+        symbol, chart, volume_ratio, overview, financial_years, news, earnings_date, rule_based_direction,
+        confidence_score, rule_based_news_reasons,
+    )
+    result = llm_provider.generate(prompt)
+    if result.error or not result.text:
+        logger.warning("AI opinion call failed for %s: %s", symbol, result.error)
+        return None, None, None, None
+    return _parse_ai_opinion(result.text)
+
+
 def generate_trade_plan(
     symbol: str,
     account_size: float,
@@ -78,37 +202,133 @@ def generate_trade_plan(
     data_provider: DataProvider,
     llm_provider: LLMProvider,
     session: Session,
+    *,
+    allow_auto_execute: bool = True,
 ) -> TradePlanResponse:
-    ohlcv = data_provider.get_ohlcv(symbol, period="6mo", interval="1d")
+    """Fully evaluates `symbol` (price/volume/technicals + fundamentals +
+    news + earnings) and either returns a tradeable plan or an explicit
+    no-trade decision (`direction is None`, `reason` set) — never silently
+    skips a symbol. `allow_auto_execute=False` lets a caller (the unattended
+    auto-scan loop) request a full evaluation/plan without letting it open a
+    paper position, e.g. once the position-count cap is already reached."""
+    settings = load_app_settings()
+
+    # 1y, matching analysis_service.get_analysis's fetch exactly — trend/EMA/
+    # RSI/support-resistance must come from the same lookback window
+    # everywhere a symbol is evaluated, or the Analysis page and a trade plan
+    # generated for the same symbol at the same moment could read the chart
+    # differently. Previously 6mo here; see notes/Decisions.md.
+    ohlcv = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
     quote = data_provider.get_quote(symbol)
     chart = analyze_chart(ohlcv)
-
-    if chart.trend == "Neutral":
-        return TradePlanResponse(symbol=symbol, direction=None, reason="No clear trend")
-
-    direction = "long" if chart.trend == "Bullish" else "short"
-    entry, stop = _derive_entry_and_stop(direction, chart.price, chart.support, chart.resistance)
-
-    sizing = calculate_position_size(account_size, risk_pct, entry, stop)
-    targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
 
     volume_ratio = quote.volume / quote.avg_volume_20d if quote.avg_volume_20d > 0 else 1.0
     scan_result = score_symbol(symbol, quote.price, quote.change_pct_24h, chart, volume_ratio)
 
     # "Smart" layer: fundamentals + news sentiment, on top of the pure
-    # technical scanner score — see analysis/fundamental_scoring.py. Every
-    # symbol (including crypto pairs with no fundamentals/news coverage)
-    # still gets a plan; those signals just contribute 0 in that case.
+    # technical scanner score — see analysis/fundamental_scoring.py. Fetched
+    # (and factored into the trade/no-trade decision) regardless of trend —
+    # every symbol (including crypto pairs with no fundamentals/news
+    # coverage) gets the full evaluation; those signals just contribute 0
+    # when unavailable.
     overview, financial_years, news = _fetch_fundamentals_and_news(symbol, data_provider)
     earnings_date = data_provider.get_earnings_date(symbol)
     news_score, news_reasons = score_news_sentiment(news)
     fundamental_score, fundamental_reasons = (
         score_fundamentals(overview, financial_years, earnings_date, quote.price) if overview else (0, [])
     )
-    combined_score = scan_result.score + fundamental_score + news_score
+    # Confluence: does the weekly timeframe / broad market (SPY) agree with
+    # the daily-chart direction? See analysis/market_confirmation.py — kept
+    # as its own capped dimension, same pattern as fundamental_score/
+    # news_score, never folded into scanner_scoring's own 0-6 technical
+    # score (that would change the Market Scanner's score/signal tiers too).
+    provisional_direction = "long" if chart.trend == "Bullish" else "short" if chart.trend == "Bearish" else None
+    weekly_chart, market_chart = _fetch_confirmation_charts(symbol, data_provider)
+    market_confirmation_score, market_confirmation_reasons = score_market_confirmation(
+        provisional_direction, weekly_chart, market_chart
+    )
+
+    # VIX regime (one-directional risk flag, not confluence — see
+    # score_vix_regime) and options positioning (put/call volume skew —
+    # analysis/options_scoring.py). Both best-effort: no chain/VIX data
+    # available just means that check contributes 0.
+    vix_level = _fetch_vix_level(symbol, data_provider)
+    vix_regime_score, vix_regime_reasons = score_vix_regime(vix_level)
+    options_summary: OptionsSummary | None = data_provider.get_options_summary(symbol)
+    options_score, options_reasons = score_options_positioning(provisional_direction, options_summary)
+
+    combined_score = (
+        scan_result.score + fundamental_score + news_score + market_confirmation_score
+        + vix_regime_score + options_score
+    )
     confidence_score = _confidence_score(combined_score)
     technical_reason = f"{chart.trend} trend with {chart.momentum.lower()} momentum"
-    signal_reasons = "; ".join([technical_reason, *fundamental_reasons, *news_reasons])
+    signal_reasons = "; ".join(
+        [technical_reason, *fundamental_reasons, *news_reasons, *market_confirmation_reasons,
+         *vix_regime_reasons, *options_reasons]
+    )
+
+    # AI Trading Overlay (opt-in, Settings): an independent second opinion
+    # from the SAME raw data, computed once here so both the no-trade and
+    # tradeable paths below can attach it — never used to decide direction
+    # or confidence_score above, only shown alongside them.
+    ai_opinion_stance, ai_opinion_score, ai_opinion_text, ai_news_assessment = _maybe_get_ai_opinion(
+        settings, llm_provider, symbol, chart, volume_ratio, overview, financial_years, news, earnings_date,
+        provisional_direction, confidence_score, news_reasons,
+    )
+
+    if chart.trend == "Neutral" or confidence_score < MIN_CONFIDENCE_FOR_TRADE:
+        reason = (
+            "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
+            if chart.trend == "Neutral"
+            else f"Confidence too low ({confidence_score}%, needs {MIN_CONFIDENCE_FOR_TRADE}%+) despite a {chart.trend.lower()} trend."
+        )
+        record = TradePlanRecord(
+            symbol=symbol,
+            status="no_trade",
+            reason=reason,
+            confidence_score=confidence_score,
+            technical_score=scan_result.score,
+            fundamental_score=fundamental_score,
+            news_score=news_score,
+            market_confirmation_score=market_confirmation_score,
+            vix_regime_score=vix_regime_score,
+            options_score=options_score,
+            signal_reasons=signal_reasons,
+            ai_opinion_stance=ai_opinion_stance,
+            ai_opinion_score=ai_opinion_score,
+            ai_opinion_text=ai_opinion_text,
+            ai_news_assessment=ai_news_assessment,
+        )
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        return TradePlanResponse(
+            id=record.id,
+            symbol=symbol,
+            direction=None,
+            reason=reason,
+            confidence_score=confidence_score,
+            status=record.status,
+            created_at=record.created_at,
+            technical_score=scan_result.score,
+            fundamental_score=fundamental_score,
+            news_score=news_score,
+            market_confirmation_score=market_confirmation_score,
+            vix_regime_score=vix_regime_score,
+            options_score=options_score,
+            ai_opinion_stance=ai_opinion_stance,
+            ai_opinion_score=ai_opinion_score,
+            ai_opinion_text=ai_opinion_text,
+            ai_news_assessment=ai_news_assessment,
+            signal_reasons=signal_reasons,
+        )
+
+    direction = "long" if chart.trend == "Bullish" else "short"
+    entry, stop = _derive_entry_and_stop(direction, chart.price, chart.support, chart.resistance)
+
+    sizing = calculate_position_size(account_size, risk_pct, entry, stop)
+    targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
 
     fallback_text = trade_plan_take_text(symbol, direction, targets.rr1, confidence_score)
     prompt = build_trade_plan_take_prompt(
@@ -145,16 +365,21 @@ def generate_trade_plan(
         technical_score=scan_result.score,
         fundamental_score=fundamental_score,
         news_score=news_score,
+        market_confirmation_score=market_confirmation_score,
+        vix_regime_score=vix_regime_score,
+        options_score=options_score,
         signal_reasons=signal_reasons,
+        ai_opinion_stance=ai_opinion_stance,
+        ai_opinion_score=ai_opinion_score,
+        ai_opinion_text=ai_opinion_text,
+        ai_news_assessment=ai_news_assessment,
     )
     session.add(record)
     session.commit()
     session.refresh(record)
 
-    settings = load_app_settings()
-
     auto_execute_note = ""
-    if settings.auto_execute_trade_plans:
+    if settings.auto_execute_trade_plans and allow_auto_execute:
         try:
             PaperTradingEngine(session, data_provider, account_size).open_position(record)
             session.refresh(record)
@@ -193,5 +418,12 @@ def generate_trade_plan(
         technical_score=scan_result.score,
         fundamental_score=fundamental_score,
         news_score=news_score,
+        market_confirmation_score=market_confirmation_score,
+        vix_regime_score=vix_regime_score,
+        options_score=options_score,
         signal_reasons=signal_reasons,
+        ai_opinion_stance=ai_opinion_stance,
+        ai_opinion_score=ai_opinion_score,
+        ai_opinion_text=ai_opinion_text,
+        ai_news_assessment=ai_news_assessment,
     )

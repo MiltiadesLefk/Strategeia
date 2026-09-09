@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAnalysis, useGenerateTradePlan, useOpenPosition, useTradePlans } from '../api/hooks';
 import { CompanyDropdown } from '../components/CompanyDropdown';
-import { SymbolPicker } from '../components/SymbolPicker';
 import { DirectionBadge, TradePlanStatusBadge } from '../components/Badge';
 import { PipelineSteps } from '../components/PipelineSteps';
 import { TickerLink } from '../components/TickerLink';
@@ -17,8 +16,44 @@ const STATUS_FILTERS = [
   { value: 'all', label: 'All statuses' },
   { value: 'pending', label: 'Pending only' },
   { value: 'executed', label: 'Executed only' },
+  { value: 'no_trade', label: 'No Trade only' },
   { value: 'discarded', label: 'Discarded only' },
 ];
+
+function AiOpinionBlock({ plan }: { plan: TradePlan }) {
+  if (!plan.ai_opinion_text) return null;
+  const stanceBadgeClass =
+    plan.ai_opinion_stance === 'bullish' ? 'badge-green' : plan.ai_opinion_stance === 'bearish' ? 'badge-red' : 'badge-neutral';
+  return (
+    <div style={{ background: 'var(--card-alt)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+        <IconBadge variant="info" size={26} />
+        <span style={{ fontWeight: 700, fontSize: 13 }}>AI Second Opinion</span>
+        {plan.ai_opinion_stance && <span className={`badge ${stanceBadgeClass}`}>{plan.ai_opinion_stance}</span>}
+        {plan.ai_opinion_score != null && (
+          <span className="text-muted tabular-nums" style={{ fontSize: 12 }}>
+            {plan.ai_opinion_score}%
+          </span>
+        )}
+      </div>
+      <div className="text-muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+        {plan.ai_opinion_text}
+      </div>
+      {plan.ai_news_assessment && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 2 }}>AI's read of the news</div>
+          <div className="text-muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+            {plan.ai_news_assessment}
+          </div>
+        </div>
+      )}
+      <div className="text-muted" style={{ fontSize: 11, marginTop: 6, opacity: 0.7 }}>
+        Independent read from the AI provider (Settings → AI Trading Overlay) — separate from, and free to disagree
+        with, the rule-based decision above.
+      </div>
+    </div>
+  );
+}
 
 function TradePlanCard({ plan }: { plan: TradePlan }) {
   const { mutate: open, isPending, isSuccess, error: openError } = useOpenPosition();
@@ -35,10 +70,16 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
           </div>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>{plan.reason ?? 'No trade plan generated'}</div>
           <div className="text-muted" style={{ fontSize: 13, maxWidth: 480 }}>
-            The technical engine only proposes a setup when price is clearly trending — {plan.symbol} is currently
-            range-bound (EMA20/EMA50 not clearly aligned). This isn't an error: pick a different symbol from the
-            dropdown above, or check back once a trend develops.
+            This isn't an error — {plan.symbol} was fully evaluated (price, volume, indicators, fundamentals, news,
+            earnings) and just didn't clear the bar for a trade plan this time. Quality over quantity: pick a
+            different symbol from the dropdown above, or check back after the next scan.
           </div>
+          {plan.signal_reasons && (
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 8, marginBottom: plan.ai_opinion_text ? 12 : 0 }}>
+              Confidence {plan.confidence_score}% — {plan.signal_reasons}
+            </div>
+          )}
+          <AiOpinionBlock plan={plan} />
         </div>
       </div>
     );
@@ -126,7 +167,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
           </div>
           {plan.signal_reasons && (
             <div style={{ background: 'var(--card-alt)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 11 }}>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 11, flexWrap: 'wrap' }}>
                 <span className="text-muted">
                   Technical <span className="tabular-nums">{plan.technical_score ?? 0}</span>
                 </span>
@@ -144,6 +185,29 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                     {plan.news_score ?? 0}
                   </span>
                 </span>
+                <span className="text-muted" title="Weekly-timeframe + broad market (SPY) agreement">
+                  Confluence{' '}
+                  <span
+                    className={`tabular-nums ${(plan.market_confirmation_score ?? 0) > 0 ? 'text-green' : (plan.market_confirmation_score ?? 0) < 0 ? 'text-red' : ''}`}
+                  >
+                    {(plan.market_confirmation_score ?? 0) > 0 ? '+' : ''}
+                    {plan.market_confirmation_score ?? 0}
+                  </span>
+                </span>
+                <span className="text-muted" title="VIX regime — only ever a penalty when elevated (>=25), never a bonus">
+                  VIX{' '}
+                  <span className={`tabular-nums ${(plan.vix_regime_score ?? 0) < 0 ? 'text-red' : ''}`}>
+                    {(plan.vix_regime_score ?? 0) > 0 ? '+' : ''}
+                    {plan.vix_regime_score ?? 0}
+                  </span>
+                </span>
+                <span className="text-muted" title="Options put/call volume skew agreement (no chain data for most crypto/thin names)">
+                  Options{' '}
+                  <span className={`tabular-nums ${(plan.options_score ?? 0) > 0 ? 'text-green' : (plan.options_score ?? 0) < 0 ? 'text-red' : ''}`}>
+                    {(plan.options_score ?? 0) > 0 ? '+' : ''}
+                    {plan.options_score ?? 0}
+                  </span>
+                </span>
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-muted)' }}>
                 {plan.signal_reasons.split('; ').map((reason) => (
@@ -154,6 +218,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
               </ul>
             </div>
           )}
+          <AiOpinionBlock plan={plan} />
         </div>
       </div>
 
@@ -248,7 +313,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
 }
 
 export function TradePlansPage() {
-  const [symbol, setSymbol] = useState('AAPL');
+  const [symbol, setSymbol] = useState('NVDA');
   const [statusFilter, setStatusFilter] = useState('active');
   const { mutate: generate, data: latest, isPending, error: generateError } = useGenerateTradePlan();
   const { data: history, isLoading: historyLoading } = useTradePlans();
@@ -256,7 +321,7 @@ export function TradePlansPage() {
   const filteredHistory = useMemo(() => {
     if (!history) return [];
     if (statusFilter === 'all') return history;
-    if (statusFilter === 'active') return history.filter((p) => p.status !== 'discarded');
+    if (statusFilter === 'active') return history.filter((p) => p.status === 'pending' || p.status === 'executed');
     return history.filter((p) => p.status === statusFilter);
   }, [history, statusFilter]);
 
@@ -266,7 +331,6 @@ export function TradePlansPage() {
         <h1 style={{ fontSize: 22 }}>Trade Plans</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <CompanyDropdown value={symbol} onChange={setSymbol} />
-          <SymbolPicker value={symbol} onChange={setSymbol} />
           <button type="button" className="btn btn-primary" onClick={() => generate(symbol)} disabled={isPending}>
             {isPending ? 'Generating…' : 'Generate Trade Plan'}
           </button>

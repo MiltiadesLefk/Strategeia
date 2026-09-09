@@ -88,7 +88,7 @@ export function DashboardPage() {
   if (error) return <ErrorBanner message={(error as ApiError).message} />;
   if (!data) return null;
 
-  const { stats, markets_scanned, potential_setups, top_setups, latest_trade_plan } = data;
+  const { stats, markets_scanned, potential_setups, top_setups, latest_trade_plan, top_pick_trade_plan } = data;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const equityTrend = equity?.map((p) => p.equity_value);
@@ -175,15 +175,23 @@ export function DashboardPage() {
           </div>
           {!latest_trade_plan ? (
             <EmptyState>No trade plans generated yet — head to Trade Plans to create one.</EmptyState>
+          ) : latest_trade_plan.direction === null ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <TickerLink symbol={latest_trade_plan.symbol} iconSize={28} fontWeight={700} />
+                <span className="badge badge-neutral">No Trade</span>
+              </div>
+              <div className="text-muted" style={{ fontSize: 13 }}>
+                {latest_trade_plan.reason ?? 'Evaluated but did not clear the bar for a trade plan.'}
+              </div>
+            </>
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <TickerLink symbol={latest_trade_plan.symbol} iconSize={28} fontWeight={700} />
-                {latest_trade_plan.direction && (
-                  <span className={`badge ${latest_trade_plan.direction === 'long' ? 'badge-green' : 'badge-red'}`}>
-                    {latest_trade_plan.direction === 'long' ? 'Long' : 'Short'}
-                  </span>
-                )}
+                <span className={`badge ${latest_trade_plan.direction === 'long' ? 'badge-green' : 'badge-red'}`}>
+                  {latest_trade_plan.direction === 'long' ? 'Long' : 'Short'}
+                </span>
               </div>
               <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                 <div>
@@ -225,10 +233,13 @@ export function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <h3>AI Insights</h3>
           </div>
-          {!topPick && !latest_trade_plan ? (
+          {!topPick && !top_pick_trade_plan ? (
             <EmptyState>No scan or trade-plan data yet to summarize.</EmptyState>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Every block below narrates topPick specifically — never a
+                  different, unrelated symbol's stale plan — so this card
+                  reads as one coherent take, not two mismatched ones. */}
               {topPick && (
                 <div style={{ display: 'flex', gap: 12 }}>
                   <IconBadge variant={topPick.trend === 'Bullish' ? 'up' : topPick.trend === 'Bearish' ? 'down' : 'info'} size={34} />
@@ -243,30 +254,44 @@ export function DashboardPage() {
                   </div>
                 </div>
               )}
-              {latest_trade_plan && (
+              {top_pick_trade_plan && top_pick_trade_plan.direction === null && (
                 <div style={{ display: 'flex', gap: 12 }}>
                   <IconBadge variant="info" size={34} />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>
-                      {latest_trade_plan.ai_provider && latest_trade_plan.ai_provider !== 'none' ? `AI Take · ${latest_trade_plan.ai_provider}` : 'Rule-based take'}
-                    </div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>No Trade</div>
                     <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-                      {latest_trade_plan.ai_take_text}
+                      {top_pick_trade_plan.reason ?? `${top_pick_trade_plan.symbol} was evaluated but didn't clear the bar for a trade plan.`}
                     </div>
                   </div>
                 </div>
               )}
-              {latest_trade_plan && (
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <IconBadge variant={(latest_trade_plan.rr1 ?? 0) >= 2 ? 'up' : 'down'} size={34} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>Risk</div>
-                    <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-                      {formatNumber(latest_trade_plan.rr1)}:1 risk:reward on <Link to={tickerHref(latest_trade_plan.symbol)}>{latest_trade_plan.symbol}</Link>,{' '}
-                      {latest_trade_plan.confidence_score}% confidence.
+              {top_pick_trade_plan && top_pick_trade_plan.direction !== null && (
+                <>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <IconBadge variant="info" size={34} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>
+                        {top_pick_trade_plan.ai_provider && top_pick_trade_plan.ai_provider !== 'none'
+                          ? `AI Take · ${top_pick_trade_plan.ai_provider}`
+                          : 'Rule-based take'}
+                      </div>
+                      <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
+                        {top_pick_trade_plan.ai_take_text}
+                      </div>
                     </div>
                   </div>
-                </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <IconBadge variant={(top_pick_trade_plan.rr1 ?? 0) >= 2 ? 'up' : 'down'} size={34} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>Risk</div>
+                      <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
+                        {formatNumber(top_pick_trade_plan.rr1)}:1 risk:reward on{' '}
+                        <Link to={tickerHref(top_pick_trade_plan.symbol)}>{top_pick_trade_plan.symbol}</Link>,{' '}
+                        {top_pick_trade_plan.confidence_score}% confidence.
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           )}

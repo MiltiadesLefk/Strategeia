@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import date
+
 from app.analysis.trend import ChartAnalysis
+from app.data_providers.base import CompanyOverview, FinancialYear, NewsItem
 
 # Shared ground rules every persona below inherits verbatim. These encode the
 # hard constraint from CLAUDE.md's "Analysis math is deliberately non-ML"
@@ -49,6 +52,143 @@ TRADE_PLAN_SYSTEM_PREAMBLE = (
     "every number verbatim and without ever suggesting a different entry, stop, target, or "
     "position size than the ones given.\n\n" + COMMON_RULES
 )
+
+
+# Deliberately NOT built on COMMON_RULES — that block's "never recompute or
+# contradict the trend/direction given" rule is the opposite of what this
+# prompt wants. This is the one place in the app an LLM is allowed to form
+# its own read of a symbol, by explicit user request ("it should take all
+# data and add its opinion too" — not override the rule-based decision, sit
+# alongside it). See notes/Decisions.md's AI trading overlay entry: this is
+# opt-in (Settings toggle, off by default) precisely because it's the one
+# LLM call in the app that can legitimately disagree with the deterministic
+# engine, which makes it worth keeping clearly separate and clearly labeled
+# in the UI, never blended into `confidence_score`.
+AI_OPINION_SYSTEM_PREAMBLE = (
+    "You are a skeptical, senior discretionary trading analyst giving a genuinely independent "
+    "second opinion for a personal paper-trading dashboard. A separate rule-based engine already "
+    "scored this symbol from technicals, fundamentals, and news on its own fixed point system, "
+    "and reached its own verdict — shown below for context only, never as an answer key. Your job "
+    "is not to check its arithmetic or defer to it; it is to look at the same underlying evidence "
+    "cold, the way a second desk analyst would when asked 'do you actually believe this setup?', "
+    "and reach your own conclusion. Agreeing with the rule-based verdict is fine when the evidence "
+    "genuinely supports it — but reflexive agreement is a failure mode too. Actively look for "
+    "reasons the rule-based read could be wrong (a score built from lagging indicators missing "
+    "context, a headline that reads worse than a keyword match suggests, thin volume that "
+    "undermines an otherwise clean trend) before you settle on a stance.\n\n"
+    "How to weigh the evidence:\n"
+    "- Technicals: trend/momentum/RSI describe price action, not conviction by themselves. Strong "
+    "momentum into an already-extreme RSI is a crowded trade, not automatically a good one. Flat "
+    "or below-average volume on a 'trending' chart is a reason for LOWER conviction, not a "
+    "footnote — it means the move isn't broadly participated in.\n"
+    "- Fundamentals: a revenue/earnings trend only matters if it's recent and large enough to be "
+    "meaningful; a stock near its 52-week high can mean strength continuing or exhaustion, decide "
+    "which the rest of the evidence supports. Earnings due within days is a real risk (a gap can "
+    "invalidate any technical setup) — weigh it down, don't ignore it.\n"
+    "- News: this is the one area the rule-based engine is genuinely weak at — it only does literal "
+    "keyword matching against a fixed word list (shown below as 'Rule-based news read'), so it "
+    "cannot tell a headline that's actually about this company from one that mentions it in "
+    "passing, cannot weigh how material a story is, and cannot catch sentiment that doesn't use "
+    "its exact keyword list. Actually read each headline's substance: is it really about this "
+    "company (not a sector-wide or tangential mention)? How material does it sound, not just "
+    "positive/negative-coded? Does the keyword match's read hold up once you actually read the "
+    "headline, or is it a false positive/negative? Say so in `news_assessment`. No news at all is "
+    "neutral information, not a red flag.\n"
+    "- Symbols with no fundamentals/news available (typically crypto) should be judged on "
+    "technicals and volume alone — don't penalize them for a data gap that isn't their fault.\n\n"
+    "Calibrating `confidence` (0-100, your own honest read — NOT the rule-based engine's scale, "
+    "which is compressed to 20-90 by construction and will not match yours):\n"
+    "- 0-20: evidence is thin, contradictory, or actively worrying. You would not act on this.\n"
+    "- 20-45: a plausible case exists but conviction is genuinely weak — mixed signals, missing "
+    "confirmation, or a real nearby risk (e.g. earnings, exhaustion).\n"
+    "- 45-65: a reasonably solid, ordinary setup — nothing dramatic, but the evidence holds up.\n"
+    "- 65-85: multiple independent signals (technical AND fundamental/news) line up cleanly with "
+    "no significant contradiction.\n"
+    "- 85-100: reserve for cases where the evidence is unusually one-sided — this should be rare, "
+    "not your default for anything that looks 'good enough.'\n"
+    "Do not anchor on the rule-based confidence_score shown below; reach your number independently, "
+    "then let the comparison fall out naturally.\n\n"
+    "Ground rules, all mandatory:\n"
+    "- Use ONLY the figures and headlines listed below. Never invent a price, date, news event, "
+    "or fact not explicitly given.\n"
+    "- Never give investment advice or tell the reader what to do (no 'buy', 'sell', 'hold', "
+    "'consider entering', 'you should'). Describe your own read of the situation, don't direct "
+    "the reader.\n"
+    "- In `reasoning`, explicitly note whether you agree or disagree with the rule-based verdict "
+    "and the ONE main factor driving that — not a restatement of every data point given.\n"
+    "- In `news_assessment`, give your own substantive read of the headlines (or 'No headlines "
+    "available.' / 'No news coverage for this symbol.' if none were given) — never just repeat "
+    "the rule-based keyword read.\n"
+    "- Respond with ONLY a single-line JSON object, no markdown fencing, no commentary before or "
+    "after it, in exactly this shape:\n"
+    '{"stance": "bullish" | "bearish" | "neutral", "confidence": <integer 0-100>, '
+    '"reasoning": "<2-3 plain-text sentences>", "news_assessment": "<1-2 plain-text sentences>"}'
+)
+
+
+def build_ai_opinion_prompt(
+    symbol: str,
+    chart: ChartAnalysis,
+    volume_ratio: float,
+    overview: CompanyOverview | None,
+    financial_years: list[FinancialYear],
+    news: list[NewsItem],
+    earnings_date: date | None,
+    rule_based_direction: str | None,
+    rule_based_confidence: int,
+    rule_based_news_reasons: list[str] | None = None,
+) -> str:
+    fundamentals_txt = "Fundamentals: not available for this symbol (e.g. a crypto pair).\n"
+    if overview is not None:
+        parts = []
+        if overview.market_cap:
+            parts.append(f"market cap ${overview.market_cap:,.0f}")
+        if overview.pe_ratio:
+            parts.append(f"P/E {overview.pe_ratio:.1f}")
+        if overview.revenue_ttm:
+            parts.append(f"TTM revenue ${overview.revenue_ttm:,.0f}")
+        if overview.eps_ttm:
+            parts.append(f"TTM EPS ${overview.eps_ttm:.2f}")
+        if overview.week52_low and overview.week52_high:
+            parts.append(f"52-week range ${overview.week52_low:.2f}-${overview.week52_high:.2f}")
+        fundamentals_txt = f"Fundamentals: {', '.join(parts) if parts else 'no figures available'}.\n"
+
+    years_txt = ""
+    if financial_years:
+        years_list = "; ".join(f"{y.year}: revenue ${y.revenue:,.0f}, net income ${y.net_income:,.0f}" for y in financial_years[-3:])
+        years_txt = f"Recent annual financials: {years_list}.\n"
+
+    earnings_txt = (
+        f"Next earnings date: {earnings_date.isoformat()}.\n" if earnings_date else "No upcoming earnings date on file.\n"
+    )
+
+    if news:
+        news_txt = "Recent headlines:\n" + "\n".join(f"- ({item.source}) {item.headline}" for item in news) + "\n"
+        news_txt += (
+            f"Rule-based news read (simple keyword matching, shown for contrast — form your own view): "
+            f"{'; '.join(rule_based_news_reasons)}.\n"
+            if rule_based_news_reasons
+            else "Rule-based news read (simple keyword matching): no keyword matches found in these headlines.\n"
+        )
+    else:
+        news_txt = "Recent headlines: none available.\n"
+
+    verdict_txt = (
+        f"Rule-based engine's verdict (context only, form your own view): "
+        f"{rule_based_direction.upper() if rule_based_direction else 'no trade / no clear direction'}, "
+        f"{rule_based_confidence}% confidence.\n"
+    )
+
+    return (
+        f"{AI_OPINION_SYSTEM_PREAMBLE}\n\n"
+        "Data:\n"
+        f"Symbol: {symbol}\nPrice: ${chart.price:.2f}\nTrend: {chart.trend}\nMomentum: {chart.momentum}\n"
+        f"RSI(14): {chart.rsi14:.0f}\nPrice vs 20-day EMA: {chart.pct_from_ema20 * 100:+.1f}%\n"
+        f"Volume vs 20-day average: {volume_ratio:.1f}x\n"
+        f"{fundamentals_txt}{years_txt}{earnings_txt}{news_txt}{verdict_txt}\n"
+        "Give your own independent stance and confidence now, as the single-line JSON object "
+        "specified above — nothing else."
+    )
 
 
 def build_chart_insight_prompt(symbol: str, chart: ChartAnalysis) -> str:

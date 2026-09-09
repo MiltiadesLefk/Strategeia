@@ -65,6 +65,23 @@ class EarningsEstimate:
     revenue_estimate: float | None
 
 
+@dataclass
+class OptionsSummary:
+    """Nearest-expiration-at-least-a-week-out options chain, summarized.
+    `put_call_volume_ratio` is put volume / call volume for that expiration
+    (below ~0.7 conventionally reads call-heavy/bullish-skewed, above ~1.0
+    put-heavy/bearish-skewed — see analysis/options_scoring.py).
+    `atm_implied_volatility` is the implied volatility of the call contract
+    whose strike is closest to the current price, not an average across the
+    whole chain (deep ITM/OTM strikes, and near-0DTE expirations, carry much
+    noisier/less meaningful IV quotes on free data)."""
+
+    symbol: str
+    expiration: str
+    put_call_volume_ratio: float | None
+    atm_implied_volatility: float | None
+
+
 class DataProvider(Protocol):
     name: str
 
@@ -81,3 +98,5 @@ class DataProvider(Protocol):
     def get_earnings_date(self, symbol: str) -> date | None: ...
 
     def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None: ...
+
+    def get_options_summary(self, symbol: str) -> OptionsSummary: ...

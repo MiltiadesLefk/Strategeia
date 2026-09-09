@@ -12,7 +12,10 @@ from app.schemas.analysis_schemas import AnalysisResponse, CandleSchema, SeriesP
 # Trading-day counts per daily-bar UI range tab. Indicators are always
 # computed over a full 1y fetch regardless of the selected range (EMA50
 # needs ~50+ bars to be meaningful) — the range only trims how much of that
-# history is *displayed*.
+# history is *displayed*. trade_plan_service/scanner_service/research_service
+# all fetch the same 1y window for their own analyze_chart() calls, so a
+# symbol's trend/EMA/RSI reads identically here and in a generated trade
+# plan — they used to diverge (6mo there vs 1y here); see notes/Decisions.md.
 RANGE_TO_DISPLAY_DAYS = {"1mo": 21, "3mo": 63, "6mo": 126, "1y": 252}
 
 # 1D/1W use real intraday bars instead — fetched and displayed in full, no

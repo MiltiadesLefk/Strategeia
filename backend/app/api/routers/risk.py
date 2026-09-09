@@ -16,7 +16,7 @@ def calculate(
     req: RiskCalculateRequest,
     data_provider: DataProvider = Depends(get_data_provider),
 ) -> RiskCalculateResponse:
-    ohlcv = data_provider.get_ohlcv(req.symbol.upper(), period="6mo", interval="1d")
+    ohlcv = data_provider.get_ohlcv(req.symbol.upper(), period="1y", interval="1d")
     chart = analyze_chart(ohlcv)
 
     sizing = calculate_position_size(req.account_size, req.risk_pct, req.entry, req.stop)

@@ -39,8 +39,9 @@ def run_auto_trade_now(
     session: Session = Depends(get_session),
 ) -> AutoScanResponse:
     """Manual trigger for the same scan -> generate -> execute pipeline the
-    scheduler runs on `auto_scan_interval_minutes` — runs immediately
-    regardless of whether the unattended `auto_scan_enabled` toggle is on,
-    same relationship "Rescan" has to the read-only scan endpoint above."""
-    generated = run_auto_scan(settings, data_provider, llm_provider, session)
-    return AutoScanResponse(generated=generated)
+    scheduler runs 3x/day (Asia/London/New York session opens) — runs
+    immediately regardless of whether the unattended `auto_scan_enabled`
+    toggle is on, same relationship "Rescan" has to the read-only scan
+    endpoint above."""
+    outcome = run_auto_scan(settings, data_provider, llm_provider, session)
+    return AutoScanResponse(generated=outcome.generated, no_trade=outcome.no_trade)

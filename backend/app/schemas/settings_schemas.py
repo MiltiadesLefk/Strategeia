@@ -15,6 +15,7 @@ class SettingsUpdateRequest(BaseModel):
     gemini_model: str | None = None
     finnhub_enabled: bool | None = None
     finnhub_api_key: str | None = None
+    ai_trading_overlay_enabled: bool | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     scan_universe_size: int | None = Field(default=None, gt=0)
@@ -23,7 +24,6 @@ class SettingsUpdateRequest(BaseModel):
     mark_to_market_interval_minutes: int | None = Field(default=None, gt=0)
     auto_execute_trade_plans: bool | None = None
     auto_scan_enabled: bool | None = None
-    auto_scan_interval_minutes: int | None = Field(default=None, gt=0)
     max_concurrent_positions: int | None = Field(default=None, gt=0)
 
 
