@@ -1,3 +1,0 @@
-INFO:     Will watch for changes in these directories: ['C:\\Users\\Miltiades\\Downloads\\bot\\backend']
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [26740] using WatchFiles
