@@ -7,8 +7,9 @@ import { CompanyIcon } from '../components/CompanyIcon';
 import { TickerLink, tickerHref } from '../components/TickerLink';
 import { IconBadge } from '../components/IconBadge';
 import { RangeTabs } from '../components/RangeTabs';
-import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
+import { CandlestickChart } from '../components/chart/CandlestickChart';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct } from '../components/common';
+import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
 import type { ApiError } from '../api/client';
 
 function LiveClock() {
@@ -36,21 +37,8 @@ function TopPickChart({ symbol }: { symbol: string }) {
   const [range, setRange] = useState('1mo');
   const { data, isLoading } = useAnalysis(symbol, range);
 
-  const levels: PriceLevel[] = data
-    ? [
-        ...data.support.slice(0, 1).map((price) => ({ price, color: '#10b981', title: 'Support' })),
-        ...data.resistance.slice(0, 1).map((price) => ({ price, color: '#ef4444', title: 'Resistance' })),
-      ]
-    : [];
-
-  // Same 2% proximity threshold the backend's scanner uses to score "near a
-  // key level" — narrated here as a breakout callout, mirrors AnalysisPage.
-  const nearestResistance = data?.resistance[0];
-  const nearestSupport = data?.support[0];
-  const isPotentialBreakout =
-    !!data &&
-    ((data.trend === 'Bullish' && nearestResistance !== undefined && Math.abs(nearestResistance - data.price) / data.price <= 0.02) ||
-      (data.trend === 'Bearish' && nearestSupport !== undefined && Math.abs(nearestSupport - data.price) / data.price <= 0.02));
+  const levels = data ? supportResistanceLevels({ support: data.support.slice(0, 1), resistance: data.resistance.slice(0, 1) }) : [];
+  const breakout = !!data && isPotentialBreakout(data);
 
   return (
     <div className="card" style={{ height: '100%' }}>
@@ -60,7 +48,7 @@ function TopPickChart({ symbol }: { symbol: string }) {
           <div>
             <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
               {symbol}
-              {isPotentialBreakout && <span className="badge badge-amber">Potential Breakout</span>}
+              {breakout && <span className="badge badge-amber">Potential Breakout</span>}
             </div>
             {data && (
               <div className="tabular-nums text-muted" style={{ fontSize: 12 }}>

@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.deps import get_app_settings, get_data_provider, get_session
+from app.api.deps import get_app_settings, get_data_provider, get_session, require_shared_secret
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
-from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, PaperTradingEngine
+from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, MaxPositionsExceededError, PaperTradingEngine
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
 from app.portfolio.stats import compute_portfolio_stats
 from app.schemas.portfolio_schemas import (
@@ -17,11 +17,11 @@ from app.schemas.portfolio_schemas import (
     PositionSchema,
 )
 
-router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
+router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[Depends(require_shared_secret)])
 
 
 def build_engine(session: Session, data_provider: DataProvider, settings: AppSettings) -> PaperTradingEngine:
-    return PaperTradingEngine(session, data_provider, settings.paper_starting_cash)
+    return PaperTradingEngine(session, data_provider, settings.paper_starting_cash, settings.max_concurrent_positions)
 
 
 def position_to_schema(position: PaperPosition) -> PositionSchema:
@@ -53,7 +53,7 @@ def open_position(
         raise HTTPException(status_code=400, detail=f"Trade plan is already {plan.status}")
     try:
         position = build_engine(session, data_provider, settings).open_position(plan)
-    except (InsufficientCashError, DuplicatePositionError) as exc:
+    except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return position_to_schema(position)
 

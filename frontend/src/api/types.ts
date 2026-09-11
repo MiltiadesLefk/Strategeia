@@ -234,6 +234,7 @@ export interface TestConnectionResponse {
 export interface SettingsStatus {
   ai_online: boolean;
   ai_provider: string;
+  ai_overlay_online: boolean;
   finnhub_online: boolean;
   telegram_online: boolean;
 }

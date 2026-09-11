@@ -40,6 +40,29 @@ def test_status_ai_online_false_for_real_provider_without_key(monkeypatch):
     assert resp.json()["ai_online"] is False
 
 
+def test_status_ai_overlay_online_requires_both_toggle_and_real_provider(monkeypatch):
+    """Matches _maybe_get_ai_opinion's own gate in trade_plan_service.py —
+    the overlay checkbox alone isn't enough to call it "online" if there's no
+    real, configured provider behind it (or vice versa)."""
+    monkeypatch.setattr(
+        "app.api.routers.settings.load_app_settings",
+        lambda: AppSettings(llm_provider="openrouter", openrouter_api_key="fake-key-123", ai_trading_overlay_enabled=True),
+    )
+    assert client.get("/api/settings/status").json()["ai_overlay_online"] is True
+
+    monkeypatch.setattr(
+        "app.api.routers.settings.load_app_settings",
+        lambda: AppSettings(llm_provider="openrouter", openrouter_api_key="fake-key-123", ai_trading_overlay_enabled=False),
+    )
+    assert client.get("/api/settings/status").json()["ai_overlay_online"] is False
+
+    monkeypatch.setattr(
+        "app.api.routers.settings.load_app_settings",
+        lambda: AppSettings(llm_provider="none", ai_trading_overlay_enabled=True),
+    )
+    assert client.get("/api/settings/status").json()["ai_overlay_online"] is False
+
+
 def test_status_finnhub_online_requires_enabled_and_key(monkeypatch):
     monkeypatch.setattr(
         "app.api.routers.settings.load_app_settings",

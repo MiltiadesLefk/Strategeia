@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.deps import require_shared_secret
 from app.config import load_app_settings, update_app_settings
 from app.data_providers.finnhub_provider import FinnhubProvider
 from app.data_providers.base import DataProviderError
@@ -14,7 +15,7 @@ from app.schemas.settings_schemas import (
 )
 from app.services.telegram_service import send_message as send_telegram_message
 
-router = APIRouter(prefix="/api/settings", tags=["settings"])
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_shared_secret)])
 
 
 @router.get("")
@@ -37,10 +38,18 @@ def get_status() -> StatusResponse:
     settings = load_app_settings()
     provider = get_llm_provider(settings)
     ai_online = provider.name != "none" and provider.is_configured()
+    # Matches _maybe_get_ai_opinion's own gate in trade_plan_service.py: the
+    # overlay only ever actually calls out when the toggle is on AND a real,
+    # configured provider is selected — not just whether the checkbox is on.
+    ai_overlay_online = settings.ai_trading_overlay_enabled and ai_online
     finnhub_online = bool(settings.finnhub_enabled and settings.finnhub_api_key)
     telegram_online = bool(settings.telegram_bot_token and settings.telegram_chat_id)
     return StatusResponse(
-        ai_online=ai_online, ai_provider=provider.name, finnhub_online=finnhub_online, telegram_online=telegram_online
+        ai_online=ai_online,
+        ai_provider=provider.name,
+        ai_overlay_online=ai_overlay_online,
+        finnhub_online=finnhub_online,
+        telegram_online=telegram_online,
     )
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
-from app.api.deps import get_app_settings, get_data_provider, get_session
+from app.api.deps import get_app_settings, get_data_provider, get_session, require_shared_secret
 from app.api.routers.portfolio import build_engine
 from app.api.routers.trade_plans import trade_plan_to_response
 from app.config import AppSettings
@@ -15,7 +15,7 @@ from app.schemas.dashboard_schemas import DashboardSummary
 from app.schemas.portfolio_schemas import PortfolioStatsSchema
 from app.services.scanner_service import scan_symbols
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(require_shared_secret)])
 
 TOP_SETUPS_LIMIT = 5
 

@@ -27,6 +27,7 @@ export const qk = {
   equityCurve: ['equity-curve'] as const,
   dashboard: ['dashboard'] as const,
   settings: ['settings'] as const,
+  settingsStatus: ['settings-status'] as const,
 };
 
 export function useScan(symbols?: string) {
@@ -147,7 +148,7 @@ export function useSettings() {
 
 export function useSettingsStatus() {
   return useQuery({
-    queryKey: ['settings-status'] as const,
+    queryKey: qk.settingsStatus,
     queryFn: () => api.get<SettingsStatus>('/api/settings/status'),
     refetchInterval: 60_000,
   });
@@ -157,7 +158,13 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (req: SettingsUpdateRequest) => api.put<AppSettings>('/api/settings', req),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.settings }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.settings });
+      // Sidebar's online/offline pills otherwise only catch up on the next
+      // 60s poll — a save that changes provider/keys should reflect there
+      // immediately, not up to a minute later.
+      queryClient.invalidateQueries({ queryKey: qk.settingsStatus });
+    },
   });
 }
 

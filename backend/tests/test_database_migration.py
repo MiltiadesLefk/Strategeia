@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import SQLModel, create_engine
 
 
@@ -71,3 +73,80 @@ def test_add_missing_columns_adds_new_nullable_fields(monkeypatch, tmp_path):
         row = conn.exec_driver_sql("SELECT symbol, technical_score FROM tradeplanrecord").fetchone()
     assert row[0] == "AAPL"
     assert row[1] is None
+
+
+def test_relax_not_null_constraints_allows_no_trade_records(monkeypatch, tmp_path):
+    """Real bug, caught live: a runtime.db created before the "no_trade"
+    decision existed (see notes/Decisions.md) has direction/entry/stop/tp1/
+    tp2/rr1/rr2/suggested_shares/account_risk_dollars as NOT NULL. Generating
+    a trade plan for a symbol that evaluates to no_trade (all of those are
+    legitimately None) then 500s with a raw sqlite3.IntegrityError instead of
+    persisting the no-trade decision — reproduced against a real backend by
+    generating a trade plan for BTC-USD."""
+    import app.database as database_module
+    from app.portfolio import models  # noqa: F401 - registers the *current* model on SQLModel.metadata
+
+    db_path = tmp_path / "old_schema.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+
+    # Same pre-no_trade-feature schema as the ADD COLUMN test above: every
+    # sizing field NOT NULL, because every trade plan used to always have a
+    # full trade setup.
+    with engine.connect() as conn:
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE tradeplanrecord (
+                id INTEGER PRIMARY KEY,
+                symbol VARCHAR NOT NULL,
+                direction VARCHAR NOT NULL,
+                entry FLOAT NOT NULL,
+                stop FLOAT NOT NULL,
+                tp1 FLOAT NOT NULL,
+                tp2 FLOAT NOT NULL,
+                rr1 FLOAT NOT NULL,
+                rr2 FLOAT NOT NULL,
+                suggested_shares INTEGER NOT NULL,
+                account_risk_dollars FLOAT NOT NULL,
+                confidence_score INTEGER NOT NULL,
+                ai_take_text VARCHAR NOT NULL,
+                ai_provider VARCHAR NOT NULL,
+                time_horizon VARCHAR NOT NULL,
+                status VARCHAR NOT NULL,
+                created_at DATETIME NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO tradeplanrecord (symbol, direction, entry, stop, tp1, tp2, rr1, rr2, "
+            "suggested_shares, account_risk_dollars, confidence_score, ai_take_text, ai_provider, "
+            "time_horizon, status, created_at) VALUES "
+            "('AAPL', 'long', 100.0, 95.0, 110.0, 120.0, 2.0, 4.0, 10, 50.0, 70, 'test', 'none', "
+            "'1-4 weeks', 'pending', '2026-01-01 00:00:00')"
+        )
+        conn.commit()
+
+    monkeypatch.setattr(database_module, "engine", engine)
+    SQLModel.metadata.create_all(engine)
+    database_module._add_missing_columns()
+
+    # Before the fix: inserting a no_trade-shaped record (direction/entry/
+    # stop/... all NULL) against the stale schema raises.
+    from sqlmodel import Session
+
+    from app.portfolio.models import TradePlanRecord
+
+    with Session(engine) as session, pytest.raises(IntegrityError):
+        session.add(TradePlanRecord(symbol="BTC-USD", status="no_trade", reason="Confidence too low", confidence_score=35))
+        session.commit()
+
+    database_module._relax_not_null_constraints()
+
+    with Session(engine) as session:
+        session.rollback()  # clear the failed transaction from the pre-fix attempt above
+        session.add(TradePlanRecord(symbol="BTC-USD", status="no_trade", reason="Confidence too low", confidence_score=35))
+        session.commit()
+
+    # The pre-existing fully-populated row survived the table rebuild intact.
+    with engine.connect() as conn:
+        row = conn.exec_driver_sql("SELECT symbol, direction, entry FROM tradeplanrecord WHERE symbol = 'AAPL'").fetchone()
+    assert row == ("AAPL", "long", 100.0)

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_data_provider
+from app.api.deps import get_data_provider, require_shared_secret
 from app.analysis.trend import analyze_chart
 from app.data_providers.base import DataProvider
 from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.risk_schemas import RiskCalculateRequest, RiskCalculateResponse
 
-router = APIRouter(prefix="/api/risk", tags=["risk"])
+router = APIRouter(prefix="/api/risk", tags=["risk"], dependencies=[Depends(require_shared_secret)])
 
 
 @router.post("/calculate", response_model=RiskCalculateResponse)

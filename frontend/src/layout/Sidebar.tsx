@@ -14,7 +14,6 @@ const ICONS = {
   dashboard: 'M3 13h8V3H3v10Zm10 8h8V3h-8v18ZM3 21h8v-6H3v6Z',
   scan: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35',
   analysis: 'M3 3v18h18M7 15l4-5 3 3 5-7',
-  research: 'M6 2h9l5 5v15H6V2Zm8 0v6h6M9 13h6M9 17h6M9 9h2',
   plans: 'M9 2h6l3 3v17H6V5l3-3Zm0 0v4h6V2M9 12h6M9 16h6',
   portfolio: 'M3 8h18v12H3V8Zm4 0V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M3 12h18',
   settings:
@@ -25,7 +24,6 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof 
   { to: '/', label: 'Dashboard', end: true, icon: 'dashboard' },
   { to: '/scan', label: 'Market Scan', icon: 'scan' },
   { to: '/analysis', label: 'Analysis', icon: 'analysis' },
-  { to: '/research', label: 'Research', icon: 'research' },
   { to: '/trade-plans', label: 'Trade Plans', icon: 'plans' },
   { to: '/portfolio', label: 'Portfolio', icon: 'portfolio' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
@@ -132,6 +130,7 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
         <StatusPill online={!!status?.ai_online} label={status?.ai_online ? `AI Online · ${status.ai_provider}` : 'AI Offline'} />
+        <StatusPill online={!!status?.ai_overlay_online} label={status?.ai_overlay_online ? 'AI Overlay ON' : 'AI Overlay OFF'} />
         <StatusPill online={!!status?.finnhub_online} label={status?.finnhub_online ? 'Finnhub Online' : 'Finnhub Offline'} />
         <StatusPill online={!!status?.telegram_online} label={status?.telegram_online ? 'Telegram Online' : 'Telegram Offline'} />
       </div>

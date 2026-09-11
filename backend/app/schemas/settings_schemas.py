@@ -37,12 +37,16 @@ class TestConnectionResponse(BaseModel):
 
 
 class StatusResponse(BaseModel):
-    """Mirrors the sidebar's 'Trading Bot Online' indicator shape for three more
+    """Mirrors the sidebar's 'Trading Bot Online' indicator shape for four more
     signals: whether the configured LLM provider is real (not just the
-    NullLLMProvider echo fallback), whether Finnhub is configured, and whether
-    Telegram notifications are configured."""
+    NullLLMProvider echo fallback), whether the AI Trading Overlay will
+    actually produce a second opinion right now (enabled AND a real provider
+    is configured — matches _maybe_get_ai_opinion's own gate in
+    trade_plan_service.py, not just whether the checkbox is on), whether
+    Finnhub is configured, and whether Telegram notifications are configured."""
 
     ai_online: bool
     ai_provider: str
+    ai_overlay_online: bool
     finnhub_online: bool
     telegram_online: bool

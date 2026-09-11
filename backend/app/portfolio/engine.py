@@ -24,11 +24,28 @@ class DuplicatePositionError(Exception):
     fill a later stop/TP hit belongs to."""
 
 
+class MaxPositionsExceededError(Exception):
+    """Raised when opening would push the account past
+    settings.max_concurrent_positions. Enforced here, in the engine itself,
+    so every path that can open a position — manual open, a trade plan's
+    auto-execute, and the unattended auto-scan loop — respects the same cap;
+    previously only the auto-scan loop (automation_service.py) checked it,
+    so manually generating (with auto-execute on) or directly opening
+    positions could blow straight through the configured limit."""
+
+
 class PaperTradingEngine:
-    def __init__(self, session: Session, data_provider: DataProvider, starting_cash: float = 100_000.0):
+    def __init__(
+        self,
+        session: Session,
+        data_provider: DataProvider,
+        starting_cash: float = 100_000.0,
+        max_concurrent_positions: int | None = None,
+    ):
         self._session = session
         self._data_provider = data_provider
         self._starting_cash = starting_cash
+        self._max_concurrent_positions = max_concurrent_positions
 
     def get_account_state(self) -> AccountState:
         account = self._session.exec(select(AccountState)).first()
@@ -48,17 +65,34 @@ class PaperTradingEngine:
         if existing is not None:
             raise DuplicatePositionError(f"{trade_plan.symbol} already has an open position (id={existing.id})")
 
+        if self._max_concurrent_positions is not None:
+            open_count = len(self._session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all())
+            if open_count >= self._max_concurrent_positions:
+                raise MaxPositionsExceededError(
+                    f"Already at the {self._max_concurrent_positions}-position cap "
+                    "(Settings -> Max Concurrent Positions) — close a position before opening another."
+                )
+
         shares = trade_plan.suggested_shares
 
-        if trade_plan.direction == "long":
-            required_cash = shares * trade_plan.entry
-            if required_cash > account.current_cash:
-                shares = math.floor(account.current_cash / trade_plan.entry) if trade_plan.entry > 0 else 0
+        # Same cash cap for both directions: a short's sale proceeds are
+        # credited to current_cash below (real brokers do the same), but
+        # they're collateral against the short, not free money — treating
+        # raw current_cash as spendable for the NEXT position would let a
+        # chain of shorts each inflate the cash available to the next trade,
+        # producing aggregate exposure with no real bound relative to actual
+        # capital. _available_cash() nets out collateral already reserved
+        # for open shorts so this cap only ever grants buying power the
+        # account actually has.
+        available = self._available_cash(account)
+        required_cash = shares * trade_plan.entry
+        if required_cash > available:
+            shares = math.floor(available / trade_plan.entry) if trade_plan.entry > 0 else 0
 
         if shares <= 0:
             raise InsufficientCashError(
                 f"Account can't afford 1 share of {trade_plan.symbol} at ${trade_plan.entry:.2f} "
-                f"(available cash: ${account.current_cash:.2f}). Increase paper starting cash or "
+                f"(available cash: ${available:.2f}). Increase paper starting cash or "
                 "risk % in Settings."
             )
 
@@ -87,6 +121,16 @@ class PaperTradingEngine:
         self._record_equity_snapshot()
         self._session.refresh(position)  # _record_equity_snapshot()'s commit expires attributes
         return position
+
+    def _available_cash(self, account: AccountState) -> float:
+        """current_cash minus collateral reserved for currently open shorts
+        — see the comment in open_position() for why raw current_cash isn't
+        the right number to size a new position against."""
+        open_shorts = self._session.exec(
+            select(PaperPosition).where(PaperPosition.status == "open", PaperPosition.direction == "short")
+        ).all()
+        reserved = sum(p.shares * p.entry_price for p in open_shorts)
+        return account.current_cash - reserved
 
     def close_position(self, position: PaperPosition, close_price: float, reason: str) -> PaperPosition:
         account = self.get_account_state()

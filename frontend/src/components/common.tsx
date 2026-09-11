@@ -4,13 +4,71 @@ export function LoadingSpinner({ label = 'Loading…' }: { label?: string }) {
   return <div className="text-muted" style={{ padding: 24, textAlign: 'center' }}>{label}</div>;
 }
 
-export function ErrorBanner({ message }: { message: string }) {
+/** A sliding on/off switch for a binary setting — clearer at a glance than
+ * a checkbox or an "Enabled"/"Disabled" <select>. Built on a real (visually
+ * hidden, not display:none) checkbox input so it stays keyboard/
+ * screen-reader accessible; see .toggle-switch in index.css. */
+export function ToggleSwitch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="toggle-switch" aria-label={label}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span className="toggle-track" />
+      <span className="toggle-thumb" />
+    </label>
+  );
+}
+
+export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div
       className="badge-red"
-      style={{ borderRadius: 8, padding: '12px 16px', fontWeight: 500, fontSize: 14 }}
+      style={{ borderRadius: 8, padding: '12px 16px', fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
     >
-      {message}
+      <span>{message}</span>
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="btn btn-secondary" style={{ flexShrink: 0, padding: '4px 10px', fontSize: 12 }}>
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Shared visual treatment for an AI-generated note (chart insight, research
+ * summary, etc.) — one place so every "here's what the AI says" box looks
+ * the same instead of each page inventing its own box. */
+export function AiNoteCard({
+  label,
+  provider,
+  text,
+  error,
+}: {
+  label: string;
+  provider?: string | null;
+  text: string;
+  error?: string | null;
+}) {
+  return (
+    <div className="card" style={{ background: 'var(--canvas)', border: '1px solid var(--border)' }}>
+      <div className="text-muted" style={{ fontSize: 12, marginBottom: 6 }}>
+        {label} {provider ? `· ${provider === 'none' ? 'rule-based' : provider}` : ''}
+      </div>
+      <div>{text}</div>
+      {error && (
+        <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
+          ({error})
+        </div>
+      )}
     </div>
   );
 }

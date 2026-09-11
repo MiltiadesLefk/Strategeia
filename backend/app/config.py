@@ -20,6 +20,18 @@ class InfraSettings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     cors_origins: str = "http://localhost:5173"
+    # Opt-in stop-gap auth: unset (default) means every endpoint stays open,
+    # exactly like before — zero friction for local/dev use. Set
+    # API_SHARED_SECRET in .env to require a matching `X-API-Key` header on
+    # every API route (see api/deps.py's require_shared_secret). This is not
+    # a substitute for the reverse-proxy/TLS/real-auth setup TODO.md's
+    # "Before running this on a public VPS 24/7" section calls for — it's a
+    # cheap guard against casual unauthenticated abuse (draining a metered
+    # LLM/Finnhub key via /api/trade-plans/generate or /api/scan/auto-trade,
+    # overwriting Settings to redirect Telegram notifications, wiping the
+    # portfolio via /api/portfolio/reset) for anyone who exposes the port
+    # before doing that real hardening.
+    api_shared_secret: str = ""
     # Deliberately separate from data/ (which holds the bundled, read-only
     # sp500.csv baked into the Docker image) so a single volume mount at
     # runtime/ can persist the db + settings without hiding sp500.csv.

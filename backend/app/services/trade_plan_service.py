@@ -29,7 +29,7 @@ from app.data_providers.base import AllProvidersFailedError, CompanyOverview, Da
 from app.llm_providers.base import LLMProvider
 from app.llm_providers.factory import generate_with_fallback
 from app.llm_providers.prompts import build_ai_opinion_prompt, build_trade_plan_take_prompt
-from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, PaperTradingEngine
+from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, MaxPositionsExceededError, PaperTradingEngine
 from app.portfolio.models import TradePlanRecord
 from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
@@ -381,10 +381,11 @@ def generate_trade_plan(
     auto_execute_note = ""
     if settings.auto_execute_trade_plans and allow_auto_execute:
         try:
-            PaperTradingEngine(session, data_provider, account_size).open_position(record)
+            engine = PaperTradingEngine(session, data_provider, account_size, settings.max_concurrent_positions)
+            engine.open_position(record)
             session.refresh(record)
             auto_execute_note = "\nAuto-executed as a paper position."
-        except (InsufficientCashError, DuplicatePositionError) as exc:
+        except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError) as exc:
             logger.warning("Auto-execute skipped for %s: %s", symbol, exc)
             auto_execute_note = f"\nAuto-execute skipped: {exc}"
 

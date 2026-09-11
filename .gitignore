@@ -24,3 +24,9 @@ frontend/.env
 frontend/*.local
 
 
+
+# Local dev-server logs — unbounded, no reason to be in history (and a
+# future source of leaked tracebacks/request data if debug logging is ever
+# added). Was previously tracked by accident.
+*_dev.log
+*_dev_err.log

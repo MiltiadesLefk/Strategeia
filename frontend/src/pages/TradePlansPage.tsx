@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAnalysis, useGenerateTradePlan, useOpenPosition, useTradePlans } from '../api/hooks';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { DirectionBadge, TradePlanStatusBadge } from '../components/Badge';
@@ -313,7 +314,11 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
 }
 
 export function TradePlansPage() {
-  const [symbol, setSymbol] = useState('NVDA');
+  // URL-backed, not a hardcoded default — arriving via "Generate Trade Plan"
+  // from a symbol's Analysis page carries the symbol along (?symbol=X);
+  // landing here directly requires an explicit choice, same as Analysis.
+  const [params, setParams] = useSearchParams();
+  const symbol = params.get('symbol');
   const [statusFilter, setStatusFilter] = useState('active');
   const { mutate: generate, data: latest, isPending, error: generateError } = useGenerateTradePlan();
   const { data: history, isLoading: historyLoading } = useTradePlans();
@@ -330,8 +335,14 @@ export function TradePlansPage() {
       <div className="page-header">
         <h1 style={{ fontSize: 22 }}>Trade Plans</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <CompanyDropdown value={symbol} onChange={setSymbol} />
-          <button type="button" className="btn btn-primary" onClick={() => generate(symbol)} disabled={isPending}>
+          <CompanyDropdown value={symbol ?? ''} onChange={(s) => setParams({ symbol: s })} />
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => symbol && generate(symbol)}
+            disabled={isPending || !symbol}
+            title={symbol ? undefined : 'Choose a company first'}
+          >
             {isPending ? 'Generating…' : 'Generate Trade Plan'}
           </button>
         </div>

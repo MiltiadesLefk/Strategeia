@@ -90,6 +90,31 @@ class AlwaysFailingProvider:
         return None
 
 
+class _FakeInfraSettings:
+    def __init__(self, api_shared_secret: str):
+        self.api_shared_secret = api_shared_secret
+
+
+def test_shared_secret_unset_leaves_api_open(monkeypatch):
+    """Default behavior — no API_SHARED_SECRET configured — must stay a
+    no-op: every endpoint open, exactly as before this stop-gap existed."""
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings(""))
+    resp = client.get("/api/settings")
+    assert resp.status_code == 200
+
+
+def test_shared_secret_rejects_missing_or_wrong_key(monkeypatch):
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings("s3cr3t-value"))
+    assert client.get("/api/settings").status_code == 401
+    assert client.get("/api/settings", headers={"X-API-Key": "wrong"}).status_code == 401
+
+
+def test_shared_secret_accepts_matching_key(monkeypatch):
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings("s3cr3t-value"))
+    resp = client.get("/api/settings", headers={"X-API-Key": "s3cr3t-value"})
+    assert resp.status_code == 200
+
+
 def test_invalid_symbol_returns_clean_502_not_bare_500():
     """Regression: hitting /api/analysis/<garbage> used to bubble
     AllProvidersFailedError all the way up as an unhandled 500 with a bare

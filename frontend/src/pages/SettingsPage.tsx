@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSettings, useTestConnection, useUpdateSettings } from '../api/hooks';
-import { LoadingSpinner } from '../components/common';
+import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
 
 const LLM_OPTIONS = [
@@ -12,12 +12,61 @@ const LLM_OPTIONS = [
   { value: 'gemini', label: 'Google Gemini' },
 ];
 
+/** Save -> Saving… -> a brief green "Saved" confirmation -> back to Save.
+ * One shared component so every card's save button behaves and looks the
+ * same, instead of each card silently going back to plain "Save" with no
+ * feedback that anything happened. */
+function SaveButton({
+  pending,
+  justSaved,
+  onClick,
+  disabled,
+}: {
+  pending: boolean;
+  justSaved: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="btn btn-primary"
+      onClick={onClick}
+      disabled={pending || disabled}
+      style={{
+        transition: 'background-color 200ms ease, border-color 200ms ease',
+        ...(justSaved ? { background: 'var(--green)', borderColor: 'var(--green)' } : {}),
+      }}
+    >
+      {pending ? 'Saving…' : justSaved ? '✓ Saved' : 'Save'}
+    </button>
+  );
+}
+
+/** Small at-a-glance ON/OFF pill so an enabled/disabled setting doesn't
+ * depend on reading a dropdown's full sentence to register — same visual
+ * language as the sidebar's online/offline status pills. */
+function OnOffBadge({ on }: { on: boolean }) {
+  return <span className={`badge ${on ? 'badge-green' : 'badge-neutral'}`}>{on ? 'ON' : 'OFF'}</span>;
+}
+
+/** Discards whatever's been typed/toggled in this card and reverts it to
+ * the last-saved server values — a safety net for "I've been fiddling with
+ * this and want to bail out without saving." */
+function ResetButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="btn btn-secondary" onClick={onClick}>
+      Reset
+    </button>
+  );
+}
+
 export function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
   const { mutate: update, isPending: saving } = useUpdateSettings();
-  const { mutate: testLlm, data: llmTestResult, isPending: testingLlm } = useTestConnection();
-  const { mutate: testFinnhub, data: finnhubTestResult, isPending: testingFinnhub } = useTestConnection();
-  const { mutate: testTelegram, data: telegramTestResult, isPending: testingTelegram } = useTestConnection();
+  const { mutate: testLlm, data: llmTestResult, isPending: testingLlm, reset: resetLlmTest } = useTestConnection();
+  const { mutate: testFinnhub, data: finnhubTestResult, isPending: testingFinnhub, reset: resetFinnhubTest } = useTestConnection();
+  const { mutate: testTelegram, data: telegramTestResult, isPending: testingTelegram, reset: resetTelegramTest } = useTestConnection();
 
   const [llmProvider, setLlmProvider] = useState('none');
   const [openrouterKey, setOpenrouterKey] = useState('');
@@ -38,6 +87,36 @@ export function SettingsPage() {
   const [maxConcurrentPositions, setMaxConcurrentPositions] = useState(5);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
 
+  const [justSavedKey, setJustSavedKey] = useState<string | null>(null);
+  const flashTimeout = useRef<number | undefined>(undefined);
+  function flashSaved(key: string) {
+    window.clearTimeout(flashTimeout.current);
+    setJustSavedKey(key);
+    flashTimeout.current = window.setTimeout(() => setJustSavedKey((cur) => (cur === key ? null : cur)), 1800);
+  }
+
+  // Bumped on every Reset so each SecretField (keyed on `${masked}-${resetNonce}`)
+  // is forced to remount even when the masked hint itself didn't change —
+  // otherwise a field mid-"Replace" (its own local editing state, not
+  // tracked here) wouldn't visibly snap back to showing the saved value.
+  const [resetNonce, setResetNonce] = useState(0);
+
+  // "Check for empty" before Save is even clickable — a provider/integration
+  // left half-configured shouldn't be one click away from a false "Saved".
+  const llmNeedsKey = ['openrouter', 'orcarouter', 'openai', 'gemini'].includes(llmProvider);
+  const llmDraftKey = { openrouter: openrouterKey, orcarouter: orcarouterKey, openai: openaiKey, gemini: geminiKey }[llmProvider] ?? '';
+  const llmExistingKey =
+    ({ openrouter: settings?.openrouter_api_key, orcarouter: settings?.orcarouter_api_key, openai: settings?.openai_api_key, gemini: settings?.gemini_api_key }[
+      llmProvider
+    ] as string | undefined) ?? '';
+  const llmMissingKey = llmNeedsKey && !llmDraftKey && !llmExistingKey;
+
+  const finnhubMissingKey = finnhubEnabled && !finnhubKey && !settings?.finnhub_api_key;
+
+  const telegramHasToken = !!(telegramToken || settings?.telegram_bot_token);
+  const telegramHasChatId = !!telegramChatId;
+  const telegramIncomplete = telegramHasToken !== telegramHasChatId; // exactly one set — the other is required too
+
   useEffect(() => {
     if (!settings) return;
     setLlmProvider(settings.llm_provider);
@@ -55,6 +134,7 @@ export function SettingsPage() {
   }, [settings]);
 
   function saveLlm() {
+    if (llmMissingKey) return;
     update(
       {
         llm_provider: llmProvider,
@@ -71,46 +151,125 @@ export function SettingsPage() {
           setOrcarouterKey('');
           setOpenaiKey('');
           setGeminiKey('');
+          // Don't call it "Saved" until we've actually confirmed the
+          // provider works — a green checkmark next to "not configured"
+          // (e.g. picking claude_code_cli with no CLI on this machine, or a
+          // bad key) is worse than no confirmation at all.
+          testLlm('llm', { onSuccess: (result) => result.ok && flashSaved('llm') });
         },
       },
     );
   }
 
   function saveFinnhub() {
+    if (finnhubMissingKey) return;
     update(
       { finnhub_enabled: finnhubEnabled, ...(finnhubKey ? { finnhub_api_key: finnhubKey } : {}) },
-      { onSuccess: () => setFinnhubKey('') },
+      {
+        onSuccess: () => {
+          setFinnhubKey('');
+          if (finnhubEnabled) {
+            testFinnhub('finnhub', { onSuccess: (result) => result.ok && flashSaved('finnhub') });
+          } else {
+            flashSaved('finnhub'); // turning it off always "works" — nothing to verify
+          }
+        },
+      },
     );
   }
 
   function saveTelegram() {
+    if (telegramIncomplete) return;
     update(
       {
         telegram_chat_id: telegramChatId,
         ...(telegramToken ? { telegram_bot_token: telegramToken } : {}),
       },
-      { onSuccess: () => setTelegramToken('') },
+      {
+        onSuccess: () => {
+          setTelegramToken('');
+          if (telegramHasToken && telegramHasChatId) {
+            testTelegram('telegram', { onSuccess: (result) => result.ok && flashSaved('telegram') });
+          } else {
+            flashSaved('telegram'); // both cleared — intentionally off, nothing to verify
+          }
+        },
+      },
     );
   }
 
   function saveAccount() {
-    update({
-      paper_starting_cash: startingCash,
-      default_risk_pct: defaultRiskPct,
-      scan_universe_size: scanSize,
-      auto_execute_trade_plans: autoExecute,
-    });
+    update(
+      {
+        paper_starting_cash: startingCash,
+        default_risk_pct: defaultRiskPct,
+        scan_universe_size: scanSize,
+        auto_execute_trade_plans: autoExecute,
+      },
+      { onSuccess: () => flashSaved('account') },
+    );
   }
 
   function saveAutomation() {
-    update({
-      auto_scan_enabled: autoScanEnabled,
-      max_concurrent_positions: maxConcurrentPositions,
-    });
+    update(
+      {
+        auto_scan_enabled: autoScanEnabled,
+        max_concurrent_positions: maxConcurrentPositions,
+      },
+      { onSuccess: () => flashSaved('automation') },
+    );
   }
 
   function saveAiOverlay() {
-    update({ ai_trading_overlay_enabled: aiOverlayEnabled });
+    update({ ai_trading_overlay_enabled: aiOverlayEnabled }, { onSuccess: () => flashSaved('ai-overlay') });
+  }
+
+  function resetLlm() {
+    if (!settings) return;
+    setLlmProvider(settings.llm_provider);
+    setOpenrouterModel(settings.openrouter_model);
+    setOrcarouterModel(settings.orcarouter_model);
+    setOpenrouterKey('');
+    setOrcarouterKey('');
+    setOpenaiKey('');
+    setGeminiKey('');
+    setResetNonce((n) => n + 1);
+    resetLlmTest(); // discard any test result for whatever config we're abandoning
+  }
+
+  function resetFinnhub() {
+    if (!settings) return;
+    setFinnhubEnabled(settings.finnhub_enabled);
+    setFinnhubKey('');
+    setResetNonce((n) => n + 1);
+    resetFinnhubTest();
+  }
+
+  function resetTelegram() {
+    if (!settings) return;
+    setTelegramChatId(settings.telegram_chat_id);
+    setTelegramToken('');
+    setResetNonce((n) => n + 1);
+    resetTelegramTest();
+  }
+
+  function resetAccount() {
+    if (!settings) return;
+    setStartingCash(settings.paper_starting_cash);
+    setDefaultRiskPct(settings.default_risk_pct);
+    setScanSize(settings.scan_universe_size);
+    setAutoExecute(settings.auto_execute_trade_plans);
+  }
+
+  function resetAutomation() {
+    if (!settings) return;
+    setAutoScanEnabled(settings.auto_scan_enabled);
+    setMaxConcurrentPositions(settings.max_concurrent_positions);
+  }
+
+  function resetAiOverlay() {
+    if (!settings) return;
+    setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
   }
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
@@ -123,7 +282,16 @@ export function SettingsPage() {
         <h3>AI Narrative Provider</h3>
         <div>
           <label>Provider</label>
-          <select value={llmProvider} onChange={(e) => setLlmProvider(e.target.value)}>
+          <select
+            value={llmProvider}
+            onChange={(e) => {
+              setLlmProvider(e.target.value);
+              // A stale "claude_code_cli is not configured" left over from
+              // testing the *previous* provider must not linger under a
+              // now-different selection — it reads as describing this one.
+              resetLlmTest();
+            }}
+          >
             {LLM_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -134,7 +302,7 @@ export function SettingsPage() {
         {llmProvider === 'openrouter' && (
           <>
             <SecretField
-              key={settings?.openrouter_api_key ?? ''}
+              key={`${settings?.openrouter_api_key ?? ''}-${resetNonce}`}
               label="OpenRouter API Key"
               masked={settings?.openrouter_api_key ?? ''}
               value={openrouterKey}
@@ -150,7 +318,7 @@ export function SettingsPage() {
         {llmProvider === 'orcarouter' && (
           <>
             <SecretField
-              key={settings?.orcarouter_api_key ?? ''}
+              key={`${settings?.orcarouter_api_key ?? ''}-${resetNonce}`}
               label="OrcaRouter API Key"
               masked={settings?.orcarouter_api_key ?? ''}
               value={orcarouterKey}
@@ -169,7 +337,7 @@ export function SettingsPage() {
         )}
         {llmProvider === 'openai' && (
           <SecretField
-            key={settings?.openai_api_key ?? ''}
+            key={`${settings?.openai_api_key ?? ''}-${resetNonce}`}
             label="OpenAI API Key"
             masked={settings?.openai_api_key ?? ''}
             value={openaiKey}
@@ -179,7 +347,7 @@ export function SettingsPage() {
         )}
         {llmProvider === 'gemini' && (
           <SecretField
-            key={settings?.gemini_api_key ?? ''}
+            key={`${settings?.gemini_api_key ?? ''}-${resetNonce}`}
             label="Gemini API Key"
             masked={settings?.gemini_api_key ?? ''}
             value={geminiKey}
@@ -190,12 +358,19 @@ export function SettingsPage() {
           <div className="text-muted" style={{ fontSize: 13 }}>
             Best-effort option: shells out to your local Claude Code CLI. No key needed, but no SLA either — higher
             latency than a direct API and depends on the CLI being installed and logged in on this machine.
+            <strong> Running the backend in Docker?</strong> This can never come online there — the container has no
+            access to your machine's CLI or its login, by design (that's the whole reason it needs no key). Either
+            run the backend directly with <code>uvicorn</code> instead of Docker, or pick a key-based provider above.
           </div>
         )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" onClick={saveLlm} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+        {llmMissingKey && (
+          <div className="text-red" style={{ fontSize: 12 }}>
+            Enter an API key above before saving — {LLM_OPTIONS.find((o) => o.value === llmProvider)?.label} needs one.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey} />
+          <ResetButton onClick={resetLlm} />
           <button className="btn btn-secondary" onClick={() => testLlm('llm')} disabled={testingLlm}>
             {testingLlm ? 'Testing…' : 'Test Connection'}
           </button>
@@ -222,18 +397,15 @@ export function SettingsPage() {
           which normally skip the AI entirely to save tokens. Requires a real provider selected above (has no effect
           while Provider is "None").
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="checkbox"
-            checked={aiOverlayEnabled}
-            onChange={(e) => setAiOverlayEnabled(e.target.checked)}
-            style={{ width: 'auto' }}
-          />
-          Enable AI second opinion on every evaluation
-        </label>
-        <button className="btn btn-primary" onClick={saveAiOverlay} disabled={saving} style={{ alignSelf: 'flex-start' }}>
-          Save
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ToggleSwitch checked={aiOverlayEnabled} onChange={setAiOverlayEnabled} label="Enable AI second opinion on every evaluation" />
+          <span>Enable AI second opinion on every evaluation</span>
+          <OnOffBadge on={aiOverlayEnabled} />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-overlay'} onClick={saveAiOverlay} />
+          <ResetButton onClick={resetAiOverlay} />
+        </div>
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -241,20 +413,25 @@ export function SettingsPage() {
         <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input type="checkbox" checked={finnhubEnabled} onChange={(e) => setFinnhubEnabled(e.target.checked)} style={{ width: 'auto' }} />
           Enable Finnhub for quotes/news/earnings
+          <OnOffBadge on={finnhubEnabled} />
         </label>
         {finnhubEnabled && (
           <SecretField
-            key={settings?.finnhub_api_key ?? ''}
+            key={`${settings?.finnhub_api_key ?? ''}-${resetNonce}`}
             label="Finnhub API Key"
             masked={settings?.finnhub_api_key ?? ''}
             value={finnhubKey}
             onChange={setFinnhubKey}
           />
         )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" onClick={saveFinnhub} disabled={saving}>
-            Save
-          </button>
+        {finnhubMissingKey && (
+          <div className="text-red" style={{ fontSize: 12 }}>
+            Enter a Finnhub API key above before saving, or turn this off first.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SaveButton pending={saving || testingFinnhub} justSaved={justSavedKey === 'finnhub'} onClick={saveFinnhub} disabled={finnhubMissingKey} />
+          <ResetButton onClick={resetFinnhub} />
           {finnhubEnabled && (
             <button className="btn btn-secondary" onClick={() => testFinnhub('finnhub')} disabled={testingFinnhub}>
               {testingFinnhub ? 'Testing…' : 'Test Connection'}
@@ -277,7 +454,7 @@ export function SettingsPage() {
           <code>https://api.telegram.org/bot&lt;token&gt;/getUpdates</code> for your chat ID.
         </div>
         <SecretField
-          key={settings?.telegram_bot_token ?? ''}
+          key={`${settings?.telegram_bot_token ?? ''}-${resetNonce}`}
           label="Bot Token"
           masked={settings?.telegram_bot_token ?? ''}
           value={telegramToken}
@@ -288,10 +465,14 @@ export function SettingsPage() {
           <label>Chat ID</label>
           <input type="text" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} placeholder="e.g. 123456789" />
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" onClick={saveTelegram} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+        {telegramIncomplete && (
+          <div className="text-red" style={{ fontSize: 12 }}>
+            {telegramHasToken ? 'Enter a Chat ID too' : 'Enter a Bot Token too'} — Telegram needs both to send notifications.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SaveButton pending={saving || testingTelegram} justSaved={justSavedKey === 'telegram'} onClick={saveTelegram} disabled={telegramIncomplete} />
+          <ResetButton onClick={resetTelegram} />
           <button className="btn btn-secondary" onClick={() => testTelegram('telegram')} disabled={testingTelegram}>
             {testingTelegram ? 'Testing…' : 'Test Connection'}
           </button>
@@ -322,15 +503,19 @@ export function SettingsPage() {
           </select>
         </div>
         <div>
-          <label>Auto-Execute Trade Plans</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            Auto-Execute Trade Plans
+            <OnOffBadge on={autoExecute} />
+          </label>
           <select value={autoExecute ? 'enabled' : 'disabled'} onChange={(e) => setAutoExecute(e.target.value === 'enabled')}>
             <option value="enabled">Enabled — open a paper position the moment a plan is generated</option>
             <option value="disabled">Disabled — review each plan and click Execute manually</option>
           </select>
         </div>
-        <button className="btn btn-primary" onClick={saveAccount} disabled={saving} style={{ alignSelf: 'flex-start' }}>
-          Save
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <SaveButton pending={saving} justSaved={justSavedKey === 'account'} onClick={saveAccount} />
+          <ResetButton onClick={resetAccount} />
+        </div>
         <div className="text-muted" style={{ fontSize: 12 }}>
           Starting cash only takes effect for a fresh paper account — use "Reset Paper Account" on the Portfolio page
           to apply a changed value to an account that already has history.
@@ -347,11 +532,14 @@ export function SettingsPage() {
           at all.
         </div>
         <div>
-          <label>Auto-Scan</label>
-          <select value={autoScanEnabled ? 'enabled' : 'disabled'} onChange={(e) => setAutoScanEnabled(e.target.value === 'enabled')}>
-            <option value="disabled">Disabled — scan and generate plans manually</option>
-            <option value="enabled">Enabled — scan and trade on a schedule, unattended</option>
-          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ToggleSwitch checked={autoScanEnabled} onChange={setAutoScanEnabled} label="Auto-Scan" />
+            <span>Auto-Scan</span>
+            <OnOffBadge on={autoScanEnabled} />
+          </div>
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            {autoScanEnabled ? 'Enabled — scan and trade on a schedule, unattended.' : 'Disabled — scan and generate plans manually.'}
+          </div>
         </div>
         <div className="text-muted" style={{ fontSize: 12 }}>
           Schedule is fixed at 00:00, 08:00, and 13:30 UTC (Asia/London/New York session opens) — not configurable
@@ -372,9 +560,10 @@ export function SettingsPage() {
             risk. Applies to auto-scan only, not manual "Execute Trade Plan" clicks.
           </div>
         </div>
-        <button className="btn btn-primary" onClick={saveAutomation} disabled={saving} style={{ alignSelf: 'flex-start' }}>
-          Save
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <SaveButton pending={saving} justSaved={justSavedKey === 'automation'} onClick={saveAutomation} />
+          <ResetButton onClick={resetAutomation} />
+        </div>
       </div>
     </div>
   );

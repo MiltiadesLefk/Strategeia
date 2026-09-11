@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
+from sqlalchemy import MetaData
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import get_infra_settings
@@ -36,11 +37,56 @@ def _add_missing_columns() -> None:
         conn.commit()
 
 
+def _relax_not_null_constraints() -> None:
+    """A column that used to be required and later became Optional in the
+    model (e.g. TradePlanRecord.direction/entry/stop/tp1/tp2/rr1/rr2/
+    suggested_shares/account_risk_dollars, once a "no_trade" decision with
+    no sizing became a real, storable outcome — see notes/Decisions.md)
+    keeps its original NOT NULL constraint on anyone's already-existing
+    runtime.db: SQLite has no ALTER COLUMN to drop one. Left unfixed,
+    inserting the now-legitimate NULL crashes with a raw IntegrityError
+    instead of persisting the no-trade record it's supposed to be.
+
+    Detected per-table via PRAGMA table_info's notnull flag vs the current
+    model, fixed with SQLite's standard rebuild recipe: build a correctly-
+    constrained shadow table, copy every column the old table and the
+    current model still have in common, drop the old table, rename the
+    shadow into its place. Unlike `_add_missing_columns()`'s pure ADD
+    COLUMN, a rebuild needs one concrete target schema, so — unlike that
+    function — this does drop any column the model no longer has; accepted
+    since the alternative is a permanently broken table. Only touches a
+    table when a real mismatch is found, so it's a cheap no-op PRAGMA check
+    against a healthy table."""
+    with engine.connect() as conn:
+        for table in SQLModel.metadata.tables.values():
+            info = conn.exec_driver_sql(f'PRAGMA table_info("{table.name}")').fetchall()
+            if not info:
+                continue  # table doesn't exist yet — create_all() already handles that
+            existing_notnull = {row[1]: bool(row[3]) for row in info}
+            needs_relax = any(existing_notnull.get(column.name) and column.nullable for column in table.columns)
+            if not needs_relax:
+                continue
+
+            shadow_name = f"_migrate_{table.name}"
+            shadow = table.to_metadata(MetaData(), name=shadow_name)
+            conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{shadow_name}"')
+            shadow.create(conn)
+
+            model_columns = set(table.columns.keys())
+            copy_columns = [name for name in existing_notnull if name in model_columns]
+            columns_sql = ", ".join(f'"{c}"' for c in copy_columns)
+            conn.exec_driver_sql(f'INSERT INTO "{shadow_name}" ({columns_sql}) SELECT {columns_sql} FROM "{table.name}"')
+            conn.exec_driver_sql(f'DROP TABLE "{table.name}"')
+            conn.exec_driver_sql(f'ALTER TABLE "{shadow_name}" RENAME TO "{table.name}"')
+        conn.commit()
+
+
 def create_db_and_tables() -> None:
     from app.portfolio import models  # noqa: F401 - registers tables on SQLModel.metadata
 
     SQLModel.metadata.create_all(engine)
     _add_missing_columns()
+    _relax_not_null_constraints()
 
 
 def get_session() -> Generator[Session, None, None]:

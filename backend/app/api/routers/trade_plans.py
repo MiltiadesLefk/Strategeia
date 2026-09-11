@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
-from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session
+from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_shared_secret
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
@@ -11,7 +11,7 @@ from app.portfolio.models import TradePlanRecord
 from app.schemas.trade_plan_schemas import TradePlanGenerateRequest, TradePlanResponse
 from app.services.trade_plan_service import generate_trade_plan
 
-router = APIRouter(prefix="/api/trade-plans", tags=["trade-plans"])
+router = APIRouter(prefix="/api/trade-plans", tags=["trade-plans"], dependencies=[Depends(require_shared_secret)])
 
 
 @router.post("/generate", response_model=TradePlanResponse)

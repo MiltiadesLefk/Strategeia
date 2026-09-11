@@ -5,7 +5,12 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.data_providers.base import QuoteData
-from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, PaperTradingEngine
+from app.portfolio.engine import (
+    DuplicatePositionError,
+    InsufficientCashError,
+    MaxPositionsExceededError,
+    PaperTradingEngine,
+)
 from app.portfolio.models import TradePlanRecord
 from app.portfolio.stats import compute_portfolio_stats
 
@@ -221,3 +226,61 @@ def test_open_short_position_gains_value_as_price_falls(session: Session):
     stats = compute_portfolio_stats(session, provider, STARTING_CASH)
 
     assert stats.portfolio_value == pytest.approx(STARTING_CASH + 100.0)
+
+
+def test_open_short_position_raises_when_cash_cant_afford_it(session: Session):
+    """Regression: the affordability cap in open_position() used to only
+    run `if direction == 'long'` — a short's suggested_shares flowed
+    straight through with no cash/collateral check at all, letting the
+    account take on short exposure with no bound relative to real capital."""
+    plan = make_plan(session, direction="short", entry=100.0, stop=105.0, suggested_shares=1000)
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, STARTING_CASH)  # 10,000 cash; 1000 shares @ $100 = $100,000 notional
+
+    position = engine.open_position(plan)
+
+    assert position.shares == 100  # capped to STARTING_CASH / entry, not the full 1000 requested
+
+
+def test_short_proceeds_are_not_spendable_on_a_new_position(session: Session):
+    """Regression: opening a short credits its sale proceeds to current_cash
+    immediately (real brokers do too) — but until the short is closed,
+    that's collateral, not free cash. Before this fix, only the long-side
+    affordability check existed, so a short's proceeds could be spent again
+    sizing a brand-new position, letting the account chain trades into
+    aggregate exposure with no real bound relative to its actual starting
+    capital."""
+    short_plan = make_plan(session, symbol="TSLA", direction="short", entry=100.0, stop=105.0, suggested_shares=50)
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, STARTING_CASH)
+    engine.open_position(short_plan)
+
+    account = engine.get_account_state()
+    assert account.current_cash == STARTING_CASH + 50 * 100.0  # 15,000 — proceeds credited, as designed
+
+    long_plan = make_plan(session, symbol="AAPL", direction="long", entry=100.0, stop=95.0, suggested_shares=120)
+    long_position = engine.open_position(long_plan)
+
+    # Capped at 100 shares (STARTING_CASH / entry) — not 120 (the full
+    # request) and not 150 (floor(current_cash / entry), which is what the
+    # short's "phantom" proceeds would wrongly allow).
+    assert long_position.shares == 100
+
+
+def test_open_position_raises_when_max_concurrent_positions_reached(session: Session):
+    """Regression: max_concurrent_positions was only enforced by the
+    unattended auto-scan loop (automation_service.py) — manually generating
+    a trade plan with auto-execute on, or opening a position directly via
+    the API, had no cap at all."""
+    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
+    engine = PaperTradingEngine(session, provider, STARTING_CASH, max_concurrent_positions=1)
+
+    first_plan = make_plan(session, symbol="AAPL")
+    engine.open_position(first_plan)
+
+    second_plan = make_plan(session, symbol="MSFT", entry=50.0, stop=45.0, suggested_shares=5)
+    with pytest.raises(MaxPositionsExceededError):
+        engine.open_position(second_plan)
+
+    account = engine.get_account_state()
+    assert account.current_cash == STARTING_CASH - 10 * 100.0  # unchanged by the rejected second open
