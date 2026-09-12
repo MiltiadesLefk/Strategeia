@@ -122,3 +122,30 @@ export function isSafeHttpUrl(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * Mean realized R — expectancy per trade — NOT a planned risk:reward ratio.
+ *
+ * This was labelled "Avg R:R" and rendered as `${value}:1`, which turned a
+ * losing average into "-0.42:1": not a ratio, and not a thing. The backend
+ * field (`avg_rr`) is the mean of realized_r across closed trades, so it is
+ * signed and belongs in R units.
+ */
+export function formatR(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}R`;
+}
+
+/**
+ * Sample-size qualifier for rate-style stats. A 67% win rate off three trades
+ * and off three hundred are not the same claim, and rendering them
+ * identically overstates the small one — the opposite of what this project
+ * says its stats are for.
+ */
+export const MIN_MEANINGFUL_TRADES = 20;
+
+export function sampleSizeNote(trades: number): string {
+  if (trades === 0) return 'no closed trades yet';
+  const label = `${trades} closed trade${trades === 1 ? '' : 's'}`;
+  return trades < MIN_MEANINGFUL_TRADES ? `${label} — too few to read much into` : label;
+}

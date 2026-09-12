@@ -75,6 +75,10 @@ class PaperPosition(SQLModel, table=True):
     symbol: str
     direction: str
     entry_price: float
+    # What the plan asked for, vs entry_price = what it actually filled at
+    # (current market + slippage — see PaperTradingEngine._resolve_entry_price).
+    # Nullable: rows written before the engine re-quoted at open read back None.
+    planned_entry_price: Optional[float] = None
     stop_loss: float
     tp1: float
     tp2: float
@@ -86,6 +90,9 @@ class PaperPosition(SQLModel, table=True):
     close_reason: Optional[str] = None
     realized_pnl: Optional[float] = None
     realized_r: Optional[float] = None
+    # Round-trip commission, charged at open and again at close. realized_pnl
+    # is already net of it; kept separately so the UI can show gross vs net.
+    fees_paid: Optional[float] = None
 
 
 class EquitySnapshot(SQLModel, table=True):

@@ -82,3 +82,70 @@ def test_fundamentals_distant_earnings_no_penalty():
     far = date.today() + timedelta(days=30)
     score, _ = score_fundamentals(_overview(week52_low=1.0, week52_high=1_000_000.0), [], far, price=150.0)
     assert score == 0
+
+
+# --- direction-awareness -----------------------------------------------------
+# Fundamentals and news are CONFLUENCE checks, so they have to know which way
+# the trade goes. Scored direction-blind, the three strongest reasons to be
+# short (collapsing revenue, 52-week low, "plunges after guidance cut") were
+# counted AGAINST a short — enough to push most short setups under
+# MIN_CONFIDENCE_FOR_TRADE and quietly suppress half the signal space.
+
+
+def _bearish_setup():
+    overview = CompanyOverview(
+        symbol="ACME", name="Acme", market_cap=1e9, pe_ratio=10.0, revenue_ttm=1e9,
+        eps_ttm=1.0, week52_low=50.0, week52_high=200.0,
+    )
+    years = [FinancialYear(2024, 1000.0, 100.0), FinancialYear(2025, 800.0, 50.0)]
+    news = [NewsItem("Acme plunges after guidance cut", "x", "http://x", "")]
+    return overview, years, news, 51.0  # price sitting on the 52-week low
+
+
+def test_bearish_evidence_supports_a_short_instead_of_penalising_it():
+    overview, years, news, price = _bearish_setup()
+
+    short_f, _ = score_fundamentals(overview, years, None, price, "short")
+    short_n, _ = score_news_sentiment(news, "short")
+    long_f, _ = score_fundamentals(overview, years, None, price, "long")
+    long_n, _ = score_news_sentiment(news, "long")
+
+    assert short_f > 0 and short_n > 0, "bearish evidence must confirm a short"
+    assert long_f < 0 and long_n < 0, "the same evidence must contradict a long"
+    assert short_f == -long_f and short_n == -long_n
+
+
+def test_bullish_evidence_still_supports_a_long():
+    overview = CompanyOverview(
+        symbol="ACME", name="Acme", market_cap=1e9, pe_ratio=10.0, revenue_ttm=1e9,
+        eps_ttm=1.0, week52_low=50.0, week52_high=200.0,
+    )
+    years = [FinancialYear(2024, 800.0, 50.0), FinancialYear(2025, 1000.0, 100.0)]
+    news = [NewsItem("Acme beats and raises guidance", "x", "http://x", "")]
+
+    assert score_fundamentals(overview, years, None, 199.0, "long")[0] > 0
+    assert score_news_sentiment(news, "long")[0] > 0
+
+
+def test_no_direction_keeps_the_original_long_biased_reading():
+    """Back-compat: callers that don't pass a direction (and the scanner's own
+    pre-direction pass) behave exactly as before."""
+    overview, years, news, price = _bearish_setup()
+    assert score_fundamentals(overview, years, None, price) == score_fundamentals(overview, years, None, price, "long")
+    assert score_news_sentiment(news) == score_news_sentiment(news, "long")
+
+
+def test_earnings_risk_stays_a_penalty_in_both_directions():
+    """The one genuinely direction-neutral factor: an earnings print can gap
+    through a stop either way, so it must not flip sign."""
+    overview = CompanyOverview(
+        symbol="ACME", name="Acme", market_cap=1e9, pe_ratio=10.0, revenue_ttm=1e9,
+        eps_ttm=1.0, week52_low=50.0, week52_high=200.0,
+    )
+    soon = date.today() + timedelta(days=1)
+    long_score, long_reasons = score_fundamentals(overview, [], soon, 120.0, "long")
+    short_score, short_reasons = score_fundamentals(overview, [], soon, 120.0, "short")
+
+    assert long_score == short_score == -1
+    assert any("earnings" in r for r in long_reasons)
+    assert any("earnings" in r for r in short_reasons)

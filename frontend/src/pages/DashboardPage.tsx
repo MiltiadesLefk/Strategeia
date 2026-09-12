@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDashboardSummary, useEquityCurve, useAnalysis } from '../api/hooks';
 import { StatCard } from '../components/StatCard';
@@ -7,31 +7,17 @@ import { CompanyIcon } from '../components/CompanyIcon';
 import { TickerLink, tickerHref } from '../components/TickerLink';
 import { IconBadge } from '../components/IconBadge';
 import { RangeTabs } from '../components/RangeTabs';
+import { MarketStatus } from '../components/MarketStatus';
 import { CandlestickChart } from '../components/chart/CandlestickChart';
-import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct } from '../components/common';
+import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR, sampleSizeNote } from '../components/common';
 import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
 import type { ApiError } from '../api/client';
 
-function LiveClock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
-  const date = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  const time = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span className="badge" style={{ background: 'var(--green-bg)', color: 'var(--green)' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
-        Live Market Data
-      </span>
-      <span className="text-muted" style={{ fontSize: 13 }}>
-        {date} · {time}
-      </span>
-    </div>
-  );
-}
+/* The old LiveClock lived here: a local wall clock next to a permanently
+   green "Live Market Data" badge. The badge was unconditional markup, and
+   the data behind it is the last daily close (cached up to 15 minutes), not
+   a live tick. Replaced by MarketStatus, which reads real session state and
+   says when the data actually arrived — see components/MarketStatus.tsx. */
 
 function TopPickChart({ symbol }: { symbol: string }) {
   const [range, setRange] = useState('1mo');
@@ -69,7 +55,7 @@ function TopPickChart({ symbol }: { symbol: string }) {
 }
 
 export function DashboardPage() {
-  const { data, isLoading, error } = useDashboardSummary();
+  const { data, isLoading, error, dataUpdatedAt } = useDashboardSummary();
   const { data: equity } = useEquityCurve();
 
   if (isLoading) return <LoadingSpinner label="Loading dashboard…" />;
@@ -87,23 +73,50 @@ export function DashboardPage() {
       <div className="page-header">
         <div>
           <h1 style={{ fontSize: 22 }}>{greeting}</h1>
-          <div className="text-muted" style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
-            Your trading bot is ready — {markets_scanned} markets scanned, {potential_setups} potential setup{potential_setups === 1 ? '' : 's'} today
+          {/* Was prefixed by a hardcoded green dot implying "healthy" — the
+              sidebar's Services indicator is the real reading of that. This
+              line is scan activity, so it states scan activity. */}
+          <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
+            {markets_scanned} market{markets_scanned === 1 ? '' : 's'} scanned · {potential_setups} potential setup
+            {potential_setups === 1 ? '' : 's'}
           </div>
         </div>
-        <LiveClock />
+        <MarketStatus asOf={dataUpdatedAt} />
+      </div>
+
+      {/* Two tiers, because these are not peers. Account performance leads;
+          win rate / expectancy / exposure follow at normal weight. The
+          scan-activity counters that used to sit in this grid at the same
+          size as Total Return are gone — they're activity, not performance,
+          and the page header already states both. */}
+      <div className="grid hero-stat-grid">
+        <StatCard
+          label="Portfolio Value"
+          value={formatMoney(stats.portfolio_value)}
+          trend={equityTrend}
+          size="hero"
+          note={`from ${formatMoney(stats.starting_cash)} starting cash`}
+        />
+        <StatCard
+          label="Total Return"
+          value={formatPct(stats.total_return)}
+          positive={stats.total_return > 0 ? true : stats.total_return < 0 ? false : null}
+          trend={equityTrend}
+          size="hero"
+          note={`${formatMoney(stats.portfolio_value - stats.starting_cash)} vs starting cash`}
+        />
       </div>
 
       <div className="grid stat-grid">
-        <StatCard label="Total Return" value={formatPct(stats.total_return)} positive={stats.total_return > 0 ? true : stats.total_return < 0 ? false : null} trend={equityTrend} />
-        <StatCard label="Win Rate" value={`${formatNumber(stats.win_rate, 0)}%`} />
+        <StatCard label="Win Rate" value={`${formatNumber(stats.win_rate, 0)}%`} note={sampleSizeNote(stats.total_trades)} />
+        <StatCard
+          label="Avg R"
+          value={formatR(stats.avg_rr)}
+          positive={stats.avg_rr === null ? null : stats.avg_rr > 0}
+          note="expectancy per closed trade"
+        />
         <StatCard label="Total Trades" value={String(stats.total_trades)} />
-        <StatCard label="Avg R:R" value={stats.avg_rr !== null ? `${formatNumber(stats.avg_rr)}:1` : '—'} />
-        <StatCard label="Markets Scanned" value={String(markets_scanned)} />
-        <StatCard label="Potential Setups" value={String(potential_setups)} />
         <StatCard label="Active Positions" value={String(stats.active_positions)} />
-        <StatCard label="Portfolio Value" value={formatMoney(stats.portfolio_value)} trend={equityTrend} />
       </div>
 
       <div className="split-row">

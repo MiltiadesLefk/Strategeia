@@ -15,7 +15,7 @@ from app.data_providers.base import (
     QuoteData,
 )
 from app.data_providers.cache import cached
-from app.timeutil import utc_from_timestamp_naive
+from app.timeutil import utc_from_timestamp_naive, utc_iso_from_timestamp
 
 BASE_URL = "https://finnhub.io/api/v1"
 QUOTE_TTL = 15 * 60
@@ -98,7 +98,7 @@ class FinnhubProvider:
         for entry in (data or [])[:limit]:
             published_at = ""
             if entry.get("datetime"):
-                published_at = utc_from_timestamp_naive(entry["datetime"]).isoformat()
+                published_at = utc_iso_from_timestamp(entry["datetime"])
             items.append(
                 NewsItem(
                     headline=entry.get("headline", ""),

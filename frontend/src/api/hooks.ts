@@ -58,11 +58,18 @@ export function useUniverse() {
   });
 }
 
-export function useAnalysis(symbol: string | null, range: string = '3mo') {
+/**
+ * `enabled: false` defers the request — used by Portfolio's position cards so
+ * N open positions don't fire N simultaneous 1-year analysis requests on page
+ * load for charts that are mostly below the fold. (The fetch itself isn't
+ * wasted: the same response draws the candlestick chart. It just doesn't need
+ * to happen before the card is on screen.)
+ */
+export function useAnalysis(symbol: string | null, range: string = '3mo', enabled: boolean = true) {
   return useQuery({
     queryKey: qk.analysis(symbol ?? '', range),
     queryFn: () => api.get<AnalysisResponse>(`/api/analysis/${symbol}?range=${range}`),
-    enabled: !!symbol,
+    enabled: !!symbol && enabled,
   });
 }
 

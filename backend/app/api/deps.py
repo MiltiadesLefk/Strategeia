@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from fastapi import Header, HTTPException
 
 from app.config import AppSettings, get_infra_settings, load_app_settings
@@ -24,7 +26,11 @@ def require_shared_secret(x_api_key: str | None = Header(default=None)) -> None:
     expected = get_infra_settings().api_shared_secret
     if not expected:
         return
-    if x_api_key != expected:
+    # compare_digest, not ==: a plain string comparison short-circuits on the
+    # first differing byte, so response timing leaks a correct prefix and the
+    # secret can be recovered byte by byte. This is the only auth in front of
+    # endpoints that spend LLM/Finnhub credit and can wipe the portfolio.
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key header")
 
 

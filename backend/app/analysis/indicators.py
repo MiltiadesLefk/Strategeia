@@ -20,6 +20,31 @@ def rsi(close: pd.Series, period: int = 14) -> pd.Series:
     return result.fillna(100)
 
 
+def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Wilder's Average True Range. True range is the widest of (high-low),
+    (high-prev_close), (prev_close-low) so it accounts for overnight gaps,
+    not just the intraday range. Smoothed with the same ewm(alpha=1/period)
+    Wilder smoothing rsi() above already uses, for consistency."""
+    high, low, close = df["high"], df["low"], df["close"]
+    prev_close = close.shift(1)
+    true_range = pd.concat(
+        [high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+    ).max(axis=1)
+    return true_range.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+
+
+def latest_atr(df: pd.DataFrame, period: int = 14) -> float | None:
+    """Most recent ATR value, or None when there aren't enough bars for a
+    meaningful read — callers treat None as "no volatility opinion" and fall
+    back to their non-ATR path rather than guessing."""
+    if len(df) < period + 1:
+        return None
+    value = atr(df, period).iloc[-1]
+    if pd.isna(value) or value <= 0:
+        return None
+    return float(value)
+
+
 def rate_of_change(close: pd.Series, periods: int) -> float:
     if len(close) <= periods or close.iloc[-1 - periods] == 0:
         return 0.0

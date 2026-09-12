@@ -12,6 +12,7 @@ from app.analysis.fundamental_scoring import (
     score_fundamentals,
     score_news_sentiment,
 )
+from app.analysis.indicators import latest_atr
 from app.analysis.insight_text import trade_plan_take_text
 from app.analysis.market_confirmation import (
     MARKET_CONFIRMATION_SCORE_CAP,
@@ -29,7 +30,14 @@ from app.data_providers.base import AllProvidersFailedError, CompanyOverview, Da
 from app.llm_providers.base import LLMProvider
 from app.llm_providers.factory import generate_with_fallback
 from app.llm_providers.prompts import build_ai_opinion_prompt, build_trade_plan_take_prompt
-from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, MaxPositionsExceededError, PaperTradingEngine
+from app.portfolio.engine import (
+    DuplicatePositionError,
+    InsufficientCashError,
+    MaxPositionsExceededError,
+    PaperTradingEngine,
+    SectorConcentrationError,
+    StalePlanError,
+)
 from app.portfolio.models import TradePlanRecord
 from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
@@ -39,6 +47,17 @@ logger = logging.getLogger(__name__)
 
 STOP_BUFFER_PCT = 0.01
 FALLBACK_STOP_PCT = 0.03
+
+# Volatility floor on the stop. A support level 1% under price is a perfectly
+# good stop on a name that moves 0.8% a day and pure noise on one that moves
+# 5% — the level-derived stop says nothing about whether it sits inside the
+# instrument's normal daily range. Below this multiple of ATR the stop is
+# pushed out to it, so "stopped out" means the setup actually broke rather
+# than that the stock breathed. 1.5x is the conventional floor for a swing
+# stop and keeps the same named-constant, non-ML shape as the rest of
+# analysis/.
+ATR_PERIOD = 14
+ATR_STOP_MULTIPLE = 1.5
 TECHNICAL_SCORE_CAP = 6
 # Deliberately excludes VIX_REGIME_SCORE_CAP: that check is one-directional
 # (score_vix_regime only ever returns 0 or a penalty, never a bonus — see
@@ -61,12 +80,27 @@ CONFIDENCE_CEILING = 90
 MIN_CONFIDENCE_FOR_TRADE = 40
 
 
-def _derive_entry_and_stop(direction: str, price: float, support: list[float], resistance: list[float]) -> tuple[float, float]:
+def _derive_entry_and_stop(
+    direction: str,
+    price: float,
+    support: list[float],
+    resistance: list[float],
+    atr_value: float | None = None,
+) -> tuple[float, float]:
+    """Structure first, volatility as a floor: the stop goes just past the
+    nearest level, then gets pushed out if that would put it closer than
+    ATR_STOP_MULTIPLE x ATR. Never pulled IN — a level further away than the
+    ATR floor is respected as-is, since structure is the better reason. A
+    missing ATR read (too few bars) just skips the floor."""
     entry = price
     if direction == "long":
         stop = support[0] * (1 - STOP_BUFFER_PCT) if support else entry * (1 - FALLBACK_STOP_PCT)
+        if atr_value:
+            stop = min(stop, entry - ATR_STOP_MULTIPLE * atr_value)
     else:
         stop = resistance[0] * (1 + STOP_BUFFER_PCT) if resistance else entry * (1 + FALLBACK_STOP_PCT)
+        if atr_value:
+            stop = max(stop, entry + ATR_STOP_MULTIPLE * atr_value)
     return entry, stop
 
 
@@ -231,18 +265,26 @@ def generate_trade_plan(
     # every symbol (including crypto pairs with no fundamentals/news
     # coverage) gets the full evaluation; those signals just contribute 0
     # when unavailable.
+    # Direction is settled before anything is scored against it: fundamentals,
+    # news and options positioning are all CONFLUENCE checks, and confluence is
+    # meaningless without knowing which way the trade goes. (Previously this
+    # was computed further down, so the two fundamental scorers ran blind and
+    # charged short setups for their own confirming evidence.)
+    provisional_direction = "long" if chart.trend == "Bullish" else "short" if chart.trend == "Bearish" else None
+
     overview, financial_years, news = _fetch_fundamentals_and_news(symbol, data_provider)
     earnings_date = data_provider.get_earnings_date(symbol)
-    news_score, news_reasons = score_news_sentiment(news)
+    news_score, news_reasons = score_news_sentiment(news, provisional_direction)
     fundamental_score, fundamental_reasons = (
-        score_fundamentals(overview, financial_years, earnings_date, quote.price) if overview else (0, [])
+        score_fundamentals(overview, financial_years, earnings_date, quote.price, provisional_direction)
+        if overview
+        else (0, [])
     )
     # Confluence: does the weekly timeframe / broad market (SPY) agree with
     # the daily-chart direction? See analysis/market_confirmation.py — kept
     # as its own capped dimension, same pattern as fundamental_score/
     # news_score, never folded into scanner_scoring's own 0-6 technical
     # score (that would change the Market Scanner's score/signal tiers too).
-    provisional_direction = "long" if chart.trend == "Bullish" else "short" if chart.trend == "Bearish" else None
     weekly_chart, market_chart = _fetch_confirmation_charts(symbol, data_provider)
     market_confirmation_score, market_confirmation_reasons = score_market_confirmation(
         provisional_direction, weekly_chart, market_chart
@@ -325,10 +367,27 @@ def generate_trade_plan(
         )
 
     direction = "long" if chart.trend == "Bullish" else "short"
-    entry, stop = _derive_entry_and_stop(direction, chart.price, chart.support, chart.resistance)
+    atr_value = latest_atr(ohlcv, ATR_PERIOD)
+    entry, stop = _derive_entry_and_stop(direction, chart.price, chart.support, chart.resistance, atr_value)
 
-    sizing = calculate_position_size(account_size, risk_pct, entry, stop)
+    # Sized against the cash the account can ACTUALLY deploy, not just the
+    # nominal account size. Without available_cash, `capped_by_cash` could
+    # never be True, so the plan advertised a share count the engine then
+    # silently shrank at open — the UI showed a position the account could
+    # not take.
+    engine = PaperTradingEngine(
+        session,
+        data_provider,
+        account_size,
+        settings.max_concurrent_positions,
+        slippage_bps=settings.slippage_bps,
+        commission_per_trade=settings.commission_per_trade,
+        max_positions_per_sector=settings.max_positions_per_sector,
+        max_position_pct_of_adv=settings.max_position_pct_of_adv,
+    )
+    sizing = calculate_position_size(account_size, risk_pct, entry, stop, engine.available_cash())
     targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
+    stop_atr_multiple = (abs(entry - stop) / atr_value) if atr_value else None
 
     fallback_text = trade_plan_take_text(symbol, direction, targets.rr1, confidence_score)
     prompt = build_trade_plan_take_prompt(
@@ -381,11 +440,16 @@ def generate_trade_plan(
     auto_execute_note = ""
     if settings.auto_execute_trade_plans and allow_auto_execute:
         try:
-            engine = PaperTradingEngine(session, data_provider, account_size, settings.max_concurrent_positions)
             engine.open_position(record)
             session.refresh(record)
             auto_execute_note = "\nAuto-executed as a paper position."
-        except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError) as exc:
+        except (
+            InsufficientCashError,
+            DuplicatePositionError,
+            MaxPositionsExceededError,
+            SectorConcentrationError,
+            StalePlanError,
+        ) as exc:
             logger.warning("Auto-execute skipped for %s: %s", symbol, exc)
             auto_execute_note = f"\nAuto-execute skipped: {exc}"
 
@@ -410,6 +474,9 @@ def generate_trade_plan(
         account_risk_dollars=sizing.account_risk_dollars,
         potential_gain=sizing.shares * abs(targets.tp1 - entry),
         potential_risk=sizing.account_risk_dollars,
+        capped_by_cash=sizing.capped_by_cash,
+        atr=atr_value,
+        stop_atr_multiple=stop_atr_multiple,
         confidence_score=confidence_score,
         time_horizon=record.time_horizon,
         ai_take_text=llm_result.text,

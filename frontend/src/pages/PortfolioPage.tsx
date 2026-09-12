@@ -4,12 +4,15 @@ import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { EquityCurveChart } from '../components/chart/EquityCurveChart';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
-import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct } from '../components/common';
+import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR, formatRelativeTime, sampleSizeNote } from '../components/common';
 import type { ApiError } from '../api/client';
 import type { Position } from '../api/types';
+import { useInView } from '../lib/useInView';
 
 function ActivePositionCard({ position }: { position: Position }) {
-  const { data: analysis, isLoading } = useAnalysis(position.symbol);
+  // Deferred until the card is near the viewport — see lib/useInView.
+  const { ref, inView } = useInView<HTMLDivElement>();
+  const { data: analysis, isLoading } = useAnalysis(position.symbol, '3mo', inView);
   const { mutate: closePosition, isPending: closing } = useClosePosition();
 
   const levels: PriceLevel[] = [
@@ -19,14 +22,26 @@ function ActivePositionCard({ position }: { position: Position }) {
     { price: position.tp2, color: '#10b981', title: 'TP2' },
   ];
 
+  // R is the unit the rest of this app reasons in — plans are sized by it,
+  // closed trades are scored by it — and open positions were the one place it
+  // was missing, showing a bare % that says nothing about how the trade is
+  // doing against its own risk. A +3% move is a different trade on a 1% stop
+  // than on a 10% one.
   const currentPrice = analysis?.price;
+  const sign = position.direction === 'long' ? 1 : -1;
+  const riskPerShare = Math.abs(position.entry_price - position.stop_loss);
+
   const unrealizedPct =
-    currentPrice !== undefined
-      ? ((currentPrice - position.entry_price) / position.entry_price) * 100 * (position.direction === 'long' ? 1 : -1)
-      : null;
+    currentPrice !== undefined ? ((currentPrice - position.entry_price) / position.entry_price) * 100 * sign : null;
+  const unrealizedDollars = currentPrice !== undefined ? (currentPrice - position.entry_price) * position.shares * sign : null;
+  const currentR = currentPrice !== undefined && riskPerShare > 0 ? ((currentPrice - position.entry_price) * sign) / riskPerShare : null;
+  // How much room is left before the stop, as a share of the current price.
+  const roomToStopPct = currentPrice !== undefined && currentPrice > 0 ? ((currentPrice - position.stop_loss) * sign * 100) / currentPrice : null;
+  const slipped =
+    position.planned_entry_price != null && Math.abs(position.planned_entry_price - position.entry_price) > 0.005;
 
   return (
-    <div className="card">
+    <div className="card" ref={ref}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <TickerLink symbol={position.symbol} iconSize={30} fontWeight={700} style={{ fontSize: 15 }} />
@@ -36,11 +51,17 @@ function ActivePositionCard({ position }: { position: Position }) {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {unrealizedPct !== null && (
-            <span className={`tabular-nums ${unrealizedPct >= 0 ? 'text-green' : 'text-red'}`} style={{ fontWeight: 700, fontSize: 14 }}>
-              {unrealizedPct >= 0 ? '+' : ''}
-              {unrealizedPct.toFixed(2)}% unrealized
-            </span>
+          {unrealizedPct !== null && unrealizedDollars !== null && (
+            <div style={{ textAlign: 'right' }}>
+              <div className={`tabular-nums ${unrealizedPct >= 0 ? 'text-green' : 'text-red'}`} style={{ fontWeight: 700, fontSize: 15 }}>
+                {formatMoney(unrealizedDollars)}
+                {currentR !== null && <span style={{ marginLeft: 8 }}>{formatR(currentR)}</span>}
+              </div>
+              <div className="text-muted tabular-nums" style={{ fontSize: 11 }}>
+                {unrealizedPct >= 0 ? '+' : ''}
+                {unrealizedPct.toFixed(2)}% unrealized
+              </div>
+            </div>
           )}
           <button className="btn btn-secondary" disabled={closing} onClick={() => closePosition(position.id)}>
             Close
@@ -52,18 +73,40 @@ function ActivePositionCard({ position }: { position: Position }) {
       ) : (
         <CandlestickChart candles={analysis.candles} levels={levels} height={260} />
       )}
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginTop: 12 }}>
+      <div className="grid position-detail-grid" style={{ gap: 12, marginTop: 12 }}>
         <div>
           <div className="text-muted" style={{ fontSize: 11 }}>
             Entry
           </div>
           <div className="tabular-nums">{formatMoney(position.entry_price)}</div>
+          {slipped && (
+            <div className="text-muted tabular-nums" style={{ fontSize: 10 }}>
+              planned {formatMoney(position.planned_entry_price)}
+            </div>
+          )}
         </div>
         <div>
           <div className="text-muted" style={{ fontSize: 11 }}>
             Stop Loss
           </div>
           <div className="tabular-nums text-red">{formatMoney(position.stop_loss)}</div>
+        </div>
+        <div>
+          {/* The number that actually matters minute to minute: how far the
+              trade can move before the thesis is done. Absent entirely
+              before — you had to work it out from entry and stop by hand. */}
+          <div className="text-muted" style={{ fontSize: 11 }}>
+            Room to Stop
+          </div>
+          <div className={`tabular-nums ${roomToStopPct !== null && roomToStopPct < 0 ? 'text-red' : ''}`}>
+            {roomToStopPct !== null ? `${roomToStopPct.toFixed(1)}%` : '—'}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted" style={{ fontSize: 11 }}>
+            Risk
+          </div>
+          <div className="tabular-nums">{formatMoney(riskPerShare * position.shares)}</div>
         </div>
         <div>
           <div className="text-muted" style={{ fontSize: 11 }}>
@@ -78,6 +121,9 @@ function ActivePositionCard({ position }: { position: Position }) {
             Opened
           </div>
           <div className="tabular-nums">{new Date(position.opened_at).toLocaleDateString()}</div>
+          <div className="text-muted" style={{ fontSize: 10 }}>
+            {formatRelativeTime(position.opened_at)}
+          </div>
         </div>
       </div>
     </div>
@@ -112,10 +158,22 @@ export function PortfolioPage() {
       {statsLoading && <LoadingSpinner label="Loading portfolio…" />}
       {stats && (
         <div className="grid stat-grid">
-          <StatCard label="Portfolio Value" value={formatMoney(stats.portfolio_value)} />
-          <StatCard label="Total Return" value={formatPct(stats.total_return)} positive={stats.total_return > 0 ? true : stats.total_return < 0 ? false : null} />
-          <StatCard label="Win Rate" value={`${formatNumber(stats.win_rate, 0)}%`} />
-          <StatCard label="Avg R:R" value={stats.avg_rr !== null ? `${formatNumber(stats.avg_rr)}:1` : '—'} />
+          <StatCard label="Portfolio Value" value={formatMoney(stats.portfolio_value)} note={`${formatMoney(stats.current_cash)} cash`} />
+          <StatCard
+            label="Total Return"
+            value={formatPct(stats.total_return)}
+            positive={stats.total_return > 0 ? true : stats.total_return < 0 ? false : null}
+          />
+          <StatCard label="Win Rate" value={`${formatNumber(stats.win_rate, 0)}%`} note={sampleSizeNote(stats.total_trades)} />
+          {/* Was "Avg R:R" rendered as `${value}:1` — which turned a losing
+              average into "-0.42:1", not a ratio and not a thing. This field
+              is mean realized R, i.e. expectancy per trade. */}
+          <StatCard
+            label="Avg R"
+            value={formatR(stats.avg_rr)}
+            positive={stats.avg_rr === null ? null : stats.avg_rr > 0}
+            note="expectancy per closed trade"
+          />
         </div>
       )}
 
@@ -171,7 +229,9 @@ export function PortfolioPage() {
                   <td className={`tabular-nums ${p.realized_pnl && p.realized_pnl > 0 ? 'text-green' : p.realized_pnl && p.realized_pnl < 0 ? 'text-red' : ''}`}>
                     {p.realized_pnl !== null ? formatMoney(p.realized_pnl) : '—'}
                   </td>
-                  <td className="tabular-nums">{p.realized_r !== null ? formatNumber(p.realized_r) : '—'}</td>
+                  <td className={`tabular-nums ${p.realized_r && p.realized_r > 0 ? 'text-green' : p.realized_r && p.realized_r < 0 ? 'text-red' : ''}`}>
+                    {formatR(p.realized_r)}
+                  </td>
                 </tr>
               ))}
             </tbody>

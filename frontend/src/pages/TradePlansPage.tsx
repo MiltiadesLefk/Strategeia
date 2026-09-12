@@ -124,6 +124,19 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                 Stop
               </div>
               <div className="tabular-nums text-red">{formatMoney(plan.stop)}</div>
+              {/* A stop's distance only means something relative to how much
+                  the instrument moves in a day. Under ~1 ATR it sits inside
+                  normal noise and gets taken out by nothing in particular —
+                  worth seeing before you execute, not after. */}
+              {plan.stop_atr_multiple != null && (
+                <div
+                  className="tabular-nums"
+                  style={{ fontSize: 10, color: plan.stop_atr_multiple < 1 ? 'var(--amber)' : 'var(--text-muted)' }}
+                  title={plan.atr != null ? `ATR14 ${formatMoney(plan.atr)}` : undefined}
+                >
+                  {formatNumber(plan.stop_atr_multiple, 1)}× ATR{plan.stop_atr_multiple < 1 ? ' — inside daily noise' : ''}
+                </div>
+              )}
             </div>
             <div>
               <div className="text-muted" style={{ fontSize: 11 }}>
@@ -138,6 +151,9 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                 Position Size
               </div>
               <div className="tabular-nums">{plan.suggested_shares} shares</div>
+              {plan.capped_by_cash && (
+                <div style={{ fontSize: 10, color: 'var(--amber)' }}>capped by available cash</div>
+              )}
             </div>
             <div>
               <div className="text-muted" style={{ fontSize: 11 }}>

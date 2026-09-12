@@ -18,7 +18,10 @@ from app.data_providers.base import (
 from app.data_providers.cache import cached
 
 STOOQ_URL = "https://stooq.com/q/d/l/"
-OHLCV_TTL = 24 * 60 * 60
+# Matches YFinanceProvider.OHLCV_TTL — see the rationale there. As the OHLCV
+# fallback this feeds the exit engine too, so it must not serve a staler bar
+# than the primary does.
+OHLCV_TTL = 15 * 60
 
 _PERIOD_TO_DAYS = {
     "1mo": 31,
