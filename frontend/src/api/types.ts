@@ -113,6 +113,12 @@ export interface TradePlan {
   account_risk_dollars?: number | null;
   potential_gain?: number | null;
   potential_risk?: number | null;
+  /** Size was cut to what the account can actually fund. */
+  capped_by_cash?: boolean | null;
+  /** ATR14, and how many ATRs the stop sits from entry. Under ~1 the stop is
+   *  inside the instrument's normal daily range and noise will take it out. */
+  atr?: number | null;
+  stop_atr_multiple?: number | null;
   confidence_score?: number | null;
   time_horizon?: string | null;
   ai_take_text?: string | null;
@@ -138,6 +144,8 @@ export interface Position {
   symbol: string;
   direction: string;
   entry_price: number;
+  /** What the plan asked for, vs entry_price = the actual fill. */
+  planned_entry_price?: number | null;
   stop_loss: number;
   tp1: number;
   tp2: number;
@@ -149,6 +157,8 @@ export interface Position {
   close_reason: string | null;
   realized_pnl: number | null;
   realized_r: number | null;
+  /** Round-trip commission; realized_pnl is already net of it. */
+  fees_paid?: number | null;
 }
 
 export interface PortfolioStats {

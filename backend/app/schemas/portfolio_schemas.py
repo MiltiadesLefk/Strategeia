@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.common import UtcDatetime
+
 
 class PositionSchema(BaseModel):
     id: int
@@ -11,17 +13,19 @@ class PositionSchema(BaseModel):
     symbol: str
     direction: str
     entry_price: float
+    planned_entry_price: float | None = None
     stop_loss: float
     tp1: float
     tp2: float
     shares: int
-    opened_at: datetime
+    opened_at: UtcDatetime
     status: str
-    closed_at: datetime | None
+    closed_at: UtcDatetime | None
     close_price: float | None
     close_reason: str | None
     realized_pnl: float | None
     realized_r: float | None
+    fees_paid: float | None = None
 
 
 class OpenPositionRequest(BaseModel):
@@ -44,6 +48,6 @@ class PortfolioStatsSchema(BaseModel):
 
 
 class EquityPointSchema(BaseModel):
-    timestamp: datetime
+    timestamp: UtcDatetime
     equity_value: float
     cash_balance: float

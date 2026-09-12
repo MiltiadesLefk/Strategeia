@@ -26,3 +26,8 @@ class RiskCalculateResponse(BaseModel):
     rr2: float
     potential_gain: float
     potential_risk: float
+    # ATR14 and the stop's distance in ATRs, so the Risk Manager can warn
+    # when a hand-entered stop sits inside the instrument's daily range.
+    atr: float | None = None
+    stop_atr_multiple: float | None = None
+    suggested_atr_stop: float | None = None

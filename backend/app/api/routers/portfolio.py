@@ -6,7 +6,14 @@ from sqlmodel import Session, select
 from app.api.deps import get_app_settings, get_data_provider, get_session, require_shared_secret
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
-from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, MaxPositionsExceededError, PaperTradingEngine
+from app.portfolio.engine import (
+    DuplicatePositionError,
+    InsufficientCashError,
+    MaxPositionsExceededError,
+    PaperTradingEngine,
+    SectorConcentrationError,
+    StalePlanError,
+)
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
 from app.portfolio.stats import compute_portfolio_stats
 from app.schemas.portfolio_schemas import (
@@ -21,7 +28,16 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[De
 
 
 def build_engine(session: Session, data_provider: DataProvider, settings: AppSettings) -> PaperTradingEngine:
-    return PaperTradingEngine(session, data_provider, settings.paper_starting_cash, settings.max_concurrent_positions)
+    return PaperTradingEngine(
+        session,
+        data_provider,
+        settings.paper_starting_cash,
+        settings.max_concurrent_positions,
+        slippage_bps=settings.slippage_bps,
+        commission_per_trade=settings.commission_per_trade,
+        max_positions_per_sector=settings.max_positions_per_sector,
+        max_position_pct_of_adv=settings.max_position_pct_of_adv,
+    )
 
 
 def position_to_schema(position: PaperPosition) -> PositionSchema:
@@ -34,7 +50,13 @@ def list_positions(
     data_provider: DataProvider = Depends(get_data_provider),
     settings: AppSettings = Depends(get_app_settings),
 ) -> list[PositionSchema]:
-    build_engine(session, data_provider, settings).mark_to_market()
+    # snapshot=False: a GET must not append to the equity curve. With
+    # react-query's refetch-on-focus, every tab focus used to write an
+    # EquitySnapshot row, so the curve was sampled by how often the dashboard
+    # was looked at rather than by time — and the table grew without bound.
+    # Exit detection still runs here so a stop/TP that fired between
+    # scheduler ticks shows up immediately; only the curve write is dropped.
+    build_engine(session, data_provider, settings).mark_to_market(snapshot=False)
     positions = session.exec(select(PaperPosition).order_by(PaperPosition.opened_at.desc())).all()
     return [position_to_schema(p) for p in positions]
 
@@ -53,7 +75,13 @@ def open_position(
         raise HTTPException(status_code=400, detail=f"Trade plan is already {plan.status}")
     try:
         position = build_engine(session, data_provider, settings).open_position(plan)
-    except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError) as exc:
+    except (
+        InsufficientCashError,
+        DuplicatePositionError,
+        MaxPositionsExceededError,
+        SectorConcentrationError,
+        StalePlanError,
+    ) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return position_to_schema(position)
 
@@ -82,7 +110,7 @@ def stats(
     data_provider: DataProvider = Depends(get_data_provider),
     settings: AppSettings = Depends(get_app_settings),
 ) -> PortfolioStatsSchema:
-    build_engine(session, data_provider, settings).mark_to_market()
+    build_engine(session, data_provider, settings).mark_to_market(snapshot=False)  # read-only: see list_positions
     result = compute_portfolio_stats(session, data_provider, settings.paper_starting_cash)
     return PortfolioStatsSchema(**result.__dict__)
 

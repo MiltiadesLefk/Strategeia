@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSettingsStatus } from '../api/hooks';
+import type { SettingsStatus } from '../api/types';
 import logo from '../assets/logo.png';
 
 function Icon({ path }: { path: string }) {
@@ -28,6 +30,77 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof 
   { to: '/portfolio', label: 'Portfolio', icon: 'portfolio' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ];
+
+/**
+ * Six stacked pills ate a third of the sidebar to tell you, almost always,
+ * that everything is fine. This shows one summary row by default and expands
+ * to the detail — and auto-expands when something is actually offline, which
+ * is the only time the detail earns the space.
+ *
+ * "Offline" here is only counted for services that are configured at all:
+ * Finnhub and Telegram are optional, and an unconfigured optional service is
+ * not a fault to shout about.
+ */
+function ServiceStatus({ status }: { status?: SettingsStatus }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const services = [
+    { key: 'ai', online: !!status?.ai_online, label: status?.ai_online ? `AI · ${status.ai_provider}` : 'AI offline', optional: false },
+    { key: 'overlay', online: !!status?.ai_overlay_online, label: status?.ai_overlay_online ? 'AI overlay on' : 'AI overlay off', optional: true },
+    { key: 'finnhub', online: !!status?.finnhub_online, label: status?.finnhub_online ? 'Finnhub online' : 'Finnhub off', optional: true },
+    { key: 'telegram', online: !!status?.telegram_online, label: status?.telegram_online ? 'Telegram online' : 'Telegram off', optional: true },
+  ];
+  const faults = services.filter((s) => !s.optional && !s.online);
+  const show = expanded || faults.length > 0;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={show}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          width: '100%',
+          padding: '8px 12px',
+          fontSize: 12,
+          fontWeight: 600,
+          borderRadius: 9999,
+          border: `1px solid ${faults.length ? 'rgba(239, 68, 68, 0.35)' : 'var(--border)'}`,
+          background: faults.length ? 'var(--red-bg)' : 'rgba(255,255,255,0.04)',
+          color: faults.length ? 'var(--red)' : 'var(--text-inverse-muted)',
+        }}
+      >
+        <span style={{ display: 'flex', gap: 3 }}>
+          {services.map((s) => (
+            <span
+              key={s.key}
+              title={s.label}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                display: 'inline-block',
+                background: s.online ? 'var(--green)' : s.optional ? 'var(--text-inverse-muted)' : 'var(--red)',
+              }}
+            />
+          ))}
+        </span>
+        {faults.length ? `${faults.length} service down` : 'Services'}
+      </button>
+      {show && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {services.map((s) => (
+            <StatusPill key={s.key} online={s.online} label={s.label} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StatusPill({ online, label }: { online: boolean; label: string }) {
   return (
@@ -109,31 +182,15 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
           </NavLink>
         ))}
       </nav>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          padding: '10px 12px',
-          marginTop: 12,
-          fontSize: 13,
-          fontWeight: 600,
-          color: 'var(--green)',
-          background: 'var(--green-bg)',
-          border: '1px solid rgba(16, 185, 129, 0.3)',
-          borderRadius: 9999,
-        }}
-      >
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
-        Trading Bot Online
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-        <StatusPill online={!!status?.ai_online} label={status?.ai_online ? `AI Online · ${status.ai_provider}` : 'AI Offline'} />
-        <StatusPill online={!!status?.ai_overlay_online} label={status?.ai_overlay_online ? 'AI Overlay ON' : 'AI Overlay OFF'} />
-        <StatusPill online={!!status?.finnhub_online} label={status?.finnhub_online ? 'Finnhub Online' : 'Finnhub Offline'} />
-        <StatusPill online={!!status?.telegram_online} label={status?.telegram_online ? 'Telegram Online' : 'Telegram Offline'} />
-      </div>
+      {/* The old "Trading Bot Online" pill lived here: unconditional green
+          markup with no state behind it, so it read "Online" with the backend
+          on fire. In a project whose whole claim is that nothing is hardcoded
+          to look good, a decorative status light is the one thing that can't
+          stay. The four pills below are real readings of
+          GET /api/settings/status — they're the honest version of it, and they
+          collapse into one summary row unless something actually needs
+          attention. */}
+      <ServiceStatus status={status} />
       {/* Required attribution for Elbstream's free ticker-logo API (CompanyIcon.tsx) */}
       <a
         href="https://elbstream.com/logos"

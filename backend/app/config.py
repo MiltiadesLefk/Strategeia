@@ -107,6 +107,18 @@ class AppSettings(BaseModel):
     paper_starting_cash: float = 100_000.0
     default_risk_pct: float = 1.0
     mark_to_market_interval_minutes: int = 15
+
+    # Execution realism. A paper fill that always lands exactly on the stop
+    # is the single easiest way to make a strategy look better than it is:
+    # real stops are market orders that fill at whatever the tape offers
+    # after the trigger, which on a gap is materially worse. The engine
+    # models the gap itself unconditionally (see PaperTradingEngine._fill_price);
+    # these two knobs cover the rest of the cost of doing business.
+    # slippage_bps applies only to MARKET fills (entries and stop exits),
+    # never to take-profit limit fills. 5bps is a modest, defensible default
+    # for liquid large-caps — raise it if you trade thinner names.
+    slippage_bps: float = 5.0
+    commission_per_trade: float = 0.0
     auto_execute_trade_plans: bool = True
 
     # Unattended scan -> generate -> execute loop. Off by default — unlike
@@ -117,6 +129,14 @@ class AppSettings(BaseModel):
     # interval — no `_interval_minutes` setting to configure here.
     auto_scan_enabled: bool = False
     max_concurrent_positions: int = 5
+
+    # Portfolio-level risk, as opposed to the per-trade risk default_risk_pct
+    # already covers. Five 1%-risk positions is only "5% at risk" if the five
+    # are independent — five semis on the same tape is one 5% bet. max_positions
+    # _per_sector bounds that; max_position_pct_of_adv bounds the other
+    # direction (a size you could not actually fill without moving the book).
+    max_positions_per_sector: int = 2
+    max_position_pct_of_adv: float = 1.0
 
     def redacted(self) -> dict:
         """Copy safe to return over the API — secrets collapsed to a masked

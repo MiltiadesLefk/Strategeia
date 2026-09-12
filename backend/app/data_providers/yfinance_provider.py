@@ -16,9 +16,18 @@ from app.data_providers.base import (
     QuoteData,
 )
 from app.data_providers.cache import cached
-from app.timeutil import utc_from_timestamp_naive
+from app.timeutil import utc_from_timestamp_naive, utc_iso_from_timestamp
 
-OHLCV_TTL = 24 * 60 * 60
+# Deliberately short, and deliberately the same as QUOTE_TTL. This was 24h,
+# which quietly broke the exit engine: mark_to_market runs every 15 min but
+# was re-reading ONE cached fetch for a full day, so a bar first pulled
+# mid-session kept its half-formed high/low until the next day — stops and
+# targets were evaluated against a snapshot of the market that had already
+# moved on. The cache's real value here is deduplicating within a single
+# scan run (one auto-scan pass asks for SPY and ^VIX once per symbol — 50
+# symbols collapse to 1 fetch each), and a 15-minute window still does all
+# of that while never serving a bar older than one mark-to-market tick.
+OHLCV_TTL = 15 * 60
 QUOTE_TTL = 15 * 60
 OVERVIEW_TTL = 24 * 60 * 60
 FINANCIALS_TTL = 24 * 60 * 60
@@ -129,7 +138,7 @@ class YFinanceProvider:
             url = (content.get("canonicalUrl") or {}).get("url") or entry.get("link") or ""
             published_raw = content.get("pubDate") or entry.get("providerPublishTime")
             if isinstance(published_raw, (int, float)):
-                published_at = utc_from_timestamp_naive(published_raw).isoformat()
+                published_at = utc_iso_from_timestamp(published_raw)
             else:
                 published_at = str(published_raw or "")
             if headline:
