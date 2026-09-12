@@ -79,6 +79,9 @@ class FakeUptrendDataProvider:
     def get_options_summary(self, symbol: str):
         return None
 
+    def get_insider_activity(self, symbol: str):
+        return None
+
 
 class FakeFlatDataProvider:
     """Dead-flat price series — analyze_chart classifies this Neutral (see
@@ -117,6 +120,9 @@ class FakeFlatDataProvider:
         return None
 
     def get_options_summary(self, symbol: str):
+        return None
+
+    def get_insider_activity(self, symbol: str):
         return None
 
 

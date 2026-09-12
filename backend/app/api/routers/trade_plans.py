@@ -72,6 +72,7 @@ def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
         market_confirmation_score=record.market_confirmation_score,
         vix_regime_score=record.vix_regime_score,
         options_score=record.options_score,
+        insider_score=record.insider_score,
         signal_reasons=record.signal_reasons,
         ai_opinion_stance=record.ai_opinion_stance,
         ai_opinion_score=record.ai_opinion_score,

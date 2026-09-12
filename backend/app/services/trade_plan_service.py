@@ -13,6 +13,7 @@ from app.analysis.fundamental_scoring import (
     score_news_sentiment,
 )
 from app.analysis.indicators import latest_atr
+from app.analysis.insider_scoring import INSIDER_SCORE_CAP, score_insider_activity
 from app.analysis.insight_text import trade_plan_take_text
 from app.analysis.market_confirmation import (
     MARKET_CONFIRMATION_SCORE_CAP,
@@ -65,7 +66,12 @@ TECHNICAL_SCORE_CAP = 6
 # it here would inflate the denominator and deflate every confidence score
 # even when VIX is calm and contributing nothing.
 MAX_SCORE_FOR_CONFIDENCE = (
-    TECHNICAL_SCORE_CAP + FUNDAMENTAL_SCORE_CAP + NEWS_SCORE_CAP + MARKET_CONFIRMATION_SCORE_CAP + OPTIONS_SCORE_CAP
+    TECHNICAL_SCORE_CAP
+    + FUNDAMENTAL_SCORE_CAP
+    + NEWS_SCORE_CAP
+    + MARKET_CONFIRMATION_SCORE_CAP
+    + OPTIONS_SCORE_CAP
+    + INSIDER_SCORE_CAP
 )
 CONFIDENCE_FLOOR = 20
 CONFIDENCE_CEILING = 90
@@ -299,15 +305,22 @@ def generate_trade_plan(
     options_summary: OptionsSummary | None = data_provider.get_options_summary(symbol)
     options_score, options_reasons = score_options_positioning(provisional_direction, options_summary)
 
+    # Open-market insider buying (SEC Form 4). Best-effort like every other
+    # confluence check: a non-registrant (crypto) or a failed fetch contributes
+    # 0 rather than blocking the evaluation. See analysis/insider_scoring.py
+    # for why selling is deliberately never scored.
+    insider_activity = data_provider.get_insider_activity(symbol)
+    insider_score, insider_reasons = score_insider_activity(provisional_direction, insider_activity)
+
     combined_score = (
         scan_result.score + fundamental_score + news_score + market_confirmation_score
-        + vix_regime_score + options_score
+        + vix_regime_score + options_score + insider_score
     )
     confidence_score = _confidence_score(combined_score)
     technical_reason = f"{chart.trend} trend with {chart.momentum.lower()} momentum"
     signal_reasons = "; ".join(
         [technical_reason, *fundamental_reasons, *news_reasons, *market_confirmation_reasons,
-         *vix_regime_reasons, *options_reasons]
+         *vix_regime_reasons, *options_reasons, *insider_reasons]
     )
 
     # AI Trading Overlay (opt-in, Settings): an independent second opinion
@@ -336,6 +349,7 @@ def generate_trade_plan(
             market_confirmation_score=market_confirmation_score,
             vix_regime_score=vix_regime_score,
             options_score=options_score,
+            insider_score=insider_score,
             signal_reasons=signal_reasons,
             ai_opinion_stance=ai_opinion_stance,
             ai_opinion_score=ai_opinion_score,
@@ -359,6 +373,7 @@ def generate_trade_plan(
             market_confirmation_score=market_confirmation_score,
             vix_regime_score=vix_regime_score,
             options_score=options_score,
+            insider_score=insider_score,
             ai_opinion_stance=ai_opinion_stance,
             ai_opinion_score=ai_opinion_score,
             ai_opinion_text=ai_opinion_text,
@@ -427,6 +442,7 @@ def generate_trade_plan(
         market_confirmation_score=market_confirmation_score,
         vix_regime_score=vix_regime_score,
         options_score=options_score,
+        insider_score=insider_score,
         signal_reasons=signal_reasons,
         ai_opinion_stance=ai_opinion_stance,
         ai_opinion_score=ai_opinion_score,
@@ -489,6 +505,7 @@ def generate_trade_plan(
         market_confirmation_score=market_confirmation_score,
         vix_regime_score=vix_regime_score,
         options_score=options_score,
+        insider_score=insider_score,
         signal_reasons=signal_reasons,
         ai_opinion_stance=ai_opinion_stance,
         ai_opinion_score=ai_opinion_score,

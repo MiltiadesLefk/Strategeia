@@ -35,6 +35,13 @@ class InfraSettings(BaseSettings):
     # Deliberately separate from data/ (which holds the bundled, read-only
     # sp500.csv baked into the Docker image) so a single volume mount at
     # runtime/ can persist the db + settings without hiding sp500.csv.
+    # SEC EDGAR's fair-access policy requires a User-Agent that identifies the
+    # requester with a contact address, and it rejects strings containing a URL
+    # (verified: any UA with "github.com" in it returns 403 where the same
+    # request with an email-shaped contact returns 200). The default is a
+    # neutral placeholder deliberately — set SEC_EDGAR_USER_AGENT in .env to
+    # your own contact if you use the insider-scoring feature in earnest.
+    sec_edgar_user_agent: str = "Strategeia/1.0 (personal paper-trading research; contact@strategeia.example)"
     db_path: str = "runtime/strategeia.db"
     settings_path: str = "runtime/settings.json"
 

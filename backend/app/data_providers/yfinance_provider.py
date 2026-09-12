@@ -225,3 +225,6 @@ class YFinanceProvider:
         return OptionsSummary(
             symbol=symbol, expiration=expiration, put_call_volume_ratio=put_call_ratio, atm_implied_volatility=atm_iv
         )
+
+    def get_insider_activity(self, symbol: str):
+        raise NotImplementedError("yfinance provider does not implement get_insider_activity")

@@ -47,6 +47,7 @@ class TradePlanResponse(BaseModel):
     market_confirmation_score: int | None = None
     vix_regime_score: int | None = None
     options_score: int | None = None
+    insider_score: int | None = None
     signal_reasons: str | None = None
     ai_opinion_stance: str | None = None
     ai_opinion_score: int | None = None

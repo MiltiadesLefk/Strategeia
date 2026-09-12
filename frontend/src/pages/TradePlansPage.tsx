@@ -225,6 +225,16 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                     {plan.options_score ?? 0}
                   </span>
                 </span>
+                <span
+                  className="text-muted"
+                  title="Open-market insider buying from SEC Form 4 filings, last 90 days. Selling is deliberately never scored — executives sell for diversification, taxes and scheduled 10b5-1 plans, so only buying carries information."
+                >
+                  Insider{' '}
+                  <span className={`tabular-nums ${(plan.insider_score ?? 0) > 0 ? 'text-green' : (plan.insider_score ?? 0) < 0 ? 'text-red' : ''}`}>
+                    {(plan.insider_score ?? 0) > 0 ? '+' : ''}
+                    {plan.insider_score ?? 0}
+                  </span>
+                </span>
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-muted)' }}>
                 {plan.signal_reasons.split('; ').map((reason) => (

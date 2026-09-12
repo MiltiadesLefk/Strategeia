@@ -10,6 +10,7 @@ from app.data_providers.base import (
     DataProvider,
     DataProviderError,
     EarningsEstimate,
+    InsiderActivity,
     FinancialsData,
     NewsItem,
     OptionsSummary,
@@ -69,6 +70,14 @@ class CompositeDataProvider:
     def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None:
         try:
             return self._try_each("get_earnings_estimate", symbol)
+        except AllProvidersFailedError:
+            return None
+
+    def get_insider_activity(self, symbol: str) -> InsiderActivity | None:
+        # Same "absence is not an error" shape as get_options_summary: a crypto
+        # pair or any non-SEC-registrant legitimately has no Form 4 history.
+        try:
+            return self._try_each("get_insider_activity", symbol)
         except AllProvidersFailedError:
             return None
 

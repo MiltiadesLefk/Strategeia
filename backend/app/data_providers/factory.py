@@ -5,6 +5,7 @@ from app.data_providers.base import DataProvider
 from app.data_providers.composite_provider import CompositeDataProvider
 from app.data_providers.finnhub_provider import FinnhubProvider
 from app.data_providers.nasdaq_provider import NasdaqProvider
+from app.data_providers.sec_edgar_provider import SecEdgarProvider
 from app.data_providers.stooq_provider import StooqProvider
 from app.data_providers.yfinance_provider import YFinanceProvider
 
@@ -34,4 +35,7 @@ def get_data_provider(settings: AppSettings) -> CompositeDataProvider:
     providers.append(YFinanceProvider())
     providers.append(NasdaqProvider())
     providers.append(StooqProvider())
+    # Last, and only ever reached for get_insider_activity: every other method
+    # raises NotImplementedError here, so it costs nothing on the hot path.
+    providers.append(SecEdgarProvider())
     return CompositeDataProvider(providers)

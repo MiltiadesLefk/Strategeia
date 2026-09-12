@@ -82,6 +82,29 @@ class OptionsSummary:
     atm_implied_volatility: float | None
 
 
+@dataclass
+class InsiderActivity:
+    """Aggregated Form 4 insider transactions over a recent window.
+
+    Counts and dollar values are split by direction because they carry very
+    different information: executives sell for diversification, taxes and
+    scheduled 10b5-1 plans constantly, so selling is weak evidence. Open-market
+    *buying* is the signal — an insider choosing to increase exposure with
+    their own money. `net_value` is buy value minus sell value.
+    """
+
+    symbol: str
+    window_days: int
+    buy_count: int
+    sell_count: int
+    buy_value: float
+    sell_value: float
+
+    @property
+    def net_value(self) -> float:
+        return self.buy_value - self.sell_value
+
+
 class DataProvider(Protocol):
     name: str
 
@@ -100,3 +123,5 @@ class DataProvider(Protocol):
     def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None: ...
 
     def get_options_summary(self, symbol: str) -> OptionsSummary: ...
+
+    def get_insider_activity(self, symbol: str) -> InsiderActivity | None: ...

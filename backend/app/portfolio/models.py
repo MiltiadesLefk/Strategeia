@@ -66,6 +66,9 @@ class TradePlanRecord(SQLModel, table=True):
     # independently-capped factors, same "shown, never hidden" pattern.
     vix_regime_score: Optional[int] = None
     options_score: Optional[int] = None
+    # Open-market insider buying, +/-1 (analysis/insider_scoring.py). Same
+    # "shown, never hidden" pattern; nullable so pre-existing rows read None.
+    insider_score: Optional[int] = None
     signal_reasons: Optional[str] = None  # "; "-joined, human-readable — not JSON, kept simple
 
 

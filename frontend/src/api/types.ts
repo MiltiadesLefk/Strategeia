@@ -144,6 +144,7 @@ export interface TradePlan {
   market_confirmation_score?: number | null;
   vix_regime_score?: number | null;
   options_score?: number | null;
+  insider_score?: number | null;
   signal_reasons?: string | null;
   ai_opinion_stance?: 'bullish' | 'bearish' | 'neutral' | null;
   ai_opinion_score?: number | null;
