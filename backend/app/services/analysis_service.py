@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from app.analysis.indicators import ema
+import pandas as pd
+
+from app.analysis.indicators import bollinger, ema, latest_atr, macd, rsi, session_vwap
 from app.analysis.insight_text import chart_insight_text
 from app.analysis.trend import analyze_chart
 from app.data_providers.base import DataProvider
@@ -47,10 +49,21 @@ def get_analysis(
         view = ohlcv.tail(display_days)
 
     chart = analyze_chart(ohlcv)
+    # Every indicator is computed on the FULL fetch and then sliced to the
+    # displayed window — same rule the EMAs already followed. Computing them
+    # on the trimmed view instead would silently shorten every lookback and
+    # make a 1-month chart disagree with a 1-year one about the same bar.
     ema20_full = ema(ohlcv["close"], 20)
     ema50_full = ema(ohlcv["close"], 50)
+    bands_full = bollinger(ohlcv["close"])
+    macd_full = macd(ohlcv["close"])
+    rsi_full = rsi(ohlcv["close"], 14)
     ema20_view = ema20_full.loc[view.index]
     ema50_view = ema50_full.loc[view.index]
+
+    atr14 = latest_atr(ohlcv)
+    # VWAP only where it means what it says: intraday. See indicators.session_vwap.
+    vwap_view = session_vwap(view) if intraday else None
 
     fallback_text = chart_insight_text(symbol, chart)
     prompt = build_chart_insight_prompt(symbol, chart)
@@ -71,6 +84,19 @@ def get_analysis(
     ema20_series = [SeriesPoint(date=d, value=float(v)) for d, v in zip(dates, ema20_view)]
     ema50_series = [SeriesPoint(date=d, value=float(v)) for d, v in zip(dates, ema50_view)]
 
+    def _series(full_series) -> list[SeriesPoint]:
+        """Slice a full-fetch series to the displayed window, dropping the
+        leading NaNs every windowed indicator starts with (a 20-period band
+        has no value for its first 19 bars) rather than plotting them as 0."""
+        if full_series is None:
+            return []
+        sliced = full_series.loc[view.index]
+        return [
+            SeriesPoint(date=d, value=float(v))
+            for d, v in zip(dates, sliced)
+            if v is not None and not pd.isna(v)
+        ]
+
     return AnalysisResponse(
         symbol=symbol,
         price=chart.price,
@@ -81,9 +107,24 @@ def get_analysis(
         momentum=chart.momentum,
         support=chart.support,
         resistance=chart.resistance,
+        atr14=atr14,
+        atr_pct=(atr14 / chart.price * 100) if atr14 and chart.price else None,
+        macd=float(macd_full.macd.iloc[-1]) if not pd.isna(macd_full.macd.iloc[-1]) else None,
+        macd_signal=float(macd_full.signal.iloc[-1]) if not pd.isna(macd_full.signal.iloc[-1]) else None,
         candles=candles,
         ema20_series=ema20_series,
         ema50_series=ema50_series,
+        bollinger_upper_series=_series(bands_full.upper),
+        bollinger_lower_series=_series(bands_full.lower),
+        rsi_series=_series(rsi_full),
+        macd_series=_series(macd_full.macd),
+        macd_signal_series=_series(macd_full.signal),
+        macd_histogram_series=_series(macd_full.histogram),
+        vwap_series=(
+            [SeriesPoint(date=d, value=float(v)) for d, v in zip(dates, vwap_view) if not pd.isna(v)]
+            if vwap_view is not None
+            else []
+        ),
         insight_text=llm_result.text,
         ai_provider=llm_result.provider,
         ai_error=llm_result.error,

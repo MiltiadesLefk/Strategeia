@@ -196,6 +196,9 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
               candles={data.candles}
               ema20Series={data.ema20_series}
               ema50Series={data.ema50_series}
+              bollingerUpperSeries={data.bollinger_upper_series}
+              bollingerLowerSeries={data.bollinger_lower_series}
+              vwapSeries={data.vwap_series}
               levels={levels}
               height={MAIN_CHART_HEIGHT}
             />
@@ -230,6 +233,49 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
               </div>
               <div className="tabular-nums" style={{ fontWeight: 700 }}>
                 {formatMoney(data.ema20)} / {formatMoney(data.ema50)}
+              </div>
+            </div>
+            {/* ATR as a share of price is the comparable form: "this name
+                moves 2.4% on an average day" is what tells you whether a
+                given stop distance is structure or noise. It's the same
+                number the trade planner floors its stops against. */}
+            <div className="card">
+              <div className="text-muted" style={{ fontSize: 12 }}>
+                ATR(14)
+              </div>
+              <div className="tabular-nums" style={{ fontWeight: 700 }}>
+                {data.atr14 != null ? formatMoney(data.atr14) : '—'}
+                {data.atr_pct != null && (
+                  <span className="text-muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                    {' '}
+                    · {formatNumber(data.atr_pct, 1)}%/day
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="card">
+              <div className="text-muted" style={{ fontSize: 12 }}>
+                MACD
+              </div>
+              <div
+                className="tabular-nums"
+                style={{
+                  fontWeight: 700,
+                  color:
+                    data.macd != null && data.macd_signal != null
+                      ? data.macd > data.macd_signal
+                        ? 'var(--green)'
+                        : 'var(--red)'
+                      : undefined,
+                }}
+              >
+                {data.macd != null ? formatNumber(data.macd) : '—'}
+                {data.macd_signal != null && (
+                  <span className="text-muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                    {' '}
+                    sig {formatNumber(data.macd_signal)}
+                  </span>
+                )}
               </div>
             </div>
           </div>

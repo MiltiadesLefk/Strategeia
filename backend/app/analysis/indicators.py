@@ -51,6 +51,63 @@ def rate_of_change(close: pd.Series, periods: int) -> float:
     return float((close.iloc[-1] - close.iloc[-1 - periods]) / close.iloc[-1 - periods])
 
 
+def sma(series: pd.Series, period: int) -> pd.Series:
+    return series.rolling(window=period, min_periods=period).mean()
+
+
+@dataclass
+class BollingerBands:
+    upper: pd.Series
+    middle: pd.Series
+    lower: pd.Series
+
+
+def bollinger(close: pd.Series, period: int = 20, mult: float = 2.0) -> BollingerBands:
+    """Middle band is a 20-period SMA, outer bands +/- `mult` standard
+    deviations. Uses the population std (ddof=0), which is the convention
+    every charting package follows — pandas defaults to the sample std
+    (ddof=1) and would draw visibly wider bands than TradingView for the
+    same settings."""
+    middle = sma(close, period)
+    deviation = close.rolling(window=period, min_periods=period).std(ddof=0)
+    return BollingerBands(upper=middle + mult * deviation, middle=middle, lower=middle - mult * deviation)
+
+
+@dataclass
+class MacdResult:
+    macd: pd.Series
+    signal: pd.Series
+    histogram: pd.Series
+
+
+def macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> MacdResult:
+    """Standard 12/26/9. The signal line is an EMA of the MACD line, and the
+    histogram is their difference — positive means momentum is building in
+    the MACD line's direction."""
+    macd_line = ema(close, fast) - ema(close, slow)
+    signal_line = ema(macd_line, signal)
+    return MacdResult(macd=macd_line, signal=signal_line, histogram=macd_line - signal_line)
+
+
+def session_vwap(df: pd.DataFrame) -> pd.Series:
+    """Volume-weighted average price, reset at the start of each session.
+
+    VWAP is an *intraday* measure: it answers "what has the average buyer paid
+    since the open today". Running the cumulative sum across a multi-month
+    series instead — which is what a naive implementation does — produces a
+    line anchored to whenever the data happened to start, drifting further
+    from meaning with every bar. That is a different indicator (anchored VWAP)
+    wearing VWAP's name, so this resets per calendar day and callers only plot
+    it on intraday ranges. See analysis_service.get_analysis.
+    """
+    typical = (df["high"] + df["low"] + df["close"]) / 3
+    volume = df["volume"].fillna(0.0)
+    session = pd.to_datetime(df["date"]).dt.date
+    cum_pv = (typical * volume).groupby(session).cumsum()
+    cum_vol = volume.groupby(session).cumsum()
+    return (cum_pv / cum_vol.replace(0, float("nan"))).ffill()
+
+
 def find_pivot_highs(df: pd.DataFrame, left: int = 3, right: int = 3) -> list[tuple[int, float]]:
     """Fractal pivot highs: high[i] strictly greater than the `left`+`right`
     neighboring bars. The most recent `right` bars can't produce a confirmed

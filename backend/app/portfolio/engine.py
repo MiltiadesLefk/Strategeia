@@ -6,6 +6,7 @@ import pandas as pd
 from sqlmodel import Session, select
 
 from app.data_providers.base import AllProvidersFailedError, DataProvider
+from app.data_providers.cache import fresh_data_only
 from app.data_providers.universe import get_sector
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
 from app.timeutil import utcnow_naive
@@ -208,7 +209,10 @@ class PaperTradingEngine:
         on offer. A quote failure falls back to the planned entry rather than
         blocking the open (same graceful-degradation stance as elsewhere)."""
         try:
-            market_price = self._data_provider.get_quote(symbol).price
+            # Same reasoning as mark_to_market: filling at a stale quote is a
+            # trading decision made on a price that may no longer exist.
+            with fresh_data_only():
+                market_price = self._data_provider.get_quote(symbol).price
         except AllProvidersFailedError:
             return planned_entry
         if market_price <= 0 or planned_entry <= 0:
@@ -372,7 +376,14 @@ class PaperTradingEngine:
 
         for position in open_positions:
             try:
-                bars = self._data_provider.get_ohlcv(position.symbol, period=EXIT_SCAN_PERIOD, interval="1d")
+                # fresh_data_only: the provider cache will serve the last
+                # known-good response when a fetch fails, which is right for
+                # rendering a research page and wrong for deciding an exit —
+                # closing a position against a bar from days ago is the same
+                # stale-data failure the multi-bar rewrite above exists to
+                # prevent. A failed fetch skips the position instead.
+                with fresh_data_only():
+                    bars = self._data_provider.get_ohlcv(position.symbol, period=EXIT_SCAN_PERIOD, interval="1d")
             except AllProvidersFailedError:
                 continue
             if bars.empty:

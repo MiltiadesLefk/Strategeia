@@ -50,9 +50,22 @@ export interface AnalysisResponse {
   momentum: string;
   support: number[];
   resistance: number[];
+  /** ATR14 in price terms, and as a % of price — the comparable form. */
+  atr14?: number | null;
+  atr_pct?: number | null;
+  macd?: number | null;
+  macd_signal?: number | null;
   candles: Candle[];
   ema20_series: SeriesPoint[];
   ema50_series: SeriesPoint[];
+  bollinger_upper_series?: SeriesPoint[];
+  bollinger_lower_series?: SeriesPoint[];
+  rsi_series?: SeriesPoint[];
+  macd_series?: SeriesPoint[];
+  macd_signal_series?: SeriesPoint[];
+  macd_histogram_series?: SeriesPoint[];
+  /** Empty on daily ranges by design — VWAP is an intraday measure. */
+  vwap_series?: SeriesPoint[];
   insight_text: string;
   ai_provider: string;
   ai_error: string | null;
