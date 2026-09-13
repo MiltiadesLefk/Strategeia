@@ -77,6 +77,15 @@ class TradePlanRecord(SQLModel, table=True):
     earnings_surprise_score: Optional[int] = None
     macro_event_score: Optional[int] = None
     signal_reasons: Optional[str] = None  # "; "-joined, human-readable — not JSON, kept simple
+    # What happened at the auto-execute step, in plain English — executed,
+    # skipped (insufficient cash / duplicate / at position cap / sector cap /
+    # stale price), or held for manual review because the AI Trading Overlay
+    # disagreed. This used to be computed and folded straight into the
+    # Telegram message with nothing kept for the API/UI, so anyone without
+    # Telegram configured had no way to see WHY a plan stayed pending. Null
+    # on a no_trade record (auto-execute is never attempted there) and on any
+    # plan generated before this field existed.
+    auto_execute_note: Optional[str] = None
 
 
 class PaperPosition(SQLModel, table=True):

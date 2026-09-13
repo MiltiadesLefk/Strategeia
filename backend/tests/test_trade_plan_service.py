@@ -548,3 +548,123 @@ def test_ai_opinion_falls_back_to_raw_text_on_malformed_response(session, monkey
     assert response.ai_opinion_stance is None
     assert response.ai_opinion_score is None
     assert response.ai_opinion_text == "I think this looks bullish overall, roughly 70% confidence."
+
+
+# ------------------------------------------------------ overlay vs auto-execute
+
+
+def _default_settings(**overrides) -> AppSettings:
+    defaults = dict(
+        telegram_bot_token="",
+        telegram_chat_id="",
+        ai_trading_overlay_enabled=True,
+        auto_execute_trade_plans=True,
+    )
+    defaults.update(overrides)
+    return AppSettings(**defaults)
+
+
+def test_overlay_contradiction_holds_auto_execute_instead_of_opening():
+    """The core behavior: a flat opposite call from the overlay must stop
+    auto-execute from firing at all — the position must not exist."""
+    assert trade_plan_service._overlay_contradicts_direction("long", "bearish") is True
+    assert trade_plan_service._overlay_contradicts_direction("short", "bullish") is True
+
+
+def test_neutral_overlay_never_contradicts():
+    """Uncertainty is not contradiction — must never hold an otherwise-clean
+    auto-execute, or the mild-hedging case (most of what a real LLM returns)
+    would make auto-execute far less useful."""
+    assert trade_plan_service._overlay_contradicts_direction("long", "neutral") is False
+    assert trade_plan_service._overlay_contradicts_direction("short", "neutral") is False
+
+
+def test_agreeing_overlay_never_contradicts():
+    assert trade_plan_service._overlay_contradicts_direction("long", "bullish") is False
+    assert trade_plan_service._overlay_contradicts_direction("short", "bearish") is False
+
+
+def test_no_stance_never_contradicts():
+    """Overlay off, misconfigured, or a parse failure — all read as None and
+    must never hold anything."""
+    assert trade_plan_service._overlay_contradicts_direction("long", None) is False
+
+
+def test_contradicting_overlay_holds_the_position_open(session, monkeypatch):
+    monkeypatch.setattr(
+        "app.services.trade_plan_service.load_app_settings",
+        lambda: _default_settings(),
+    )
+    llm = FakeConfiguredLLMProvider('{"stance": "bearish", "confidence": 62, "reasoning": "Looks exhausted."}')
+
+    response = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), llm, session)
+
+    assert response.direction == "long"  # rule-based decision itself is untouched
+    assert response.status == "pending"  # never became "executed"
+    assert response.ai_opinion_stance == "bearish"
+    assert "held" in response.auto_execute_note
+    assert "bearish" in response.auto_execute_note
+    assert session.exec(select(PaperPosition)).first() is None
+
+
+def test_agreeing_overlay_still_auto_executes(session, monkeypatch):
+    monkeypatch.setattr(
+        "app.services.trade_plan_service.load_app_settings",
+        lambda: _default_settings(),
+    )
+    llm = FakeConfiguredLLMProvider('{"stance": "bullish", "confidence": 80, "reasoning": "Agrees."}')
+
+    response = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), llm, session)
+
+    assert response.status == "executed"
+    assert "Auto-executed" in response.auto_execute_note
+    assert session.exec(select(PaperPosition)).first() is not None
+
+
+def test_neutral_overlay_still_auto_executes(session, monkeypatch):
+    """Uncertainty from the AI must not freeze an otherwise-clean plan."""
+    monkeypatch.setattr(
+        "app.services.trade_plan_service.load_app_settings",
+        lambda: _default_settings(),
+    )
+    llm = FakeConfiguredLLMProvider('{"stance": "neutral", "confidence": 50, "reasoning": "Mixed signals."}')
+
+    response = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), llm, session)
+
+    assert response.status == "executed"
+    assert session.exec(select(PaperPosition)).first() is not None
+
+
+def test_the_hold_can_be_turned_off_while_keeping_the_overlay_on(session, monkeypatch):
+    """ai_overlay_blocks_auto_execute=False: the overlay still runs and is
+    still shown, it just no longer gets a say over auto-execute."""
+    monkeypatch.setattr(
+        "app.services.trade_plan_service.load_app_settings",
+        lambda: _default_settings(ai_overlay_blocks_auto_execute=False),
+    )
+    llm = FakeConfiguredLLMProvider('{"stance": "bearish", "confidence": 62, "reasoning": "Looks exhausted."}')
+
+    response = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), llm, session)
+
+    assert response.status == "executed"
+    assert response.ai_opinion_stance == "bearish"  # still shown
+    assert session.exec(select(PaperPosition)).first() is not None  # but didn't block
+
+
+def test_overlay_off_is_completely_unaffected(session, monkeypatch):
+    """No overlay opinion exists to contradict anything — behavior must be
+    identical to before this feature existed."""
+    monkeypatch.setattr(
+        "app.services.trade_plan_service.load_app_settings",
+        lambda: AppSettings(
+            telegram_bot_token="", telegram_chat_id="",
+            ai_trading_overlay_enabled=False, auto_execute_trade_plans=True,
+        ),
+    )
+    llm = FakeConfiguredLLMProvider('{"stance": "bullish", "confidence": 80, "reasoning": "n/a"}')
+
+    response = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), llm, session)
+
+    assert response.ai_opinion_stance is None
+    assert response.status == "executed"
+    assert session.exec(select(PaperPosition)).first() is not None

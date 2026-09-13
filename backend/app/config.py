@@ -106,6 +106,20 @@ class AppSettings(BaseModel):
     # notes/Decisions.md.
     ai_trading_overlay_enabled: bool = False
 
+    # Only meaningful when ai_trading_overlay_enabled is also on — off,
+    # this changes nothing. The overlay's opinion is NEVER blended into
+    # direction/confidence_score (see trade_plan_service._maybe_get_ai_opinion)
+    # — that invariant does not change here. This is a brake on the
+    # auto-EXECUTE step only: when the overlay flatly contradicts the
+    # rule-based direction (long vs its "bearish", short vs its "bullish" —
+    # a "neutral" read is uncertainty, not contradiction, and doesn't hold
+    # anything), auto-execute leaves the plan "pending" for manual review
+    # instead of opening the position, on the reasoning that the one moment
+    # a second opinion is worth having is the moment before capital commits.
+    # Defaults on because turning the overlay on at all is itself opt-in —
+    # the reasonable assumption is you wanted the second opinion to matter.
+    ai_overlay_blocks_auto_execute: bool = True
+
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 

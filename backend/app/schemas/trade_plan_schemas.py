@@ -51,6 +51,10 @@ class TradePlanResponse(BaseModel):
     expected_move_score: int | None = None
     earnings_surprise_score: int | None = None
     macro_event_score: int | None = None
+    # Plain-English outcome of the auto-execute step (executed / skipped-with-
+    # reason / held for manual review on overlay disagreement). Null on a
+    # no_trade record — auto-execute is never attempted there.
+    auto_execute_note: str | None = None
     # Informational only, tradeable plans only (parallels atr/stop_atr_multiple):
     # options-implied +/-% move by the nearest usable expiration, and the
     # median actual +/-% move this stock has made around its last reported

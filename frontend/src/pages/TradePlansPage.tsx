@@ -361,6 +361,23 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                 This trade plan was built from real-time market data. Review it, then execute it as a simulated
                 paper position — no real money or broker order is involved.
               </div>
+              {/* Distinguishes "pending because auto-execute is off" from
+                  "pending because auto-execute deliberately declined to fire" —
+                  the AI Trading Overlay disagreement is the one case worth a
+                  visibly different (amber, not muted) treatment, since it's
+                  the app actively asking you to make the call it wouldn't
+                  make unattended. */}
+              {plan.auto_execute_note?.startsWith('Auto-execute held') ? (
+                <div className="badge badge-amber" style={{ marginTop: 10, maxWidth: 480, whiteSpace: 'normal', display: 'inline-block' }}>
+                  ⚠ {plan.auto_execute_note}
+                </div>
+              ) : (
+                plan.auto_execute_note && (
+                  <div className="text-muted" style={{ fontSize: 12, marginTop: 8, maxWidth: 480 }}>
+                    {plan.auto_execute_note}
+                  </div>
+                )
+              )}
             </div>
             <button className="btn btn-primary" disabled={isPending} onClick={() => plan.id && open(plan.id)}>
               {isPending ? 'Executing…' : 'Execute Trade Plan'}

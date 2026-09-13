@@ -246,6 +246,26 @@ def _maybe_get_ai_opinion(
     return _parse_ai_opinion(result.text)
 
 
+def _overlay_contradicts_direction(direction: str, ai_opinion_stance: str | None) -> bool:
+    """True only when the AI Trading Overlay's stance is the FLAT OPPOSITE of
+    the rule-based direction — long vs "bearish", short vs "bullish".
+
+    A "neutral" stance (or no stance at all — overlay off, misconfigured, or
+    a parse failure) is uncertainty, not contradiction, and must never hold
+    an otherwise-clean auto-execute: escalating "the AI wasn't sure" to
+    "block the trade" would make auto-execute far less useful for the
+    mild-hedging case, which is most of what a real LLM actually returns.
+    This is the only thing the overlay is allowed to affect — it gates
+    whether auto-execute FIRES, never `direction`/`confidence_score`/entry/
+    stop/size, which are already fully decided by the time this runs.
+    """
+    if ai_opinion_stance is None:
+        return False
+    return (direction == "long" and ai_opinion_stance == "bearish") or (
+        direction == "short" and ai_opinion_stance == "bullish"
+    )
+
+
 def generate_trade_plan(
     symbol: str,
     account_size: float,
@@ -502,19 +522,46 @@ def generate_trade_plan(
 
     auto_execute_note = ""
     if settings.auto_execute_trade_plans and allow_auto_execute:
-        try:
-            engine.open_position(record)
-            session.refresh(record)
-            auto_execute_note = "\nAuto-executed as a paper position."
-        except (
-            InsufficientCashError,
-            DuplicatePositionError,
-            MaxPositionsExceededError,
-            SectorConcentrationError,
-            StalePlanError,
-        ) as exc:
-            logger.warning("Auto-execute skipped for %s: %s", symbol, exc)
-            auto_execute_note = f"\nAuto-execute skipped: {exc}"
+        if settings.ai_overlay_blocks_auto_execute and _overlay_contradicts_direction(direction, ai_opinion_stance):
+            # The one moment a second opinion is worth having is the moment
+            # before capital commits — see _overlay_contradicts_direction and
+            # notes/Decisions.md. Direction/confidence/entry/stop/size above
+            # are untouched; only whether open_position() gets CALLED changes.
+            confidence_note = f" ({ai_opinion_score}% confidence)" if ai_opinion_score is not None else ""
+            auto_execute_note = (
+                f"\nAuto-execute held: AI Trading Overlay called this {ai_opinion_stance}{confidence_note} "
+                f"against a rule-based {direction} — left pending for manual review."
+            )
+            logger.info(
+                "Auto-execute held for %s: overlay (%s) contradicts rule-based %s",
+                symbol, ai_opinion_stance, direction,
+            )
+        else:
+            try:
+                engine.open_position(record)
+                session.refresh(record)
+                auto_execute_note = "\nAuto-executed as a paper position."
+            except (
+                InsufficientCashError,
+                DuplicatePositionError,
+                MaxPositionsExceededError,
+                SectorConcentrationError,
+                StalePlanError,
+            ) as exc:
+                logger.warning("Auto-execute skipped for %s: %s", symbol, exc)
+                auto_execute_note = f"\nAuto-execute skipped: {exc}"
+
+        # Persisted so the API/UI can show WHY a plan is still "pending"
+        # without needing Telegram configured — previously this note was
+        # computed and then only ever folded into the Telegram text below,
+        # discarded everywhere else. Safe to commit again here: open_position
+        # already committed and this function already refreshed `record`
+        # right after (see CLAUDE.md's attribute-expiry note) — refreshing
+        # again after this commit keeps that guarantee for the caller.
+        record.auto_execute_note = auto_execute_note.strip()
+        session.add(record)
+        session.commit()
+        session.refresh(record)
 
     notify_text = (
         f"New trade plan: {symbol} {direction.upper()}\n"
@@ -544,6 +591,7 @@ def generate_trade_plan(
         historical_earnings_move_pct=historical_move_pct,
         confidence_score=confidence_score,
         time_horizon=record.time_horizon,
+        auto_execute_note=record.auto_execute_note,
         ai_take_text=llm_result.text,
         ai_provider=llm_result.provider,
         status=record.status,

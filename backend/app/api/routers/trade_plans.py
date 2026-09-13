@@ -76,6 +76,7 @@ def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
         expected_move_score=record.expected_move_score,
         earnings_surprise_score=record.earnings_surprise_score,
         macro_event_score=record.macro_event_score,
+        auto_execute_note=record.auto_execute_note,
         signal_reasons=record.signal_reasons,
         ai_opinion_stance=record.ai_opinion_stance,
         ai_opinion_score=record.ai_opinion_score,

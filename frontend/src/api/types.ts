@@ -143,6 +143,10 @@ export interface TradePlan {
   ai_take_text?: string | null;
   ai_provider?: string | null;
   status?: string | null;
+  /** What happened at the auto-execute step, in plain English — executed,
+   *  skipped with a reason, or held for manual review because the AI Trading
+   *  Overlay's stance was the flat opposite of the rule-based direction. */
+  auto_execute_note?: string | null;
   created_at?: string | null;
   technical_score?: number | null;
   fundamental_score?: number | null;
