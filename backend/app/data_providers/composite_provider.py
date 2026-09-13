@@ -10,6 +10,7 @@ from app.data_providers.base import (
     DataProvider,
     DataProviderError,
     EarningsEstimate,
+    EarningsHistoryEntry,
     InsiderActivity,
     FinancialsData,
     NewsItem,
@@ -80,6 +81,15 @@ class CompositeDataProvider:
             return self._try_each("get_insider_activity", symbol)
         except AllProvidersFailedError:
             return None
+
+    def get_earnings_history(self, symbol: str, limit: int = 12) -> list[EarningsHistoryEntry]:
+        # Empty list on total failure, not an exception — every caller here
+        # already treats "no history" (a new IPO, thin coverage) as a normal,
+        # scoreable state rather than an error condition.
+        try:
+            return self._try_each("get_earnings_history", symbol, limit=limit)
+        except AllProvidersFailedError:
+            return []
 
     def get_options_summary(self, symbol: str) -> OptionsSummary | None:
         # Common/expected absence (crypto has no options chain at all, many

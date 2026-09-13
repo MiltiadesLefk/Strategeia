@@ -63,6 +63,9 @@ class FakeUniverseProvider:
     def get_insider_activity(self, symbol: str):
         return None
 
+    def get_earnings_history(self, symbol: str, limit: int = 12):
+        return []
+
 
 @pytest.fixture
 def session():

@@ -132,6 +132,12 @@ export interface TradePlan {
    *  inside the instrument's normal daily range and noise will take it out. */
   atr?: number | null;
   stop_atr_multiple?: number | null;
+  /** Options-implied +/-% move by the nearest usable expiration, and the
+   *  median actual +/-% move this stock has made around its last reported
+   *  earnings dates. Informational only, tradeable plans only — neither is a
+   *  prediction of direction. */
+  expected_move_pct?: number | null;
+  historical_earnings_move_pct?: number | null;
   confidence_score?: number | null;
   time_horizon?: string | null;
   ai_take_text?: string | null;
@@ -145,6 +151,14 @@ export interface TradePlan {
   vix_regime_score?: number | null;
   options_score?: number | null;
   insider_score?: number | null;
+  /** One-directional risk flags (0 or a penalty, never a bonus): options
+   *  market pricing an outsized move, and a scheduled FOMC/CPI/jobs release
+   *  in the next day. */
+  expected_move_score?: number | null;
+  macro_event_score?: number | null;
+  /** Genuine +/-, like fundamental_score: a consistent beat/miss streak on
+   *  reported (not upcoming) consensus EPS. */
+  earnings_surprise_score?: number | null;
   signal_reasons?: string | null;
   ai_opinion_stance?: 'bullish' | 'bearish' | 'neutral' | null;
   ai_opinion_score?: number | null;

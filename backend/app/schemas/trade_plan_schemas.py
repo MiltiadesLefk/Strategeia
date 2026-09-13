@@ -48,6 +48,15 @@ class TradePlanResponse(BaseModel):
     vix_regime_score: int | None = None
     options_score: int | None = None
     insider_score: int | None = None
+    expected_move_score: int | None = None
+    earnings_surprise_score: int | None = None
+    macro_event_score: int | None = None
+    # Informational only, tradeable plans only (parallels atr/stop_atr_multiple):
+    # options-implied +/-% move by the nearest usable expiration, and the
+    # median actual +/-% move this stock has made around its last reported
+    # earnings dates. Neither is a prediction of direction.
+    expected_move_pct: float | None = None
+    historical_earnings_move_pct: float | None = None
     signal_reasons: str | None = None
     ai_opinion_stance: str | None = None
     ai_opinion_score: int | None = None

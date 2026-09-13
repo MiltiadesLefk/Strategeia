@@ -82,6 +82,9 @@ class FakeUptrendDataProvider:
     def get_insider_activity(self, symbol: str):
         return None
 
+    def get_earnings_history(self, symbol: str, limit: int = 12):
+        return []
+
 
 class FakeFlatDataProvider:
     """Dead-flat price series — analyze_chart classifies this Neutral (see
@@ -124,6 +127,9 @@ class FakeFlatDataProvider:
 
     def get_insider_activity(self, symbol: str):
         return None
+
+    def get_earnings_history(self, symbol: str, limit: int = 12):
+        return []
 
 
 @pytest.fixture

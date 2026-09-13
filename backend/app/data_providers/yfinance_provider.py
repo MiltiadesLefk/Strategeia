@@ -9,6 +9,7 @@ from app.data_providers.base import (
     CompanyOverview,
     DataProviderError,
     EarningsEstimate,
+    EarningsHistoryEntry,
     FinancialsData,
     FinancialYear,
     NewsItem,
@@ -185,6 +186,42 @@ class YFinanceProvider:
             eps_estimate=eps_estimate,
             revenue_estimate=None,
         )
+
+    @cached(EARNINGS_TTL)
+    def get_earnings_history(self, symbol: str, limit: int = 12) -> list[EarningsHistoryEntry]:
+        """Same `get_earnings_dates()` call as get_earnings_estimate, read the
+        other direction: PAST rows instead of the next upcoming one. yfinance
+        returns "Reported EPS"/"Surprise(%)" as NaN for rows that haven't
+        happened yet, which is what separates past from future here rather
+        than a second date comparison.
+
+        `limit` is rows returned by yfinance BEFORE filtering to the past, so
+        asking for 12 past quarters means requesting somewhat more than 12 to
+        leave room for upcoming rows in the same window."""
+        try:
+            dates_df = yf.Ticker(symbol).get_earnings_dates(limit=limit + 4)
+        except Exception:
+            return []
+        if dates_df is None or dates_df.empty:
+            return []
+
+        entries: list[EarningsHistoryEntry] = []
+        for ts, row in dates_df.iterrows():
+            actual = row.get("Reported EPS")
+            if actual is None or pd.isna(actual):
+                continue  # not yet reported — that's get_earnings_estimate's job, not history
+            estimate = row.get("EPS Estimate")
+            surprise = row.get("Surprise(%)")
+            entries.append(
+                EarningsHistoryEntry(
+                    date=ts.date(),
+                    eps_estimate=float(estimate) if estimate is not None and not pd.isna(estimate) else None,
+                    eps_actual=float(actual),
+                    surprise_pct=float(surprise) if surprise is not None and not pd.isna(surprise) else None,
+                )
+            )
+        entries.sort(key=lambda e: e.date, reverse=True)
+        return entries[:limit]
 
     @cached(OPTIONS_TTL)
     def get_options_summary(self, symbol: str) -> OptionsSummary:

@@ -12,9 +12,16 @@ from app.analysis.fundamental_scoring import (
     score_fundamentals,
     score_news_sentiment,
 )
+from app.analysis.earnings_history_scoring import (
+    SURPRISE_TRACK_RECORD_CAP,
+    historical_earnings_move_pct,
+    score_earnings_surprise_track_record,
+)
+from app.analysis.expected_move import compute_expected_move_pct, days_to_expiration, score_expected_move
 from app.analysis.indicators import latest_atr
 from app.analysis.insider_scoring import INSIDER_SCORE_CAP, score_insider_activity
 from app.analysis.insight_text import trade_plan_take_text
+from app.analysis.macro_calendar import score_macro_event_proximity
 from app.analysis.market_confirmation import (
     MARKET_CONFIRMATION_SCORE_CAP,
     MARKET_PROXY_SYMBOL,
@@ -60,11 +67,14 @@ FALLBACK_STOP_PCT = 0.03
 ATR_PERIOD = 14
 ATR_STOP_MULTIPLE = 1.5
 TECHNICAL_SCORE_CAP = 6
-# Deliberately excludes VIX_REGIME_SCORE_CAP: that check is one-directional
-# (score_vix_regime only ever returns 0 or a penalty, never a bonus — see
-# its docstring), so it can't contribute to the achievable maximum. Including
-# it here would inflate the denominator and deflate every confidence score
-# even when VIX is calm and contributing nothing.
+# Deliberately excludes VIX_REGIME_SCORE_CAP, EXPECTED_MOVE_SCORE_CAP and
+# MACRO_EVENT_SCORE_CAP: all three are one-directional (only ever 0 or a
+# penalty, never a bonus — see each docstring), so none can contribute to the
+# achievable maximum. Including any of them here would inflate the
+# denominator and deflate every confidence score even when the corresponding
+# risk is calm/absent and contributing nothing. SURPRISE_TRACK_RECORD_CAP is
+# included: like fundamental_score/insider_score it's a genuine +/- swing, so
+# it belongs in the achievable max the same way they do.
 MAX_SCORE_FOR_CONFIDENCE = (
     TECHNICAL_SCORE_CAP
     + FUNDAMENTAL_SCORE_CAP
@@ -72,6 +82,7 @@ MAX_SCORE_FOR_CONFIDENCE = (
     + MARKET_CONFIRMATION_SCORE_CAP
     + OPTIONS_SCORE_CAP
     + INSIDER_SCORE_CAP
+    + SURPRISE_TRACK_RECORD_CAP
 )
 CONFIDENCE_FLOOR = 20
 CONFIDENCE_CEILING = 90
@@ -312,15 +323,31 @@ def generate_trade_plan(
     insider_activity = data_provider.get_insider_activity(symbol)
     insider_score, insider_reasons = score_insider_activity(provisional_direction, insider_activity)
 
+    # Forward-looking, but on the market's OWN pricing/record, never a guess
+    # at unpublished content — see each module's docstring for why this is a
+    # legitimate "picture before it comes out" rather than fabrication.
+    atr14 = latest_atr(ohlcv, ATR_PERIOD)
+    atr_pct = (atr14 / chart.price * 100) if atr14 and chart.price else None
+    expected_move_score, expected_move_reasons = score_expected_move(
+        provisional_direction, options_summary, atr_pct
+    )
+    earnings_history = data_provider.get_earnings_history(symbol)
+    earnings_surprise_score, earnings_surprise_reasons = score_earnings_surprise_track_record(
+        provisional_direction, earnings_history
+    )
+    macro_event_score, macro_event_reasons = score_macro_event_proximity()
+
     combined_score = (
         scan_result.score + fundamental_score + news_score + market_confirmation_score
         + vix_regime_score + options_score + insider_score
+        + expected_move_score + earnings_surprise_score + macro_event_score
     )
     confidence_score = _confidence_score(combined_score)
     technical_reason = f"{chart.trend} trend with {chart.momentum.lower()} momentum"
     signal_reasons = "; ".join(
         [technical_reason, *fundamental_reasons, *news_reasons, *market_confirmation_reasons,
-         *vix_regime_reasons, *options_reasons, *insider_reasons]
+         *vix_regime_reasons, *options_reasons, *insider_reasons,
+         *expected_move_reasons, *earnings_surprise_reasons, *macro_event_reasons]
     )
 
     # AI Trading Overlay (opt-in, Settings): an independent second opinion
@@ -350,6 +377,9 @@ def generate_trade_plan(
             vix_regime_score=vix_regime_score,
             options_score=options_score,
             insider_score=insider_score,
+            expected_move_score=expected_move_score,
+            earnings_surprise_score=earnings_surprise_score,
+            macro_event_score=macro_event_score,
             signal_reasons=signal_reasons,
             ai_opinion_stance=ai_opinion_stance,
             ai_opinion_score=ai_opinion_score,
@@ -374,6 +404,9 @@ def generate_trade_plan(
             vix_regime_score=vix_regime_score,
             options_score=options_score,
             insider_score=insider_score,
+            expected_move_score=expected_move_score,
+            earnings_surprise_score=earnings_surprise_score,
+            macro_event_score=macro_event_score,
             ai_opinion_stance=ai_opinion_stance,
             ai_opinion_score=ai_opinion_score,
             ai_opinion_text=ai_opinion_text,
@@ -382,7 +415,7 @@ def generate_trade_plan(
         )
 
     direction = "long" if chart.trend == "Bullish" else "short"
-    atr_value = latest_atr(ohlcv, ATR_PERIOD)
+    atr_value = atr14  # already computed above, for score_expected_move
     entry, stop = _derive_entry_and_stop(direction, chart.price, chart.support, chart.resistance, atr_value)
 
     # Sized against the cash the account can ACTUALLY deploy, not just the
@@ -403,6 +436,17 @@ def generate_trade_plan(
     sizing = calculate_position_size(account_size, risk_pct, entry, stop, engine.available_cash())
     targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
     stop_atr_multiple = (abs(entry - stop) / atr_value) if atr_value else None
+    # Shown regardless of whether it moved the score — same "surface the
+    # number, not just the verdict" pattern as ATR/MACD. options_summary and
+    # earnings_history were already fetched above for scoring; this reuses
+    # them rather than fetching again.
+    expected_move_days = days_to_expiration(options_summary.expiration) if options_summary else None
+    expected_move_pct = (
+        compute_expected_move_pct(options_summary.atm_implied_volatility, expected_move_days)
+        if options_summary and options_summary.atm_implied_volatility and expected_move_days
+        else None
+    )
+    historical_move_pct = historical_earnings_move_pct(ohlcv, earnings_history)
 
     fallback_text = trade_plan_take_text(symbol, direction, targets.rr1, confidence_score)
     prompt = build_trade_plan_take_prompt(
@@ -443,6 +487,9 @@ def generate_trade_plan(
         vix_regime_score=vix_regime_score,
         options_score=options_score,
         insider_score=insider_score,
+        expected_move_score=expected_move_score,
+        earnings_surprise_score=earnings_surprise_score,
+        macro_event_score=macro_event_score,
         signal_reasons=signal_reasons,
         ai_opinion_stance=ai_opinion_stance,
         ai_opinion_score=ai_opinion_score,
@@ -493,6 +540,8 @@ def generate_trade_plan(
         capped_by_cash=sizing.capped_by_cash,
         atr=atr_value,
         stop_atr_multiple=stop_atr_multiple,
+        expected_move_pct=expected_move_pct,
+        historical_earnings_move_pct=historical_move_pct,
         confidence_score=confidence_score,
         time_horizon=record.time_horizon,
         ai_take_text=llm_result.text,
@@ -506,6 +555,9 @@ def generate_trade_plan(
         vix_regime_score=vix_regime_score,
         options_score=options_score,
         insider_score=insider_score,
+        expected_move_score=expected_move_score,
+        earnings_surprise_score=earnings_surprise_score,
+        macro_event_score=macro_event_score,
         signal_reasons=signal_reasons,
         ai_opinion_stance=ai_opinion_stance,
         ai_opinion_score=ai_opinion_score,

@@ -157,3 +157,6 @@ class FinnhubProvider:
 
     def get_insider_activity(self, symbol: str):
         raise NotImplementedError("finnhub provider does not implement get_insider_activity")
+
+    def get_earnings_history(self, symbol: str, limit: int = 12):
+        raise NotImplementedError("finnhub provider does not implement get_earnings_history")

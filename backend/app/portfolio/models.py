@@ -69,6 +69,13 @@ class TradePlanRecord(SQLModel, table=True):
     # Open-market insider buying, +/-1 (analysis/insider_scoring.py). Same
     # "shown, never hidden" pattern; nullable so pre-existing rows read None.
     insider_score: Optional[int] = None
+    # Forward-looking dimensions on the market's own current pricing/record,
+    # never a guess at unpublished content — see each analysis module's
+    # docstring. expected_move/macro_event are one-directional (0 or a
+    # penalty only); earnings_surprise is a genuine +/- like fundamental_score.
+    expected_move_score: Optional[int] = None
+    earnings_surprise_score: Optional[int] = None
+    macro_event_score: Optional[int] = None
     signal_reasons: Optional[str] = None  # "; "-joined, human-readable — not JSON, kept simple
 
 

@@ -66,6 +66,25 @@ class EarningsEstimate:
 
 
 @dataclass
+class EarningsHistoryEntry:
+    """One PAST reported quarter: what was estimated, what actually happened.
+
+    This is backward-looking fact, not a forecast — the "estimate" here is
+    what consensus expected *before* that report, preserved for the record,
+    not a current live estimate. Two independent things get built from a
+    list of these: `analysis/earnings_history_scoring.score_earnings_surprise_track_record`
+    (has this company consistently beaten or missed?) and
+    `analysis/earnings_history_scoring.historical_earnings_move_pct` (how much
+    does the stock actually move on these dates?), which only needs `date`.
+    """
+
+    date: date
+    eps_estimate: float | None
+    eps_actual: float | None
+    surprise_pct: float | None
+
+
+@dataclass
 class OptionsSummary:
     """Nearest-expiration-at-least-a-week-out options chain, summarized.
     `put_call_volume_ratio` is put volume / call volume for that expiration
@@ -121,6 +140,8 @@ class DataProvider(Protocol):
     def get_earnings_date(self, symbol: str) -> date | None: ...
 
     def get_earnings_estimate(self, symbol: str) -> EarningsEstimate | None: ...
+
+    def get_earnings_history(self, symbol: str, limit: int = 12) -> list[EarningsHistoryEntry]: ...
 
     def get_options_summary(self, symbol: str) -> OptionsSummary: ...
 

@@ -235,7 +235,44 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                     {plan.insider_score ?? 0}
                   </span>
                 </span>
+                <span
+                  className="text-muted"
+                  title="Consistent beat/miss streak on reported (already-happened) consensus EPS, last several quarters. Real history, not a forecast of the next print."
+                >
+                  Earnings Track{' '}
+                  <span className={`tabular-nums ${(plan.earnings_surprise_score ?? 0) > 0 ? 'text-green' : (plan.earnings_surprise_score ?? 0) < 0 ? 'text-red' : ''}`}>
+                    {(plan.earnings_surprise_score ?? 0) > 0 ? '+' : ''}
+                    {plan.earnings_surprise_score ?? 0}
+                  </span>
+                </span>
+                <span
+                  className="text-muted"
+                  title="Options market pricing a move meaningfully larger than this stock's own recent range. A magnitude read, not a direction call — penalizes a long and a short on the same setup identically."
+                >
+                  Expected Move{' '}
+                  <span className={`tabular-nums ${(plan.expected_move_score ?? 0) < 0 ? 'text-red' : ''}`}>
+                    {plan.expected_move_score ?? 0}
+                  </span>
+                </span>
+                <span
+                  className="text-muted"
+                  title="A scheduled FOMC decision, CPI release or jobs report today or tomorrow — market-wide event risk, same for every plan on a given day, hand-maintained from federalreserve.gov and bls.gov."
+                >
+                  Macro Event{' '}
+                  <span className={`tabular-nums ${(plan.macro_event_score ?? 0) < 0 ? 'text-red' : ''}`}>
+                    {plan.macro_event_score ?? 0}
+                  </span>
+                </span>
               </div>
+              {(plan.expected_move_pct != null || plan.historical_earnings_move_pct != null) && (
+                <div className="text-muted" style={{ fontSize: 11, marginTop: -6, marginBottom: 8 }}>
+                  {plan.expected_move_pct != null && <>Options imply ±{formatNumber(plan.expected_move_pct, 1)}% by next expiration</>}
+                  {plan.expected_move_pct != null && plan.historical_earnings_move_pct != null && ' · '}
+                  {plan.historical_earnings_move_pct != null && (
+                    <>historically moves ±{formatNumber(plan.historical_earnings_move_pct, 1)}% on earnings</>
+                  )}
+                </div>
+              )}
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-muted)' }}>
                 {plan.signal_reasons.split('; ').map((reason) => (
                   <li key={reason} style={{ marginBottom: 2 }}>
