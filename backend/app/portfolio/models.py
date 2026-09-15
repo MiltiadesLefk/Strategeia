@@ -76,6 +76,18 @@ class TradePlanRecord(SQLModel, table=True):
     expected_move_score: Optional[int] = None
     earnings_surprise_score: Optional[int] = None
     macro_event_score: Optional[int] = None
+    # Points the AI Trading Overlay's disagreement cost the confidence math:
+    # 0 or negative, never positive (analysis/ai_overlay_scoring.py explains
+    # the one-directional asymmetry). NOT the same field as
+    # ai_opinion_score above, which is the AI's own stated 0-100 conviction
+    # in its own stance — this is what that stance did to confidence_score.
+    ai_overlay_score: Optional[int] = None
+    # "take" | "pass" | None — the AI's direct answer to "would you take this
+    # trade?", which is a different question from ai_opinion_stance ("where
+    # does the stock go?") and the one actually acted on. None means the
+    # model gave no usable verdict (older rows, or a provider that ignored
+    # the field), in which case the stance is used as the fallback signal.
+    ai_trade_verdict: Optional[str] = None
     signal_reasons: Optional[str] = None  # "; "-joined, human-readable — not JSON, kept simple
     # What happened at the auto-execute step, in plain English — executed,
     # skipped (insufficient cash / duplicate / at position cap / sector cap /

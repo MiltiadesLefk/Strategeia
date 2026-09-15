@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.config import AiOverlayObjectionAction
+
 
 class SettingsUpdateRequest(BaseModel):
     llm_provider: str | None = None
@@ -16,6 +18,12 @@ class SettingsUpdateRequest(BaseModel):
     finnhub_enabled: bool | None = None
     finnhub_api_key: str | None = None
     ai_trading_overlay_enabled: bool | None = None
+    # How much the overlay's opinion counts (see AppSettings): whether an
+    # objection costs confidence points, and what it does to the trade.
+    # Both were previously settable only by hand-editing settings.json.
+    ai_overlay_scores_confidence: bool | None = None
+    ai_overlay_objection_action: AiOverlayObjectionAction | None = None
+    min_confidence_for_trade: int | None = Field(default=None, ge=0, le=100)
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     scan_universe_size: int | None = Field(default=None, gt=0)

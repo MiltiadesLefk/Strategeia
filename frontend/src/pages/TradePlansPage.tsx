@@ -31,6 +31,18 @@ function AiOpinionBlock({ plan }: { plan: TradePlan }) {
         <IconBadge variant="info" size={26} />
         <span style={{ fontWeight: 700, fontSize: 13 }}>AI Second Opinion</span>
         {plan.ai_opinion_stance && <span className={`badge ${stanceBadgeClass}`}>{plan.ai_opinion_stance}</span>}
+        {plan.ai_trade_verdict && (
+          <span
+            className={`badge ${plan.ai_trade_verdict === 'pass' ? 'badge-red' : 'badge-green'}`}
+            title={
+              plan.ai_trade_verdict === 'pass'
+                ? "The AI would not take this trade. This — not the stance beside it — is the answer acted on."
+                : 'The AI would take this trade, even if its directional read differs.'
+            }
+          >
+            {plan.ai_trade_verdict === 'pass' ? 'would not take' : 'would take'}
+          </span>
+        )}
         {plan.ai_opinion_score != null && (
           <span className="text-muted tabular-nums" style={{ fontSize: 12 }}>
             {plan.ai_opinion_score}%
@@ -49,8 +61,8 @@ function AiOpinionBlock({ plan }: { plan: TradePlan }) {
         </div>
       )}
       <div className="text-muted" style={{ fontSize: 11, marginTop: 6, opacity: 0.7 }}>
-        Independent read from the AI provider (Settings → AI Trading Overlay) — separate from, and free to disagree
-        with, the rule-based decision above.
+        Independent read from the AI provider (Settings → AI Trading Overlay). It cannot pick the direction, entry,
+        stop or size — but a flat disagreement costs confidence and can stop the trade.
       </div>
     </div>
   );
@@ -263,6 +275,15 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                     {plan.macro_event_score ?? 0}
                   </span>
                 </span>
+                <span
+                  className="text-muted"
+                  title="The AI Trading Overlay's second opinion, scored. Only ever a penalty (0 to -3, scaled by how sure the AI says it is) and never a bonus: the AI is shown the rule-based verdict, so its agreement is weak evidence, and it must not be able to talk the engine into a trade the rules rejected."
+                >
+                  AI Overlay{' '}
+                  <span className={`tabular-nums ${(plan.ai_overlay_score ?? 0) < 0 ? 'text-red' : ''}`}>
+                    {plan.ai_overlay_score ?? 0}
+                  </span>
+                </span>
               </div>
               {(plan.expected_move_pct != null || plan.historical_earnings_move_pct != null) && (
                 <div className="text-muted" style={{ fontSize: 11, marginTop: -6, marginBottom: 8 }}>
@@ -320,6 +341,15 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
             </div>
             <div className="tabular-nums" style={{ fontWeight: 700, marginBottom: 4 }}>
               {plan.confidence_score}%
+              {plan.confidence_points != null && plan.confidence_points_max != null && (
+                <span
+                  className="text-muted"
+                  style={{ fontWeight: 400, fontSize: 11, marginLeft: 6 }}
+                  title="Confidence is the share of the engine's evidence points this setup earned. Only 17 values are reachable, about 6 points apart — the percentage is not a continuous scale."
+                >
+                  {plan.confidence_points}/{plan.confidence_points_max} pts
+                </span>
+              )}
             </div>
             <div style={{ width: '100%', height: 4, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
               <div style={{ width: `${plan.confidence_score ?? 0}%`, height: '100%', background: 'var(--indigo-light)' }} />

@@ -257,6 +257,36 @@ tbody tr:hover {
   gap: 16px;
 }
 
+/* Settings is a set of independent cards with very different heights. As a
+   grid, every row was as tall as its tallest card, so the short ones left
+   large dead gaps beneath them — AI Narrative Provider and Finnhub each sat
+   next to the much taller AI Trading Overlay with ~400px of empty space
+   under them. Multi-column packs by height instead: a card takes only the
+   room it needs and the next one starts right after it.
+
+   column-width rather than column-count so it stays responsive for free —
+   the browser drops to two columns, then one, as the viewport narrows, with
+   no breakpoints to keep in sync. */
+.settings-columns {
+  column-width: 420px;
+  column-gap: 20px;
+}
+
+/* The page title spans the full width above the columns instead of being
+   packed into the first one. */
+.settings-columns > h1 {
+  column-span: all;
+  margin-bottom: 20px;
+}
+
+.settings-columns > .card {
+  /* A card must never be fragmented across a column boundary. */
+  break-inside: avoid;
+  /* Multi-column has no `gap` for block flow, so the vertical rhythm the
+     grid's `gap` used to provide comes from the card itself. */
+  margin-bottom: 20px;
+}
+
 .stat-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

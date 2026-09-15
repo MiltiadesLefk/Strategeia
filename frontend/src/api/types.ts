@@ -139,13 +139,21 @@ export interface TradePlan {
   expected_move_pct?: number | null;
   historical_earnings_move_pct?: number | null;
   confidence_score?: number | null;
+  /** The raw evidence points behind confidence_score, and the most the engine
+   *  can award. Confidence is quantised — only 17 values are reachable, 6.25
+   *  apart — so the percentage alone implies precision it does not have. */
+  confidence_points?: number | null;
+  confidence_points_max?: number | null;
   time_horizon?: string | null;
   ai_take_text?: string | null;
   ai_provider?: string | null;
   status?: string | null;
   /** What happened at the auto-execute step, in plain English — executed,
    *  skipped with a reason, or held for manual review because the AI Trading
-   *  Overlay's stance was the flat opposite of the rule-based direction. */
+   *  Overlay's stance was the flat opposite of the rule-based direction.
+   *  With ai_overlay_vetoes_trade on (the default once the overlay is on) a
+   *  contradiction never reaches this step — the evaluation ends as a
+   *  no_trade record with the overlay named in `reason` instead. */
   auto_execute_note?: string | null;
   created_at?: string | null;
   technical_score?: number | null;
@@ -163,8 +171,16 @@ export interface TradePlan {
   /** Genuine +/-, like fundamental_score: a consistent beat/miss streak on
    *  reported (not upcoming) consensus EPS. */
   earnings_surprise_score?: number | null;
+  /** What the AI Trading Overlay's disagreement cost the confidence score:
+   *  0 or negative, never positive. Distinct from ai_opinion_score below,
+   *  which is the AI's own stated conviction in its own stance. */
+  ai_overlay_score?: number | null;
   signal_reasons?: string | null;
   ai_opinion_stance?: 'bullish' | 'bearish' | 'neutral' | null;
+  /** The AI's answer to "would you take this trade?" — a different question
+   *  from ai_opinion_stance (where it thinks the stock goes), and the one
+   *  actually acted on. Null when the model gave no usable verdict. */
+  ai_trade_verdict?: 'take' | 'pass' | null;
   ai_opinion_score?: number | null;
   ai_opinion_text?: string | null;
   ai_news_assessment?: string | null;
@@ -242,6 +258,9 @@ export interface AppSettings {
   auto_scan_enabled: boolean;
   max_concurrent_positions: number;
   ai_trading_overlay_enabled: boolean;
+  ai_overlay_scores_confidence: boolean;
+  ai_overlay_objection_action: AiOverlayObjectionAction;
+  min_confidence_for_trade: number;
 }
 
 export interface SettingsUpdateRequest {
@@ -266,12 +285,20 @@ export interface SettingsUpdateRequest {
   auto_scan_enabled?: boolean;
   max_concurrent_positions?: number;
   ai_trading_overlay_enabled?: boolean;
+  ai_overlay_scores_confidence?: boolean;
+  ai_overlay_objection_action?: AiOverlayObjectionAction;
+  min_confidence_for_trade?: number;
 }
 
 export interface TestConnectionResponse {
   ok: boolean;
   message: string;
 }
+
+/** What the AI Trading Overlay's objection actually does. One choice, not a
+ *  set of flags: "cancel" and "hold" fire on the same trigger and cancel
+ *  always wins, so they can never both be in effect. */
+export type AiOverlayObjectionAction = 'cancel' | 'hold' | 'none';
 
 export interface SettingsStatus {
   ai_online: boolean;

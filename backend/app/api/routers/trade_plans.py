@@ -9,7 +9,7 @@ from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
 from app.portfolio.models import TradePlanRecord
 from app.schemas.trade_plan_schemas import TradePlanGenerateRequest, TradePlanResponse
-from app.services.trade_plan_service import generate_trade_plan
+from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, clamp_points, generate_trade_plan
 
 router = APIRouter(prefix="/api/trade-plans", tags=["trade-plans"], dependencies=[Depends(require_shared_secret)])
 
@@ -76,6 +76,23 @@ def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
         expected_move_score=record.expected_move_score,
         earnings_surprise_score=record.earnings_surprise_score,
         macro_event_score=record.macro_event_score,
+        ai_overlay_score=record.ai_overlay_score,
+        ai_trade_verdict=record.ai_trade_verdict,
+        # Recomputed from the stored dimensions rather than persisted: it is
+        # a pure function of columns already on the row, so a stored copy
+        # could only ever drift out of step with them.
+        confidence_points=clamp_points(
+            sum(
+                score or 0
+                for score in (
+                    record.technical_score, record.fundamental_score, record.news_score,
+                    record.market_confirmation_score, record.vix_regime_score, record.options_score,
+                    record.insider_score, record.expected_move_score, record.earnings_surprise_score,
+                    record.macro_event_score, record.ai_overlay_score,
+                )
+            )
+        ),
+        confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         auto_execute_note=record.auto_execute_note,
         signal_reasons=record.signal_reasons,
         ai_opinion_stance=record.ai_opinion_stance,

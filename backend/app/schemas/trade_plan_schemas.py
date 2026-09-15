@@ -36,6 +36,11 @@ class TradePlanResponse(BaseModel):
     atr: float | None = None
     stop_atr_multiple: float | None = None
     confidence_score: int | None = None
+    # The raw evidence points behind confidence_score, and the maximum the
+    # engine can award. Confidence is quantised — 17 reachable values, 6.25
+    # apart — so "7 / 16" is what the percentage actually means.
+    confidence_points: int | None = None
+    confidence_points_max: int | None = None
     time_horizon: str | None = None
     ai_take_text: str | None = None
     ai_provider: str | None = None
@@ -51,6 +56,13 @@ class TradePlanResponse(BaseModel):
     expected_move_score: int | None = None
     earnings_surprise_score: int | None = None
     macro_event_score: int | None = None
+    # 0 or negative — what the AI Trading Overlay's disagreement cost
+    # confidence_score. Distinct from ai_opinion_score below, which is the
+    # AI's own conviction in its own stance.
+    ai_overlay_score: int | None = None
+    # "take" | "pass" — would the AI take this trade? Distinct from
+    # ai_opinion_stance (its directional read) and the field acted on.
+    ai_trade_verdict: str | None = None
     # Plain-English outcome of the auto-execute step (executed / skipped-with-
     # reason / held for manual review on overlay disagreement). Null on a
     # no_trade record — auto-execute is never attempted there.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import date
 
 from sqlmodel import Session, select
@@ -17,6 +18,7 @@ from app.analysis.earnings_history_scoring import (
     historical_earnings_move_pct,
     score_earnings_surprise_track_record,
 )
+from app.analysis.ai_overlay_scoring import overlay_opposes_trade, score_ai_overlay
 from app.analysis.expected_move import compute_expected_move_pct, days_to_expiration, score_expected_move
 from app.analysis.indicators import latest_atr
 from app.analysis.insider_scoring import INSIDER_SCORE_CAP, score_insider_activity
@@ -67,12 +69,13 @@ FALLBACK_STOP_PCT = 0.03
 ATR_PERIOD = 14
 ATR_STOP_MULTIPLE = 1.5
 TECHNICAL_SCORE_CAP = 6
-# Deliberately excludes VIX_REGIME_SCORE_CAP, EXPECTED_MOVE_SCORE_CAP and
-# MACRO_EVENT_SCORE_CAP: all three are one-directional (only ever 0 or a
-# penalty, never a bonus — see each docstring), so none can contribute to the
-# achievable maximum. Including any of them here would inflate the
-# denominator and deflate every confidence score even when the corresponding
-# risk is calm/absent and contributing nothing. SURPRISE_TRACK_RECORD_CAP is
+# Deliberately excludes VIX_REGIME_SCORE_CAP, EXPECTED_MOVE_SCORE_CAP,
+# MACRO_EVENT_SCORE_CAP and AI_OVERLAY_SCORE_CAP: all four are
+# one-directional (only ever 0 or a penalty, never a bonus — see each
+# docstring), so none can contribute to the achievable maximum. Including
+# any of them here would inflate the denominator and deflate every
+# confidence score even when the corresponding risk is calm/absent and
+# contributing nothing. SURPRISE_TRACK_RECORD_CAP is
 # included: like fundamental_score/insider_score it's a genuine +/- swing, so
 # it belongs in the achievable max the same way they do.
 MAX_SCORE_FOR_CONFIDENCE = (
@@ -84,17 +87,26 @@ MAX_SCORE_FOR_CONFIDENCE = (
     + INSIDER_SCORE_CAP
     + SURPRISE_TRACK_RECORD_CAP
 )
-CONFIDENCE_FLOOR = 20
-CONFIDENCE_CEILING = 90
+# A straight 0-100 percentage of the achievable evidence: a plan showing 56%
+# earned 9 of the 16 points this engine can award, and nothing else is being
+# done to the number. It used to be squeezed onto a 20-90 range, which made
+# the floor unreachable in both directions and every score harder to reason
+# about — a "20%" plan was not weakly-evidenced, it was the worst possible,
+# and no plan could ever read below it however bad the evidence was. The
+# label stays "Confidence", never "Win Probability" (see notes/Decisions.md):
+# it measures how much of the evidence lined up, not the odds of the trade
+# working.
+CONFIDENCE_FLOOR = 0
+CONFIDENCE_CEILING = 100
 
 # "We don't target more trades, but better trades": a symbol clearing the
 # trend check still doesn't get a plan unless the combined technical +
-# fundamental + news confidence clears this bar. Below it (or on a Neutral
-# trend), generate_trade_plan returns/persists an explicit no-trade decision
-# instead of forcing a mediocre plan out the door. Deliberately skips the LLM
-# call in that path too — a low-confidence symbol doesn't need (and
-# shouldn't spend tokens on) an AI narrative, only a rule-based reason.
-MIN_CONFIDENCE_FOR_TRADE = 40
+# fundamental + news confidence clears the configured bar
+# (AppSettings.min_confidence_for_trade). Below it (or on a Neutral trend),
+# generate_trade_plan returns/persists an explicit no-trade decision instead
+# of forcing a mediocre plan out the door, and deliberately skips the plan
+# LLM call in that path too — a rejected symbol doesn't need (and shouldn't
+# spend tokens on) an AI narrative, only a rule-based reason.
 
 
 def _derive_entry_and_stop(
@@ -121,8 +133,20 @@ def _derive_entry_and_stop(
     return entry, stop
 
 
+def clamp_points(total: int) -> int:
+    """The raw evidence points behind a confidence percentage, clamped to
+    the range the percentage can express. Surfaced on the response because
+    confidence is quantised, not continuous: with MAX_SCORE_FOR_CONFIDENCE
+    at 16 there are only 17 reachable values, 6.25 points apart, so a bare
+    "44%" implies a precision the engine does not have. Showing "7 / 16"
+    beside it is the honest version, and matches this codebase's habit of
+    displaying the number a verdict came from rather than just the verdict.
+    """
+    return max(0, min(MAX_SCORE_FOR_CONFIDENCE, total))
+
+
 def _confidence_score(score: int) -> int:
-    clamped = max(0, min(MAX_SCORE_FOR_CONFIDENCE, score))
+    clamped = clamp_points(score)
     span = CONFIDENCE_CEILING - CONFIDENCE_FLOOR
     return round(CONFIDENCE_FLOOR + (clamped / MAX_SCORE_FOR_CONFIDENCE) * span)
 
@@ -187,7 +211,27 @@ def _fetch_vix_level(symbol: str, data_provider: DataProvider) -> float | None:
         return None
 
 
-def _parse_ai_opinion(raw_text: str) -> tuple[str | None, int | None, str, str | None]:
+@dataclass
+class AiOpinion:
+    """The overlay's parsed response. A dataclass rather than the tuple this
+    used to be: `trade_verdict` made it a five-field return, and the two
+    score-shaped fields (`score`, the model's own 0-100 conviction) sat one
+    position apart from each other with nothing but argument order keeping
+    them straight.
+
+    `stance` is the model's directional read of the stock; `trade_verdict`
+    is its answer to "would you take this trade?". They are genuinely
+    different questions — see analysis/ai_overlay_scoring.overlay_opposes_trade.
+    """
+
+    stance: str | None = None
+    trade_verdict: str | None = None
+    score: int | None = None
+    text: str | None = None
+    news_assessment: str | None = None
+
+
+def _parse_ai_opinion(raw_text: str) -> AiOpinion:
     """Best-effort parse of the AI overlay's structured JSON response. A
     provider that ignores the format instruction (or a flaky one that wraps
     it in prose/markdown) just means no stance/score/news_assessment get
@@ -198,15 +242,21 @@ def _parse_ai_opinion(raw_text: str) -> tuple[str | None, int | None, str, str |
         stance = data.get("stance")
         if stance not in ("bullish", "bearish", "neutral"):
             stance = None
+        # Unrecognised or absent verdict stays None rather than defaulting to
+        # "take": a model that ignored the field has not said the trade is
+        # fine, and overlay_opposes_trade falls back to the stance for it.
+        trade_verdict = data.get("trade_verdict")
+        if trade_verdict not in ("take", "pass"):
+            trade_verdict = None
         score = data.get("confidence")
         score = max(0, min(100, int(score))) if isinstance(score, (int, float)) else None
         reasoning = data.get("reasoning")
         text = reasoning.strip() if isinstance(reasoning, str) and reasoning.strip() else raw_text.strip()
         news_assessment = data.get("news_assessment")
         news_assessment = news_assessment.strip() if isinstance(news_assessment, str) and news_assessment.strip() else None
-        return stance, score, text, news_assessment
+        return AiOpinion(stance, trade_verdict, score, text, news_assessment)
     except (json.JSONDecodeError, AttributeError, TypeError):
-        return None, None, raw_text.strip(), None
+        return AiOpinion(text=raw_text.strip())
 
 
 def _maybe_get_ai_opinion(
@@ -222,19 +272,19 @@ def _maybe_get_ai_opinion(
     rule_based_direction: str | None,
     confidence_score: int,
     rule_based_news_reasons: list[str],
-) -> tuple[str | None, int | None, str | None, str | None]:
+) -> AiOpinion:
     """The AI Trading Overlay (Settings, off by default): an independent
     second read of the SAME raw data, alongside — never blended into — the
     rule-based decision above. Only actually calls an LLM when the toggle is
-    on AND a real provider is configured; otherwise returns (None, None,
-    None, None) so the fields simply stay empty rather than showing a fake or
+    on AND a real provider is configured; otherwise returns an empty
+    AiOpinion so the fields simply stay empty rather than showing a fake or
     rule-based-disguised-as-AI opinion. Also returns a dedicated
     `news_assessment` — the AI actually reads headline substance instead of
     the rule-based engine's plain keyword matching (see
     fundamental_scoring.score_news_sentiment), and is explicitly shown that
     keyword read to contrast against."""
     if not settings.ai_trading_overlay_enabled or llm_provider.name == "none" or not llm_provider.is_configured():
-        return None, None, None, None
+        return AiOpinion()
     prompt = build_ai_opinion_prompt(
         symbol, chart, volume_ratio, overview, financial_years, news, earnings_date, rule_based_direction,
         confidence_score, rule_based_news_reasons,
@@ -242,28 +292,30 @@ def _maybe_get_ai_opinion(
     result = llm_provider.generate(prompt)
     if result.error or not result.text:
         logger.warning("AI opinion call failed for %s: %s", symbol, result.error)
-        return None, None, None, None
+        return AiOpinion()
     return _parse_ai_opinion(result.text)
 
 
-def _overlay_contradicts_direction(direction: str, ai_opinion_stance: str | None) -> bool:
-    """True only when the AI Trading Overlay's stance is the FLAT OPPOSITE of
-    the rule-based direction — long vs "bearish", short vs "bullish".
+def _overlay_contradicts_direction(direction: str | None, opinion: AiOpinion) -> bool:
+    """Thin wrapper over analysis.ai_overlay_scoring.overlay_opposes_trade,
+    kept here because this is where the two settings that read it live.
 
-    A "neutral" stance (or no stance at all — overlay off, misconfigured, or
-    a parse failure) is uncertainty, not contradiction, and must never hold
-    an otherwise-clean auto-execute: escalating "the AI wasn't sure" to
-    "block the trade" would make auto-execute far less useful for the
-    mild-hedging case, which is most of what a real LLM actually returns.
-    This is the only thing the overlay is allowed to affect — it gates
-    whether auto-execute FIRES, never `direction`/`confidence_score`/entry/
-    stop/size, which are already fully decided by the time this runs.
+    Opposition means the model's `trade_verdict` is "pass", or — when it
+    gave no usable verdict — its stance is the flat opposite of the
+    direction. A Neutral-trend symbol has no direction to object to and
+    never counts.
+
+    One setting reads this, at two different strengths —
+    `ai_overlay_objection_action` picks which one acts: "cancel" (the
+    evaluation becomes an explicit no_trade) or "hold" (the plan is written
+    but left pending for a human). Neither one lets the overlay pick `direction`,
+    entry, stop or size: those come from the rule-based trend and the risk
+    engine, and an objection can only stop a trade, never redirect or
+    originate one. The overlay's one graded influence on a NUMBER is
+    score_ai_overlay's penalty into confidence_score, which is likewise
+    one-directional (see analysis/ai_overlay_scoring.py).
     """
-    if ai_opinion_stance is None:
-        return False
-    return (direction == "long" and ai_opinion_stance == "bearish") or (
-        direction == "short" and ai_opinion_stance == "bullish"
-    )
+    return overlay_opposes_trade(direction, opinion.stance, opinion.trade_verdict)
 
 
 def generate_trade_plan(
@@ -357,34 +409,90 @@ def generate_trade_plan(
     )
     macro_event_score, macro_event_reasons = score_macro_event_proximity()
 
-    combined_score = (
+    rule_based_score = (
         scan_result.score + fundamental_score + news_score + market_confirmation_score
         + vix_regime_score + options_score + insider_score
         + expected_move_score + earnings_surprise_score + macro_event_score
     )
-    confidence_score = _confidence_score(combined_score)
+    # The purely rule-based read, computed before the overlay is consulted —
+    # this is the number handed to the overlay prompt as context (see
+    # build_ai_opinion_prompt: "for context only, never as an answer key"),
+    # so the model is shown what the deterministic engine concluded on its
+    # own rather than a figure its own opinion already moved. Feeding it the
+    # post-overlay score would make the prompt's context partly an echo of
+    # the model's own previous reasoning.
+    rule_based_confidence = _confidence_score(rule_based_score)
     technical_reason = f"{chart.trend} trend with {chart.momentum.lower()} momentum"
-    signal_reasons = "; ".join(
-        [technical_reason, *fundamental_reasons, *news_reasons, *market_confirmation_reasons,
-         *vix_regime_reasons, *options_reasons, *insider_reasons,
-         *expected_move_reasons, *earnings_surprise_reasons, *macro_event_reasons]
-    )
 
     # AI Trading Overlay (opt-in, Settings): an independent second opinion
     # from the SAME raw data, computed once here so both the no-trade and
-    # tradeable paths below can attach it — never used to decide direction
-    # or confidence_score above, only shown alongside them.
-    ai_opinion_stance, ai_opinion_score, ai_opinion_text, ai_news_assessment = _maybe_get_ai_opinion(
+    # tradeable paths below can attach it. Its influence is bounded and
+    # one-directional in every form — see the ai_overlay_* settings block in
+    # config.py and analysis/ai_overlay_scoring.py.
+    opinion = _maybe_get_ai_opinion(
         settings, llm_provider, symbol, chart, volume_ratio, overview, financial_years, news, earnings_date,
-        provisional_direction, confidence_score, news_reasons,
+        provisional_direction, rule_based_confidence, news_reasons,
+    )
+    ai_opinion_stance = opinion.stance
+    ai_opinion_score = opinion.score
+    ai_opinion_text = opinion.text
+    ai_news_assessment = opinion.news_assessment
+    ai_trade_verdict = opinion.trade_verdict
+
+    # Rung 1 of the ladder: a disagreeing overlay costs conviction, scored
+    # like any other dimension. Never a bonus, so it can only ever talk the
+    # engine out of a trade, never into one.
+    ai_overlay_score, ai_overlay_reasons = (
+        score_ai_overlay(provisional_direction, opinion.stance, opinion.trade_verdict, opinion.score)
+        if settings.ai_overlay_scores_confidence
+        else (0, [])
+    )
+    combined_score = rule_based_score + ai_overlay_score
+    confidence_score = _confidence_score(combined_score)
+    signal_reasons = "; ".join(
+        [technical_reason, *fundamental_reasons, *news_reasons, *market_confirmation_reasons,
+         *vix_regime_reasons, *options_reasons, *insider_reasons,
+         *expected_move_reasons, *earnings_surprise_reasons, *macro_event_reasons,
+         *ai_overlay_reasons]
     )
 
-    if chart.trend == "Neutral" or confidence_score < MIN_CONFIDENCE_FOR_TRADE:
-        reason = (
-            "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
-            if chart.trend == "Neutral"
-            else f"Confidence too low ({confidence_score}%, needs {MIN_CONFIDENCE_FOR_TRADE}%+) despite a {chart.trend.lower()} trend."
-        )
+    # "cancel": the objection ends the evaluation as an explicit no-trade
+    # decision rather than writing a plan the engine's own second opinion
+    # expects to lose. Distinct from the confidence penalty in kind, not
+    # just degree — that is capped at 3 points and a high-conviction setup
+    # absorbs it, whereas this stops the trade outright.
+    overlay_vetoes_trade = settings.ai_overlay_objection_action == "cancel" and _overlay_contradicts_direction(
+        provisional_direction, opinion
+    )
+
+    if chart.trend == "Neutral" or overlay_vetoes_trade or confidence_score < settings.min_confidence_for_trade:
+        if chart.trend == "Neutral":
+            reason = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
+        elif overlay_vetoes_trade:
+            # Named ahead of the confidence bar deliberately: when the
+            # overlay's own penalty is what pushed the score under
+            # min_confidence_for_trade, "confidence too low" would report
+            # the symptom and hide the cause.
+            conviction = f" at {ai_opinion_score}% conviction" if ai_opinion_score is not None else ""
+            if ai_trade_verdict == "pass":
+                reason = (
+                    f"AI Trading Overlay would not take this trade{conviction} — "
+                    f"no trade taken against a rule-based {provisional_direction}."
+                )
+            else:
+                reason = (
+                    f"AI Trading Overlay reads this {ai_opinion_stance}{conviction} against a rule-based "
+                    f"{provisional_direction} — no trade taken on a flat disagreement."
+                )
+            logger.info(
+                "Trade vetoed for %s: overlay opposes rule-based %s (verdict=%s, stance=%s)",
+                symbol, provisional_direction, ai_trade_verdict, ai_opinion_stance,
+            )
+        else:
+            reason = (
+                f"Confidence too low ({confidence_score}%, needs {settings.min_confidence_for_trade}%+) "
+                f"despite a {chart.trend.lower()} trend."
+            )
         record = TradePlanRecord(
             symbol=symbol,
             status="no_trade",
@@ -400,6 +508,10 @@ def generate_trade_plan(
             expected_move_score=expected_move_score,
             earnings_surprise_score=earnings_surprise_score,
             macro_event_score=macro_event_score,
+            ai_overlay_score=ai_overlay_score,
+            ai_trade_verdict=ai_trade_verdict,
+            confidence_points=clamp_points(combined_score),
+            confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
             signal_reasons=signal_reasons,
             ai_opinion_stance=ai_opinion_stance,
             ai_opinion_score=ai_opinion_score,
@@ -427,6 +539,10 @@ def generate_trade_plan(
             expected_move_score=expected_move_score,
             earnings_surprise_score=earnings_surprise_score,
             macro_event_score=macro_event_score,
+            ai_overlay_score=ai_overlay_score,
+            ai_trade_verdict=ai_trade_verdict,
+            confidence_points=clamp_points(combined_score),
+            confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
             ai_opinion_stance=ai_opinion_stance,
             ai_opinion_score=ai_opinion_score,
             ai_opinion_text=ai_opinion_text,
@@ -510,6 +626,10 @@ def generate_trade_plan(
         expected_move_score=expected_move_score,
         earnings_surprise_score=earnings_surprise_score,
         macro_event_score=macro_event_score,
+        ai_overlay_score=ai_overlay_score,
+        ai_trade_verdict=ai_trade_verdict,
+        confidence_points=clamp_points(combined_score),
+        confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         signal_reasons=signal_reasons,
         ai_opinion_stance=ai_opinion_stance,
         ai_opinion_score=ai_opinion_score,
@@ -522,14 +642,23 @@ def generate_trade_plan(
 
     auto_execute_note = ""
     if settings.auto_execute_trade_plans and allow_auto_execute:
-        if settings.ai_overlay_blocks_auto_execute and _overlay_contradicts_direction(direction, ai_opinion_stance):
-            # The one moment a second opinion is worth having is the moment
-            # before capital commits — see _overlay_contradicts_direction and
-            # notes/Decisions.md. Direction/confidence/entry/stop/size above
-            # are untouched; only whether open_position() gets CALLED changes.
+        if settings.ai_overlay_objection_action == "hold" and _overlay_contradicts_direction(direction, opinion):
+            # "hold": the plan is written and left pending for a human,
+            # on the reasoning that the one moment a second opinion is
+            # worth having is the moment before capital commits.
+            # Mutually exclusive with "cancel" by construction rather than
+            # by accident — same trigger, and a cancelled evaluation
+            # returned a no_trade record long before reaching this line.
+            # Entry/stop/size are untouched either way; only whether
+            # open_position() gets CALLED changes here.
             confidence_note = f" ({ai_opinion_score}% confidence)" if ai_opinion_score is not None else ""
+            called_it = (
+                f"would not take this trade{confidence_note}"
+                if ai_trade_verdict == "pass"
+                else f"called this {ai_opinion_stance}{confidence_note}"
+            )
             auto_execute_note = (
-                f"\nAuto-execute held: AI Trading Overlay called this {ai_opinion_stance}{confidence_note} "
+                f"\nAuto-execute held: AI Trading Overlay {called_it} "
                 f"against a rule-based {direction} — left pending for manual review."
             )
             logger.info(
@@ -606,6 +735,10 @@ def generate_trade_plan(
         expected_move_score=expected_move_score,
         earnings_surprise_score=earnings_surprise_score,
         macro_event_score=macro_event_score,
+        ai_overlay_score=ai_overlay_score,
+        ai_trade_verdict=ai_trade_verdict,
+        confidence_points=clamp_points(combined_score),
+        confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         signal_reasons=signal_reasons,
         ai_opinion_stance=ai_opinion_stance,
         ai_opinion_score=ai_opinion_score,

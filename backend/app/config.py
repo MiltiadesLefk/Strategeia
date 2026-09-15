@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -60,6 +60,14 @@ class InfraSettings(BaseSettings):
 
 LlmProviderName = Literal["none", "claude_code_cli", "openrouter", "orcarouter", "openai", "gemini"]
 
+# What happens when the AI Trading Overlay says it would not take the trade.
+# One choice, not a set of flags: "cancel" and "hold" fire on the identical
+# trigger and cancel always wins (a cancelled evaluation never reaches the
+# auto-execute step), so as two independent booleans one combination was
+# always dead and the UI could show a setting as ON that could never once
+# fire. See notes/Decisions.md.
+AiOverlayObjectionAction = Literal["cancel", "hold", "none"]
+
 
 MASK_BULLET_COUNT = 16
 
@@ -97,28 +105,83 @@ class AppSettings(BaseModel):
     finnhub_enabled: bool = False
     finnhub_api_key: str = ""
 
-    # Opt-in, off by default: when on, generate_trade_plan asks the LLM for
-    # its own independent read of ALL the same raw data (technicals,
-    # fundamentals, news, earnings) — stored as ai_opinion_* on the trade
-    # plan, shown alongside (never blended into) the rule-based
-    # confidence_score/decision. Costs one extra LLM call per symbol
-    # evaluated, including ones the rule-based engine rejects — see
-    # notes/Decisions.md.
+    # Master switch, opt-in and off by default: when on, generate_trade_plan
+    # asks the LLM for its own independent read of ALL the same raw data
+    # (technicals, fundamentals, news, earnings) — stored as ai_opinion_* on
+    # the trade plan. Costs one extra LLM call per symbol evaluated,
+    # including ones the rule-based engine rejects. With this off, neither
+    # ai_overlay_* setting below does anything. See notes/Decisions.md.
     ai_trading_overlay_enabled: bool = False
 
-    # Only meaningful when ai_trading_overlay_enabled is also on — off,
-    # this changes nothing. The overlay's opinion is NEVER blended into
-    # direction/confidence_score (see trade_plan_service._maybe_get_ai_opinion)
-    # — that invariant does not change here. This is a brake on the
-    # auto-EXECUTE step only: when the overlay flatly contradicts the
-    # rule-based direction (long vs its "bearish", short vs its "bullish" —
-    # a "neutral" read is uncertainty, not contradiction, and doesn't hold
-    # anything), auto-execute leaves the plan "pending" for manual review
-    # instead of opening the position, on the reasoning that the one moment
-    # a second opinion is worth having is the moment before capital commits.
-    # Defaults on because turning the overlay on at all is itself opt-in —
-    # the reasonable assumption is you wanted the second opinion to matter.
-    ai_overlay_blocks_auto_execute: bool = True
+    # Two independent questions about how much the overlay's opinion counts,
+    # both meaningful only when ai_trading_overlay_enabled is also on — off,
+    # neither changes anything, so a default install behaves exactly as it
+    # always has. Both default to their active setting because turning the
+    # overlay on at all is itself opt-in: the reasonable assumption is you
+    # wanted the second opinion to matter. Neither lets the overlay
+    # ORIGINATE a trade — direction still comes from the rule-based trend and
+    # nowhere else, and the score contribution is one-directional (a penalty,
+    # never a bonus). See analysis/ai_overlay_scoring.py and
+    # notes/Decisions.md.
+
+    # (1) Does an objection cost confidence points? The overlay becomes a
+    # scored dimension like every other confluence check (0 to -3, scaled by
+    # the model's own stated conviction) instead of sitting in a box next to
+    # a number it couldn't touch. A marginal plan can fall under
+    # min_confidence_for_trade this way, so this alone can reach the
+    # trade/no-trade decision — independently of the action below.
+    ai_overlay_scores_confidence: bool = True
+
+    # What an objection actually DOES, as a single three-way choice:
+    #   "cancel" — the evaluation becomes an explicit no_trade decision with
+    #              the overlay named as the reason, instead of a plan.
+    #   "hold"   — the plan is written normally, but auto-execute leaves it
+    #              "pending" for manual review instead of opening the
+    #              position. The one moment a second opinion is worth having
+    #              is the moment before capital commits.
+    #   "none"   — the objection is recorded and scored but stops nothing.
+    #              Useful for measuring whether the overlay's objections
+    #              actually correlate with losing trades before giving it
+    #              stopping power.
+    # These were two booleans (ai_overlay_vetoes_trade /
+    # ai_overlay_blocks_auto_execute) and should not have been: they fire on
+    # the same trigger and cancel strictly wins, so "both on" was
+    # indistinguishable from "cancel" and the UI showed a live-looking
+    # toggle that could never fire. Old settings.json files are migrated in
+    # _migrate_overlay_objection_action below.
+    ai_overlay_objection_action: AiOverlayObjectionAction = "cancel"
+
+    # The confidence bar a setup must clear to become a tradeable plan at
+    # all; below it (or on a Neutral trend) the evaluation is persisted as an
+    # explicit no_trade decision instead. Was a hardcoded constant in
+    # trade_plan_service.py.
+    #
+    # The default is 30, not the 40 that constant held, and the change is a
+    # rescale rather than a loosening. Confidence used to be squeezed onto a
+    # 20-90 range; it is now the honest 0-100 percentage of achievable
+    # evidence points a setup actually earned. 40 on the old range and 30 on
+    # the new one are the same cutoff: 5 of the 16 achievable points. Keeping
+    # the literal 40 would have silently tightened the bar to 7 points and
+    # rejected setups the app has been trading all along.
+    min_confidence_for_trade: int = 30
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_overlay_objection_action(cls, data):
+        """Carry a settings.json written before ai_overlay_objection_action
+        existed onto the new field. Without this, pydantic silently drops
+        the two retired booleans (BaseModel ignores extras) and anyone who
+        had deliberately turned the veto off would find it back on after an
+        upgrade — a real behaviour change, applied invisibly."""
+        if not isinstance(data, dict) or data.get("ai_overlay_objection_action") is not None:
+            return data
+        vetoes = data.get("ai_overlay_vetoes_trade")
+        holds = data.get("ai_overlay_blocks_auto_execute")
+        if vetoes is None and holds is None:
+            return data
+        data = dict(data)
+        data["ai_overlay_objection_action"] = "cancel" if vetoes else "hold" if holds else "none"
+        return data
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

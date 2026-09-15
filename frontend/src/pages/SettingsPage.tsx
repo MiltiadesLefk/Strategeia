@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSettings, useTestConnection, useUpdateSettings } from '../api/hooks';
 import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
+import type { AiOverlayObjectionAction } from '../api/types';
 
 const LLM_OPTIONS = [
   { value: 'none', label: 'None (rule-based text)' },
@@ -46,7 +47,41 @@ function SaveButton({
 /** Small at-a-glance ON/OFF pill so an enabled/disabled setting doesn't
  * depend on reading a dropdown's full sentence to register — same visual
  * language as the sidebar's online/offline status pills. */
-function OnOffBadge({ on }: { on: boolean }) {
+/** `inactive` is for a sub-setting whose master switch is off: the setting
+ * itself is still ON, but nothing it controls can happen. Rendering "OFF"
+ * there flatly contradicted the toggle beside it, which is still drawn in
+ * its true (green, on) position — two controls describing the same state
+ * two different ways. */
+/** Alternatives, not a ladder of independent switches: "cancel" and "hold"
+ *  trigger on the identical condition and cancel strictly wins, so as two
+ *  booleans one combination was always dead code and the UI could show a
+ *  setting as ON that could never fire once. */
+const OVERLAY_ACTIONS: { value: AiOverlayObjectionAction; label: string; help: string }[] = [
+  {
+    value: 'cancel',
+    label: 'Cancel the trade',
+    help: 'Strongest. The evaluation becomes an explicit No Trade with the AI named as the reason, instead of a plan. Nothing is left to execute.',
+  },
+  {
+    value: 'hold',
+    label: 'Hold it for manual review',
+    help: 'The plan is written normally with the rule-based direction, but auto-execute leaves it Pending instead of opening the position. You decide.',
+  },
+  {
+    value: 'none',
+    label: 'Nothing — just record it',
+    help: 'The objection is shown on the plan (and still costs confidence, if that is on above) but stops nothing. Use this to find out whether the AI is actually right before letting it block trades.',
+  },
+];
+
+function OnOffBadge({ on, inactive }: { on: boolean; inactive?: boolean }) {
+  if (inactive) {
+    return (
+      <span className="badge badge-neutral" title="Saved as on, but has no effect while the switch above is off.">
+        INACTIVE
+      </span>
+    );
+  }
   return <span className={`badge ${on ? 'badge-green' : 'badge-neutral'}`}>{on ? 'ON' : 'OFF'}</span>;
 }
 
@@ -85,7 +120,11 @@ export function SettingsPage() {
   const [autoExecute, setAutoExecute] = useState(true);
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [maxConcurrentPositions, setMaxConcurrentPositions] = useState(5);
+  const [minConfidence, setMinConfidence] = useState(30);
+  const [markToMarketMinutes, setMarkToMarketMinutes] = useState(15);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
+  const [aiOverlayScores, setAiOverlayScores] = useState(true);
+  const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
 
   const [justSavedKey, setJustSavedKey] = useState<string | null>(null);
   const flashTimeout = useRef<number | undefined>(undefined);
@@ -130,7 +169,11 @@ export function SettingsPage() {
     setAutoExecute(settings.auto_execute_trade_plans);
     setAutoScanEnabled(settings.auto_scan_enabled);
     setMaxConcurrentPositions(settings.max_concurrent_positions);
+    setMinConfidence(settings.min_confidence_for_trade);
+    setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
+    setAiOverlayScores(settings.ai_overlay_scores_confidence);
+    setAiOverlayAction(settings.ai_overlay_objection_action);
   }, [settings]);
 
   function saveLlm() {
@@ -205,6 +248,8 @@ export function SettingsPage() {
         default_risk_pct: defaultRiskPct,
         scan_universe_size: scanSize,
         auto_execute_trade_plans: autoExecute,
+        min_confidence_for_trade: minConfidence,
+        mark_to_market_interval_minutes: markToMarketMinutes,
       },
       { onSuccess: () => flashSaved('account') },
     );
@@ -221,7 +266,14 @@ export function SettingsPage() {
   }
 
   function saveAiOverlay() {
-    update({ ai_trading_overlay_enabled: aiOverlayEnabled }, { onSuccess: () => flashSaved('ai-overlay') });
+    update(
+      {
+        ai_trading_overlay_enabled: aiOverlayEnabled,
+        ai_overlay_scores_confidence: aiOverlayScores,
+        ai_overlay_objection_action: aiOverlayAction,
+      },
+      { onSuccess: () => flashSaved('ai-overlay') },
+    );
   }
 
   function resetLlm() {
@@ -259,6 +311,8 @@ export function SettingsPage() {
     setDefaultRiskPct(settings.default_risk_pct);
     setScanSize(settings.scan_universe_size);
     setAutoExecute(settings.auto_execute_trade_plans);
+    setMinConfidence(settings.min_confidence_for_trade);
+    setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
   }
 
   function resetAutomation() {
@@ -270,18 +324,31 @@ export function SettingsPage() {
   function resetAiOverlay() {
     if (!settings) return;
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
+    setAiOverlayScores(settings.ai_overlay_scores_confidence);
+    setAiOverlayAction(settings.ai_overlay_objection_action);
   }
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 20, alignItems: 'start' }}>
-      <h1 style={{ fontSize: 22, gridColumn: '1 / -1' }}>Settings</h1>
+    <div className="settings-columns">
+      <h1 style={{ fontSize: 22 }}>Settings</h1>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>AI Narrative Provider</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          Which AI writes the plain-English commentary on charts, research cards and trade plans. This is narration
+          only — it describes numbers the rule-based engine already computed and never decides a signal. Leaving this
+          on "None" is fully supported: every screen falls back to rule-based wording and nothing breaks. It is also
+          the provider the AI Trading Overlay below uses, and the overlay stays inert until a real one is selected
+          here.
+        </div>
         <div>
           <label>Provider</label>
+          <div className="text-muted" style={{ fontSize: 12, marginBottom: 4 }}>
+            <code>Claude Code CLI</code> shells out to the <code>claude</code> command already installed on this
+            machine — no API key and no metered billing. The others are REST APIs and need a key below.
+          </div>
           <select
             value={llmProvider}
             onChange={(e) => {
@@ -312,6 +379,10 @@ export function SettingsPage() {
             <div>
               <label>Model</label>
               <input type="text" value={openrouterModel} onChange={(e) => setOpenrouterModel(e.target.value)} />
+              <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Any model slug OpenRouter lists, e.g. <code>anthropic/claude-3.5-haiku</code>. These calls are short
+                and frequent, so a small fast model is usually the right trade-off over a frontier one.
+              </div>
             </div>
           </>
         )}
@@ -385,12 +456,13 @@ export function SettingsPage() {
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>AI Trading Overlay</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
-          Every trade decision above is made by deterministic, rule-based math — technicals, fundamentals, and news
-          scored by named thresholds, never by an LLM. Turning this on does NOT change that: it adds a second,
-          independent read from the AI provider above, shown alongside the rule-based decision — never blended into
-          it, and never able to override the direction or confidence score. The AI sees the same raw data (price,
-          volume, indicators, fundamentals, full news headlines, earnings date) and gives its own stance and
-          reasoning, which can agree or disagree with the rule-based verdict.
+          The setup itself is still decided by deterministic, rule-based math — technicals, fundamentals and news
+          scored by named thresholds. The AI never picks the direction, entry, stop or position size, and it can
+          never talk the engine into a trade the rules rejected. What it can do is argue against one: it sees the
+          same raw data (price, volume, indicators, fundamentals, full news headlines, earnings date) and answers
+          two separate questions — where it thinks the stock goes, and whether it would actually take this trade.
+          The second answer is the one acted on, and when it is no, the plan loses confidence and can be stopped
+          outright.
         </div>
         <div className="text-muted" style={{ fontSize: 12 }}>
           Costs one extra AI call per symbol evaluated — including ones the rule-based engine rejects as "no trade,"
@@ -402,6 +474,76 @@ export function SettingsPage() {
           <span>Enable AI second opinion on every evaluation</span>
           <OnOffBadge on={aiOverlayEnabled} />
         </div>
+
+        <div
+          style={{
+            borderLeft: '2px solid var(--border)',
+            paddingLeft: 14,
+            marginLeft: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            opacity: aiOverlayEnabled ? 1 : 0.45,
+          }}
+        >
+          <div className="text-muted" style={{ fontSize: 12 }}>
+            How much its opinion counts. Both settings below do nothing while the overlay above is off.
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ToggleSwitch
+                checked={aiOverlayScores}
+                onChange={setAiOverlayScores}
+                disabled={!aiOverlayEnabled}
+                label="Count disagreement in the confidence score"
+              />
+              <span>Count disagreement in the confidence score</span>
+              <OnOffBadge on={aiOverlayScores} inactive={!aiOverlayEnabled} />
+            </div>
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              An objection subtracts up to 3 points (scaled by how sure the AI says it is), shown as "AI Overlay"
+              in the plan's score breakdown. Agreement is deliberately worth 0 — the AI is shown the rule-based
+              verdict before it answers, so agreeing with it proves little.
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>When the AI says not to take the trade</div>
+            <div className="text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              Pick one. These are alternatives, not extras — cancelling and holding react to the same moment, and a
+              cancelled trade never reaches auto-execute, so only one of them can ever actually happen.
+            </div>
+            {OVERLAY_ACTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  marginBottom: 10,
+                  cursor: aiOverlayEnabled ? 'pointer' : 'default',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="ai-overlay-objection-action"
+                  value={opt.value}
+                  checked={aiOverlayAction === opt.value}
+                  disabled={!aiOverlayEnabled}
+                  onChange={() => setAiOverlayAction(opt.value)}
+                  style={{ width: 'auto', marginTop: 3 }}
+                />
+                <span>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</span>
+                  <span className="text-muted" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
+                    {opt.help}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <SaveButton pending={saving} justSaved={justSavedKey === 'ai-overlay'} onClick={saveAiOverlay} />
           <ResetButton onClick={resetAiOverlay} />
@@ -410,6 +552,12 @@ export function SettingsPage() {
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>Finnhub (optional, free tier)</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          A fourth market-data source, off by default because the app does not need it: quotes, fundamentals and news
+          already come from Yahoo, with Nasdaq, Stooq and SEC EDGAR behind it. Worth enabling mainly as extra
+          redundancy during a Yahoo outage. The free tier cannot serve full financials history or intraday candles,
+          so those keep coming from the other providers regardless.
+        </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input type="checkbox" checked={finnhubEnabled} onChange={(e) => setFinnhubEnabled(e.target.checked)} style={{ width: 'auto' }} />
           Enable Finnhub for quotes/news/earnings
@@ -486,13 +634,42 @@ export function SettingsPage() {
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>Paper Account</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          Simulated money only. Positions are priced against real market data, but no broker is connected and no
+          order is ever placed anywhere.
+        </div>
         <div>
           <label>Starting Cash ($)</label>
           <input type="number" value={startingCash} onChange={(e) => setStartingCash(Number(e.target.value))} />
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            The account's opening balance, and the cash the position sizer is allowed to deploy. A plan asking for
+            more shares than the balance covers is trimmed to what the account can actually fund.
+          </div>
         </div>
         <div>
           <label>Default Risk per Trade (%)</label>
           <input type="number" value={defaultRiskPct} onChange={(e) => setDefaultRiskPct(Number(e.target.value))} step={0.1} />
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            How much of the account a single trade is allowed to lose if its stop is hit — this is what decides the
+            share count, working backwards from the distance between entry and stop. 1% is the conventional swing
+            default: a wider stop buys fewer shares, so the dollar risk stays fixed regardless of the setup.
+          </div>
+        </div>
+        <div>
+          <label>Minimum Confidence to Trade (%)</label>
+          <input
+            type="number"
+            value={minConfidence}
+            min={0}
+            max={100}
+            onChange={(e) => setMinConfidence(Number(e.target.value))}
+          />
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            The bar a setup has to clear to become a tradeable plan at all — below it the symbol is still fully
+            evaluated and recorded, as an explicit "No Trade" with its reason, rather than skipped. Confidence is the
+            share of the engine's 16 evidence points a setup earned, so it moves in ~6% steps: the default 30% means
+            5 points. Raise it for fewer, higher-conviction plans; lower it to see more marginal setups.
+          </div>
         </div>
         <div>
           <label>Scan Universe Size</label>
@@ -501,6 +678,25 @@ export function SettingsPage() {
             <option value={50}>50</option>
             <option value={64}>Full bundled list (64, incl. BTC/ETH/SOL)</option>
           </select>
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            How many symbols from the bundled list a market scan looks at. Every symbol costs several provider
+            requests, so a smaller universe is faster and much less likely to hit a free-tier rate limit.
+          </div>
+        </div>
+        <div>
+          <label>Mark-to-Market Interval (minutes)</label>
+          <input
+            type="number"
+            value={markToMarketMinutes}
+            min={1}
+            onChange={(e) => setMarkToMarketMinutes(Number(e.target.value))}
+          />
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            How often open positions are repriced and checked for a stop or target hit, and how often the
+            connection-health alerts above run. Exit checks walk every bar since entry, so a longer interval delays
+            when a close is recorded but never causes one to be missed. Runs on a fixed clock, not only during
+            market hours.
+          </div>
         </div>
         <div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -511,6 +707,10 @@ export function SettingsPage() {
             <option value="enabled">Enabled — open a paper position the moment a plan is generated</option>
             <option value="disabled">Disabled — review each plan and click Execute manually</option>
           </select>
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Whether a generated plan turns itself into an open paper position without you clicking Execute. Applies
+            to plans you generate by hand as well as ones from Auto-Scan.
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <SaveButton pending={saving} justSaved={justSavedKey === 'account'} onClick={saveAccount} />
