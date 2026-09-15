@@ -1,8 +1,11 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 // Only relevant if the backend's matching InfraSettings.api_shared_secret
 // (API_SHARED_SECRET in backend/.env) is set — see api/deps.py's
-// require_shared_secret. Both unset (the default) is a no-op end to end;
-// setting one without the other locks this frontend out with a 401.
+// require_auth. Increasingly a secondary path: logging in via
+// AuthGate/useLogin gets a session cookie that authenticates every request
+// below on its own (credentials: 'include'), with no build-time secret
+// needed at all. This stays for anyone still relying on the older baked-in
+// key (scripts, Swagger UI, a frontend built before login existed).
 const API_SHARED_SECRET = import.meta.env.VITE_API_SHARED_SECRET || '';
 
 export class ApiError extends Error {
@@ -16,6 +19,12 @@ export class ApiError extends Error {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
+    // The session cookie AuthGate's login sets is what actually
+    // authenticates the SPA now (see api/routers/auth.py) — without this,
+    // the browser never sends it back, and every request would fall
+    // through to needing API_SHARED_SECRET again regardless of being
+    // logged in.
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(API_SHARED_SECRET ? { 'X-API-Key': API_SHARED_SECRET } : {}),

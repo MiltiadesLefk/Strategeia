@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { AuthGate } from './components/AuthGate';
 import { DashboardLayout } from './layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { MarketScanPage } from './pages/MarketScanPage';
@@ -17,16 +18,18 @@ function ResearchRedirect() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<DashboardLayout />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="scan" element={<MarketScanPage />} />
-        <Route path="analysis" element={<AnalysisPage />} />
-        <Route path="research" element={<ResearchRedirect />} />
-        <Route path="trade-plans" element={<TradePlansPage />} />
-        <Route path="portfolio" element={<PortfolioPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
-    </Routes>
+    <AuthGate>
+      <Routes>
+        <Route element={<DashboardLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="scan" element={<MarketScanPage />} />
+          <Route path="analysis" element={<AnalysisPage />} />
+          <Route path="research" element={<ResearchRedirect />} />
+          <Route path="trade-plans" element={<TradePlansPage />} />
+          <Route path="portfolio" element={<PortfolioPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
+      </Routes>
+    </AuthGate>
   );
 }

@@ -59,12 +59,37 @@ This builds and runs both services:
   provider API keys) as a named volume so it survives container restarts/redeploys.
 - `frontend` on port 5173, served by nginx.
 
-**For a real public deployment**, edit `docker-compose.yml` before building:
-- `frontend.build.args.VITE_API_BASE_URL` → your backend's public URL (baked in at build
-  time; Vite env vars aren't runtime-configurable, so this requires a rebuild if it
-  changes)
+**Auth**: the dashboard has its own login screen — one user, one username+password, no
+signup (`api/routers/auth.py`). Set `AUTH_USERNAME` (defaults to `admin` if left unset)
+and `AUTH_PASSWORD` in the backend's `environment:`; leave the password unset and the
+backend generates a random one on first start and logs it prominently to
+`runtime/auth_password.txt`. Three wrong attempts in a row locks out further tries for 15
+minutes (per client — one attacker hammering the login can't lock out the real operator).
+Every API route also still accepts a real `X-API-Key` header as an alternative
+(`InfraSettings.api_shared_secret`, same auto-generate-if-unset behavior into
+`runtime/api_key.txt`) for scripts/Swagger/anything with no browser to hold a session
+cookie in. This compose file keeps the previous zero-config behavior via
+`ALLOW_UNAUTHENTICATED_API=true` in the backend's `environment:` block (no login screen
+at all, meant for local/LAN use). **For a real public deployment**, edit
+`docker-compose.yml` before building:
+- `backend.environment.ALLOW_UNAUTHENTICATED_API` → `false`
+- `backend.environment.AUTH_USERNAME` → your own username (add this line — it isn't
+  present by default; leaving it unset uses `admin`)
+- `backend.environment.AUTH_PASSWORD` → your own password (or leave unset and read the
+  auto-generated one from `runtime/auth_password.txt` after first start)
+- `frontend.build.args.VITE_API_BASE_URL` → your backend's public URL (baked in at
+  build time; Vite env vars aren't runtime-configurable, so this requires a rebuild if
+  it changes)
 - `backend.environment.CORS_ORIGINS` → your frontend's public URL (otherwise the browser
   will block API calls with a CORS error)
+- Only needed if you also want script/Swagger access: `backend.environment.API_SHARED_SECRET`
+  → a real generated value, and `frontend.build.args.VITE_API_SHARED_SECRET` → the *same*
+  value (a mismatch locks the frontend's fallback key out with 401s, but not the login
+  screen, which doesn't use it)
+
+This app has no built-in TLS termination or reverse proxy — put it behind whatever you
+already run for that (nginx/Caddy/Traefik, or your platform's own ingress), or bind
+`HOST` to a VPN/Tailscale-only interface instead of a public one.
 
 ## Configuring AI / data providers
 
@@ -88,9 +113,10 @@ cd backend
 .venv\Scripts\python -m pytest tests -v
 ```
 
-45 tests cover the technical-analysis math, risk/position-sizing formulas, scanner
+372 tests cover the technical-analysis math, risk/position-sizing formulas, scanner
 scoring, the paper-trading engine (open → mark-to-market → close, with real assertions
-on realized P&L/R), data-provider fallback behavior, and the LLM provider abstraction.
+on realized P&L/R), data-provider fallback behavior, the LLM provider abstraction, and
+the auth/login/lockout behavior above.
 
 ## Project layout
 

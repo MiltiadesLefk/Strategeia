@@ -3,9 +3,12 @@ import { api } from './client';
 import type {
   AnalysisResponse,
   AppSettings,
+  AuthStatus,
   AutoScanResponse,
   DashboardSummary,
   EquityPoint,
+  LoginRequest,
+  LoginResponse,
   Position,
   PortfolioStats,
   ResearchResponse,
@@ -28,6 +31,7 @@ export const qk = {
   dashboard: ['dashboard'] as const,
   settings: ['settings'] as const,
   settingsStatus: ['settings-status'] as const,
+  authStatus: ['auth-status'] as const,
 };
 
 export function useScan(symbols?: string) {
@@ -171,6 +175,70 @@ export function useUpdateSettings() {
       // 60s poll — a save that changes provider/keys should reflect there
       // immediately, not up to a minute later.
       queryClient.invalidateQueries({ queryKey: qk.settingsStatus });
+    },
+  });
+}
+
+// AuthGate's own hooks — see components/AuthGate.tsx. Kept in this file
+// alongside every other endpoint wrapper per this project's own rule
+// (api/hooks.ts wraps every backend endpoint, no ad-hoc fetch calls in
+// components) rather than living next to the component that happens to be
+// their only caller today.
+
+export function useAuthStatus() {
+  return useQuery({
+    queryKey: qk.authStatus,
+    queryFn: () => api.get<AuthStatus>('/api/auth/status'),
+    // No retry: a 401 here would just mean "not logged in", not a
+    // transient failure worth retrying — react-query's default retry
+    // would otherwise turn one wrong-password check into a burst of
+    // requests against the same lockout counter.
+    retry: false,
+    // Catches a session that expired (session_lifetime_days elapsed, or
+    // the backend restarted with a fresh session_secret — see
+    // app/auth.py) within a minute, same poll cadence as the sidebar's
+    // useSettingsStatus, rather than only re-checking on the next full
+    // page load/window focus. main.tsx's global 401 handler covers the
+    // gap between polls: any OTHER request hitting a 401 invalidates this
+    // query immediately too.
+    refetchInterval: 60_000,
+  });
+}
+
+export function useLogin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: LoginRequest) => api.post<LoginResponse>('/api/auth/login', req),
+    onSuccess: () => {
+      // A 200 here already means the cookie is set and valid — writing
+      // the known result directly (rather than invalidateQueries, which
+      // only SCHEDULES a refetch) makes AuthGate show the real app on
+      // this same tick instead of one more request-and-render cycle
+      // later, and sidesteps any ordering question with the
+      // queryClient.clear() a previous logout may have just run.
+      queryClient.setQueryData(qk.authStatus, { authenticated: true });
+    },
+  });
+}
+
+export function useLogout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<LoginResponse>('/api/auth/logout'),
+    onSuccess: () => {
+      // Order matters: queryClient.clear() tears down every query
+      // observer, authStatus's included — AuthGate's useAuthStatus() was
+      // subscribed to the entry clear() just destroyed, and a
+      // setQueryData call made AFTER that teardown was observed to write
+      // into the cache without ever notifying AuthGate, leaving the real
+      // app rendered under a logged-out session. Setting the known result
+      // FIRST (while AuthGate's subscription is still live, so it
+      // actually re-renders to the login screen) then removing everything
+      // ELSE avoids that — the next login still starts from a clean
+      // slate, just without ever tearing down the one query the UI is
+      // currently keyed off.
+      queryClient.setQueryData(qk.authStatus, { authenticated: false });
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== qk.authStatus[0] });
     },
   });
 }

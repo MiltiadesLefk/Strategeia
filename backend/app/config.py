@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import secrets
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -10,6 +12,7 @@ from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+logger = logging.getLogger(__name__)
 
 
 class InfraSettings(BaseSettings):
@@ -20,18 +23,32 @@ class InfraSettings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     cors_origins: str = "http://localhost:5173"
-    # Opt-in stop-gap auth: unset (default) means every endpoint stays open,
-    # exactly like before — zero friction for local/dev use. Set
-    # API_SHARED_SECRET in .env to require a matching `X-API-Key` header on
-    # every API route (see api/deps.py's require_shared_secret). This is not
-    # a substitute for the reverse-proxy/TLS/real-auth setup TODO.md's
-    # "Before running this on a public VPS 24/7" section calls for — it's a
-    # cheap guard against casual unauthenticated abuse (draining a metered
-    # LLM/Finnhub key via /api/trade-plans/generate or /api/scan/auto-trade,
+    # Auth gate in front of every API route (see api/deps.py's
+    # require_shared_secret) — a matching `X-API-Key` header is required on
+    # every request once this is non-empty. Leave EMPTY here: an empty
+    # field is not "no auth", it means "let get_infra_settings() decide" —
+    # see _load_or_create_shared_secret below, which auto-generates and
+    # persists a real secret into runtime/ the first time this is empty AND
+    # allow_unauthenticated_api is false. Set this explicitly (env var or
+    # .env) to pin a specific value instead — e.g. to share one secret
+    # between the backend and a build-time frontend config, which a
+    # freshly-generated one can't do without a manual copy step. This is
+    # not a substitute for the reverse-proxy/TLS setup TODO.md's "Before
+    # running this on a public VPS 24/7" section calls for — it's what
+    # stops casual unauthenticated abuse (draining a metered LLM/Finnhub
+    # key via /api/trade-plans/generate or /api/scan/auto-trade,
     # overwriting Settings to redirect Telegram notifications, wiping the
-    # portfolio via /api/portfolio/reset) for anyone who exposes the port
-    # before doing that real hardening.
+    # portfolio via /api/portfolio/reset) once traffic reaches the port.
     api_shared_secret: str = ""
+    # The explicit opt-out TODO.md called for: "keep an explicit opt-out
+    # for anyone who genuinely wants an open port on localhost." Set to
+    # true (backend/.env.example does this for local dev) to keep every
+    # endpoint open with zero friction, exactly like before this existed —
+    # NEVER set this for anything reachable beyond localhost/a private
+    # network. Distinguishing "deliberately open" from "just never
+    # configured" needs its own flag: api_shared_secret alone can't tell
+    # the two apart once it's a string defaulting to "".
+    allow_unauthenticated_api: bool = False
     # Deliberately separate from data/ (which holds the bundled, read-only
     # sp500.csv baked into the Docker image) so a single volume mount at
     # runtime/ can persist the db + settings without hiding sp500.csv.
@@ -45,6 +62,45 @@ class InfraSettings(BaseSettings):
     db_path: str = "runtime/strategeia.db"
     settings_path: str = "runtime/settings.json"
 
+    # The ONE account that logs into this dashboard (api/routers/auth.py) —
+    # no signup, no other users, by explicit design: "for now, create ONLY
+    # ONE user, mine ... so no sign up, so no one can use it." Unlike
+    # auth_password below, a username isn't a secret (it's not auto-generated
+    # or logged specially, and it isn't what a stolen .env would actually
+    # need to guard) — "admin" is a fine default until you set your own via
+    # AUTH_USERNAME. Still checked with secrets.compare_digest alongside the
+    # password purely for consistency, not because it needs to be.
+    auth_username: str = "admin"
+    # Set your own via AUTH_PASSWORD; left unset, one is auto-generated and
+    # logged loudly at startup the same way api_shared_secret is, so a
+    # forgotten password still leaves the dashboard reachable rather than
+    # permanently locking you out — but the expected flow is you set this
+    # yourself. Compared with secrets.compare_digest, same as
+    # api_shared_secret, and for the same reason (constant-time).
+    auth_password: str = ""
+    # HMAC key that signs the session cookie a successful login issues (see
+    # auth.py's create_session_token/verify_session_token). Auto-generated
+    # and persisted to runtime/ exactly like api_shared_secret, but never
+    # logged loudly — unlike the API secret and the password, nobody ever
+    # needs to type this anywhere; it's pure internal plumbing, and a fresh
+    # one on first boot just means any session issued before that boot
+    # stops verifying (nobody is silently locked into a broken state, they
+    # just see the login screen again).
+    session_secret: str = ""
+    # "also make maximum logins tries 3": after this many wrong passwords
+    # from one client, further attempts are refused for
+    # login_lockout_minutes regardless of whether the next guess would have
+    # been correct — see auth.py's _LoginAttempts. Per-client (best-effort
+    # by IP, see auth.py), not global, so one attacker hammering the login
+    # can't lock the real operator out of their own dashboard.
+    max_login_attempts: int = 3
+    login_lockout_minutes: int = 15
+    # How long a successful login stays valid before the browser has to log
+    # in again. A personal dashboard checked periodically, not a banking
+    # app — long enough to not be annoying, short enough that a device left
+    # logged in somewhere doesn't stay valid indefinitely.
+    session_lifetime_days: int = 7
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -56,6 +112,124 @@ class InfraSettings(BaseSettings):
     @property
     def settings_file(self) -> Path:
         return BASE_DIR / self.settings_path
+
+    @property
+    def generated_secret_file(self) -> Path:
+        return self.settings_file.parent / "api_key.txt"
+
+    @property
+    def generated_session_secret_file(self) -> Path:
+        return self.settings_file.parent / "session_secret.txt"
+
+    @property
+    def generated_password_file(self) -> Path:
+        return self.settings_file.parent / "auth_password.txt"
+
+
+# Idea credited to OpenTerminal (github.com/ErTasselli/OpenTerminal), reviewed
+# 2026-09-12 — see TODO.md/notes/Decisions.md. The problem it fixes: a guard
+# that only activates once you know to turn it on makes the INSECURE state
+# the default one. This makes the SECURE state the default instead, at zero
+# cost to anyone who hasn't touched auth config yet — the first request
+# after a fresh install still succeeds, it just needs whatever this
+# generates and persists into runtime/.
+def _load_or_create_secret(secret_file: Path) -> str:
+    """Shared plumbing behind all three auto-generated secrets
+    (api_shared_secret, auth_password, session_secret) — read an existing
+    value back if one is already on disk (so a restart doesn't invalidate
+    a secret something else was already built/logged in against), else
+    generate, persist, and best-effort-chmod a fresh one. Callers own
+    deciding WHETHER to call this (only when nothing was explicitly
+    configured) and what, if anything, to log about it — this function
+    itself never logs, since the right message differs a lot between "an
+    operator needs to copy this somewhere" (the API secret, the password)
+    and "pure internal plumbing, silence is correct" (the session
+    secret)."""
+    if secret_file.exists():
+        existing = secret_file.read_text(encoding="utf-8").strip()
+        if existing:
+            return existing
+        # An empty file (a previous run failed mid-write, or someone
+        # truncated it by hand) is treated the same as "absent" below —
+        # fall through and regenerate rather than authenticating against
+        # a value nothing could ever match.
+
+    secret = secrets.token_urlsafe(32)
+    secret_file.parent.mkdir(parents=True, exist_ok=True)
+    secret_file.write_text(secret, encoding="utf-8")
+    try:
+        # Best-effort: POSIX only (a real VPS), silently skipped on
+        # Windows dev machines where chmod is a no-op anyway.
+        secret_file.chmod(0o600)
+    except OSError:
+        pass
+    return secret
+
+
+# logger.warning is what makes a message land in `docker logs`/console with
+# zero logging setup required — Python's logging module ships a "handler of
+# last resort" that prints WARNING+ to stderr when nothing else is
+# configured (confirmed: this codebase has no logging.basicConfig anywhere
+# and scheduler.py already relies on the same mechanism for its bare
+# logger.exception calls). logger.info would NOT reliably show up the same
+# way, so both loud messages below use WARNING even though neither is
+# really a warning.
+
+
+def _load_or_create_shared_secret(infra: InfraSettings) -> str:
+    """Only ever called when api_shared_secret is empty AND
+    allow_unauthenticated_api is false — an explicit value in .env/the
+    environment always wins and this is never reached."""
+    secret_file = infra.generated_secret_file
+    was_missing = not (secret_file.exists() and secret_file.read_text(encoding="utf-8").strip())
+    secret = _load_or_create_secret(secret_file)
+    if was_missing:
+        logger.warning(
+            "\n"
+            + "=" * 78
+            + "\nNo API_SHARED_SECRET configured — generated one and saved it to:\n"
+            + f"  {secret_file}\n"
+            + "\nEvery API request now requires this as an X-API-Key header. The bundled\n"
+            + "frontend needs the SAME value baked in at build time as VITE_API_SHARED_SECRET\n"
+            + "(see README) — a value generated here after the frontend was already built\n"
+            + "will lock it out with 401s until it's rebuilt with this value.\n"
+            + "\nTo pin a specific value instead: set API_SHARED_SECRET yourself before\n"
+            + "starting the backend. To disable this guard entirely for local-only use, set\n"
+            + "ALLOW_UNAUTHENTICATED_API=true (see backend/.env.example) — never do that for\n"
+            + "anything reachable beyond localhost.\n"
+            + "=" * 78
+        )
+    return secret
+
+
+def _load_or_create_auth_password(infra: InfraSettings) -> str:
+    """Only ever called when auth_password is empty — an explicit value in
+    .env/the environment always wins. Unlike the API secret, there is no
+    opt-out for this one: "for now, create ONLY ONE user, mine ... so no
+    sign up, so no one can use it" means a login screen always exists, so
+    a password always has to exist for it to check against."""
+    secret_file = infra.generated_password_file
+    was_missing = not (secret_file.exists() and secret_file.read_text(encoding="utf-8").strip())
+    password = _load_or_create_secret(secret_file)
+    if was_missing:
+        logger.warning(
+            "\n"
+            + "=" * 78
+            + "\nNo AUTH_PASSWORD configured — generated one and saved it to:\n"
+            + f"  {secret_file}\n"
+            + "\nThis is the password for the dashboard's login screen (POST /api/auth/login),\n"
+            + "not the API key above — they're two separate secrets. Read the file to log in,\n"
+            + "or set AUTH_PASSWORD yourself in .env to choose your own instead.\n"
+            + "=" * 78
+        )
+    return password
+
+
+def _load_or_create_session_secret(infra: InfraSettings) -> str:
+    """Only ever called when session_secret is empty. Deliberately silent
+    (see the module comment above) — nobody ever needs to type this
+    anywhere, it only signs the session cookie a login issues."""
+    return _load_or_create_secret(infra.generated_session_secret_file)
 
 
 LlmProviderName = Literal["none", "claude_code_cli", "openrouter", "orcarouter", "openai", "gemini"]
@@ -245,7 +419,27 @@ _settings_cache: AppSettings | None = None
 
 @lru_cache
 def get_infra_settings() -> InfraSettings:
-    return InfraSettings()
+    """@lru_cache makes this a process-lifetime singleton, which is exactly
+    what the three _load_or_create_* calls below need: each runs (and, on a
+    fresh install, writes to disk and maybe logs) at most once per process,
+    the first time anything asks for InfraSettings — never on every
+    request, since every caller (api/deps.py, api/routers/auth.py,
+    database.py, main.py, sec_edgar_provider.py) goes through this same
+    cached function."""
+    infra = InfraSettings()
+    # allow_unauthenticated_api skips ALL of this, not just the API key:
+    # require_auth returns immediately in that mode without checking a
+    # password or a session cookie either, so generating and loudly
+    # logging either one would just be noise about a credential nothing
+    # will ever check.
+    if not infra.allow_unauthenticated_api:
+        if not infra.api_shared_secret:
+            infra.api_shared_secret = _load_or_create_shared_secret(infra)
+        if not infra.auth_password:
+            infra.auth_password = _load_or_create_auth_password(infra)
+        if not infra.session_secret:
+            infra.session_secret = _load_or_create_session_secret(infra)
+    return infra
 
 
 def _settings_file() -> Path:

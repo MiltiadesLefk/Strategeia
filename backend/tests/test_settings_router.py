@@ -167,3 +167,29 @@ def test_redacted_never_leaks_full_key_regardless_of_length():
         masked = settings.redacted()["openrouter_api_key"]
         assert key not in masked or len(key) <= 4
         assert masked != ""
+
+
+def test_test_connection_cooldown_rejects_immediate_repeat_call(monkeypatch):
+    """Regression: /api/settings/test-connection had no cooldown at all —
+    the one remaining endpoint that can trigger real per-call LLM/Finnhub
+    spend with no guard (see TODO.md). Uses target="telegram" with no
+    bot token configured so the call short-circuits with no real network
+    request either time — the cooldown must fire before that check, purely
+    on repeat-call timing."""
+    resp1 = client.post("/api/settings/test-connection", json={"target": "telegram"})
+    assert resp1.status_code == 200
+
+    resp2 = client.post("/api/settings/test-connection", json={"target": "telegram"})
+    assert resp2.status_code == 429
+    assert "telegram" in resp2.json()["detail"]
+
+
+def test_test_connection_cooldown_is_tracked_separately_per_target():
+    """Testing Telegram must not block testing the LLM provider right
+    after — they hit different services with different costs and share no
+    budget worth protecting jointly."""
+    resp1 = client.post("/api/settings/test-connection", json={"target": "telegram"})
+    assert resp1.status_code == 200
+
+    resp2 = client.post("/api/settings/test-connection", json={"target": "llm"})
+    assert resp2.status_code == 200  # a different target, not rate-limited by the telegram call

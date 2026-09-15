@@ -5,7 +5,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
-from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_shared_secret
+from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_auth
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.data_providers.universe import get_default_watchlist, load_universe
@@ -14,7 +14,7 @@ from app.schemas.scan_schemas import AutoScanResponse, ScanResponse
 from app.services.automation_service import run_auto_scan
 from app.services.scanner_service import scan_symbols
 
-router = APIRouter(prefix="/api", tags=["scanner"], dependencies=[Depends(require_shared_secret)])
+router = APIRouter(prefix="/api", tags=["scanner"], dependencies=[Depends(require_auth)])
 
 # A single request otherwise had no cap on how many symbols it could force
 # scan_symbols() to fetch — one unauthenticated GET with a few thousand
@@ -66,7 +66,7 @@ def run_auto_trade_now(
     position per qualifying symbol. A short in-process cooldown (not
     persisted — process-lifetime only, same pattern as data_providers/cache.py)
     stops it from being hammered in a tight loop, independent of whether
-    require_shared_secret's opt-in auth is configured."""
+    require_auth's opt-in auth is configured."""
     global _last_auto_trade_run_monotonic
     now = time.monotonic()
     if _last_auto_trade_run_monotonic is not None:

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import get_data_provider, get_llm_provider, require_shared_secret
+from app.api.deps import get_data_provider, get_llm_provider, require_auth
 from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
 from app.schemas.analysis_schemas import AnalysisResponse
 from app.services.analysis_service import get_analysis
 
-router = APIRouter(prefix="/api/analysis", tags=["analysis"], dependencies=[Depends(require_shared_secret)])
+router = APIRouter(prefix="/api/analysis", tags=["analysis"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/{symbol}", response_model=AnalysisResponse)

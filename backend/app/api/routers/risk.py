@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_data_provider, require_shared_secret
+from app.api.deps import get_data_provider, require_auth
 from app.analysis.indicators import latest_atr
 from app.analysis.trend import analyze_chart
 from app.data_providers.base import DataProvider
@@ -10,7 +10,7 @@ from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.services.trade_plan_service import ATR_PERIOD, ATR_STOP_MULTIPLE
 from app.schemas.risk_schemas import RiskCalculateRequest, RiskCalculateResponse
 
-router = APIRouter(prefix="/api/risk", tags=["risk"], dependencies=[Depends(require_shared_secret)])
+router = APIRouter(prefix="/api/risk", tags=["risk"], dependencies=[Depends(require_auth)])
 
 
 @router.post("/calculate", response_model=RiskCalculateResponse)

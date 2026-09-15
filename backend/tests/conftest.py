@@ -1,5 +1,27 @@
 from __future__ import annotations
 
+import os
+
+# Module-level, not a fixture: this MUST run before `app.main` (and
+# therefore `app.config.get_infra_settings()`) is ever imported, which
+# happens at test-COLLECTION time (several test files do `from app.main
+# import app` at module scope) — before any fixture, even an autouse one,
+# gets a chance to run. pytest guarantees conftest.py in a directory loads
+# before it imports any test module in that directory, which is exactly
+# what makes module-level code here a safe place to do this.
+#
+# Without this, every router test (none of which send an X-API-Key header —
+# they predate auth and were never meant to exercise it) would start
+# getting 401s the moment get_infra_settings() auto-generates and requires
+# a real shared secret by default (see config.py's
+# _load_or_create_shared_secret). setdefault, not a flat assignment, so an
+# explicit ALLOW_UNAUTHENTICATED_API in the real environment (e.g. someone
+# deliberately testing the auth-required path end-to-end) is never
+# clobbered. tests/test_api_validation.py's auth tests are unaffected
+# either way — they monkeypatch app.api.deps.get_infra_settings directly
+# with a fake, bypassing the real cached one entirely.
+os.environ.setdefault("ALLOW_UNAUTHENTICATED_API", "true")
+
 import pytest
 
 
@@ -33,3 +55,36 @@ def _stable_macro_calendar(monkeypatch):
         "app.services.trade_plan_service.score_macro_event_proximity",
         lambda: (0, []),
     )
+
+
+@pytest.fixture(autouse=True)
+def _reset_in_process_cooldowns(monkeypatch):
+    """Every in-process, not-persisted cooldown in the API (matching the
+    established pattern — see scanner.py's AUTO_TRADE_COOLDOWN_SECONDS and
+    settings.py's TEST_CONNECTION_COOLDOWN_SECONDS) lives in a module-level
+    dict/variable that, by design, survives for the whole process — real
+    protection against a tight request loop, but it also means the state
+    persists ACROSS test functions in one pytest run. Without this,
+    test_settings_router.py's three separate tests that each call
+    target="telegram" once would fail from test 2 onward: the cooldown left
+    by test 1 (run milliseconds earlier) would still be active and return
+    429 instead of the real response each test asserts on.
+
+    Reset before every test rather than fixed up in the affected tests
+    individually, same reasoning as the macro-calendar fixture above: any
+    future test/cooldown pair hits this the same way, not just the ones
+    that already exist.
+    """
+    monkeypatch.setattr("app.api.routers.settings._last_test_connection_monotonic", {})
+    monkeypatch.setattr("app.api.routers.scanner._last_auto_trade_run_monotonic", None)
+    # Same reasoning, different shape: app.auth.login_attempts is one
+    # shared LoginAttemptTracker instance for the process (see its
+    # docstring), so a lockout one test triggers on purpose would otherwise
+    # still be counting down for the next test that logs in with the same
+    # client key. Patched on api/routers/auth.py's own name for it, not
+    # app.auth's — `from app.auth import login_attempts` there already
+    # bound its own independent reference to the original object, which
+    # patching app.auth's attribute would not reach.
+    from app.auth import LoginAttemptTracker
+
+    monkeypatch.setattr("app.api.routers.auth.login_attempts", LoginAttemptTracker())

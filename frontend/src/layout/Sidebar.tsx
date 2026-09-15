@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useSettingsStatus } from '../api/hooks';
+import { useLogout, useSettingsStatus } from '../api/hooks';
 import type { SettingsStatus } from '../api/types';
 import logo from '../assets/logo.png';
 
@@ -127,6 +127,7 @@ function StatusPill({ online, label }: { online: boolean; label: string }) {
 
 export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
   const { data: status } = useSettingsStatus();
+  const { mutate: logout, isPending: loggingOut } = useLogout();
   return (
     <aside
       className={`sidebar${mobileOpen ? ' open' : ''}`}
@@ -145,17 +146,28 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
           <img src={logo} alt="Strategeia" style={{ width: 32, height: 32, flexShrink: 0, objectFit: 'contain' }} />
           <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>Strategeia</span>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close menu"
-          className="mobile-only-close"
-          style={{ display: 'none', background: 'none', border: 'none', color: 'var(--text-inverse-muted)', padding: 4 }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            onClick={() => logout()}
+            disabled={loggingOut}
+            aria-label="Log out"
+            title="Log out"
+            style={{ background: 'none', border: 'none', color: 'var(--text-inverse-muted)', padding: 4, cursor: 'pointer' }}
+          >
+            <Icon path="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          </button>
+          <button
+            onClick={onClose}
+            aria-label="Close menu"
+            className="mobile-only-close"
+            style={{ display: 'none', background: 'none', border: 'none', color: 'var(--text-inverse-muted)', padding: 4 }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
       </div>
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
         {NAV_ITEMS.map((item) => (

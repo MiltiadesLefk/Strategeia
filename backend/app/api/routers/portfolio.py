@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.deps import get_app_settings, get_data_provider, get_session, require_shared_secret
+from app.api.deps import get_app_settings, get_data_provider, get_session, require_auth
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.portfolio.engine import (
@@ -24,7 +24,7 @@ from app.schemas.portfolio_schemas import (
     PositionSchema,
 )
 
-router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[Depends(require_shared_secret)])
+router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[Depends(require_auth)])
 
 
 def build_engine(session: Session, data_provider: DataProvider, settings: AppSettings) -> PaperTradingEngine:

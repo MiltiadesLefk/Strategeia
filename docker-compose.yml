@@ -6,15 +6,25 @@ services:
     volumes:
       - backend_runtime:/app/runtime
     environment:
-      # For a real VPS deploy, set this to your public frontend origin
-      # (e.g. https://strategeia.example.com) so the browser isn't blocked by CORS.
+      # For a real deploy, set this to your public frontend origin (e.g.
+      # https://strategeia.example.com) so the browser isn't blocked by CORS.
       - CORS_ORIGINS=http://localhost:5173
-      # Opt-in stop-gap auth — see InfraSettings.api_shared_secret in
-      # backend/app/config.py. Blank (default) means every endpoint stays
-      # open, same as before. Set this to a real secret before exposing
-      # port 8000 beyond localhost, and set the frontend build's
-      # VITE_API_SHARED_SECRET below to the SAME value, or the frontend
-      # itself gets locked out with 401s.
+      # Every API route requires logging in (the dashboard's own login
+      # screen) or a real X-API-Key by default now (see
+      # backend/app/config.py) — ALLOW_UNAUTHENTICATED_API keeps this
+      # compose file's zero-config local/LAN behavior exactly like before
+      # that existed. Set this to false once this is reachable beyond
+      # localhost — see README. AUTH_PASSWORD (for the login) and
+      # API_SHARED_SECRET (for scripts/Swagger, not the browser) both
+      # auto-generate and log themselves at startup if left unset here.
+      # AUTH_USERNAME is deliberately NOT listed here at all (rather than
+      # set to "="): unlike those two, an env var explicitly set to empty
+      # overrides its field default ("admin") with an actual empty string
+      # instead of falling back to it — leaving the key out entirely is
+      # what lets the "admin" default apply. Set AUTH_USERNAME=your-choice
+      # here to override it with a real value.
+      - ALLOW_UNAUTHENTICATED_API=true
+      - AUTH_PASSWORD=
       - API_SHARED_SECRET=
     restart: unless-stopped
 
@@ -22,11 +32,12 @@ services:
     build:
       context: ./frontend
       args:
-        # For a real VPS deploy, set this to your public backend URL
-        # (baked in at build time — Vite env vars aren't runtime-configurable).
+        # For a real deploy, set this to your public backend URL (baked in
+        # at build time — Vite env vars aren't runtime-configurable).
         VITE_API_BASE_URL: http://localhost:8000
-        # Must equal the backend's API_SHARED_SECRET above (also baked in at
-        # build time). Leave both blank for today's no-auth local/LAN use.
+        # Must equal the backend's API_SHARED_SECRET above (also baked in
+        # at build time) once the backend actually requires one. Left
+        # blank here to match ALLOW_UNAUTHENTICATED_API=true above.
         VITE_API_SHARED_SECRET: ""
     ports:
       - "5173:80"

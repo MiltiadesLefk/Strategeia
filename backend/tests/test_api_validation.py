@@ -91,28 +91,59 @@ class AlwaysFailingProvider:
 
 
 class _FakeInfraSettings:
-    def __init__(self, api_shared_secret: str):
+    def __init__(self, api_shared_secret: str = "s3cr3t-value", allow_unauthenticated_api: bool = False,
+                 session_secret: str = "session-signing-key"):
         self.api_shared_secret = api_shared_secret
+        self.allow_unauthenticated_api = allow_unauthenticated_api
+        self.session_secret = session_secret
 
 
-def test_shared_secret_unset_leaves_api_open(monkeypatch):
-    """Default behavior — no API_SHARED_SECRET configured — must stay a
-    no-op: every endpoint open, exactly as before this stop-gap existed."""
-    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings(""))
+def test_allow_unauthenticated_api_leaves_every_endpoint_open(monkeypatch):
+    """The explicit local-dev opt-out — the only case where an unset/wrong
+    X-API-Key and no session cookie must still succeed."""
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings(allow_unauthenticated_api=True))
     resp = client.get("/api/settings")
     assert resp.status_code == 200
 
 
 def test_shared_secret_rejects_missing_or_wrong_key(monkeypatch):
-    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings("s3cr3t-value"))
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings())
     assert client.get("/api/settings").status_code == 401
     assert client.get("/api/settings", headers={"X-API-Key": "wrong"}).status_code == 401
 
 
 def test_shared_secret_accepts_matching_key(monkeypatch):
-    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings("s3cr3t-value"))
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings())
     resp = client.get("/api/settings", headers={"X-API-Key": "s3cr3t-value"})
     assert resp.status_code == 200
+
+
+def test_a_valid_session_cookie_is_sufficient_with_no_api_key_at_all(monkeypatch):
+    """The path the bundled frontend's login screen actually uses — see
+    app/auth.py and api/routers/auth.py."""
+    from app.auth import create_session_token
+
+    infra = _FakeInfraSettings()
+    infra.session_lifetime_days = 7
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: infra)
+    token = create_session_token(infra)
+
+    client.cookies.set("strategeia_session", token)
+    try:
+        resp = client.get("/api/settings")
+        assert resp.status_code == 200
+    finally:
+        client.cookies.clear()
+
+
+def test_an_invalid_session_cookie_is_rejected(monkeypatch):
+    monkeypatch.setattr("app.api.deps.get_infra_settings", lambda: _FakeInfraSettings())
+    client.cookies.set("strategeia_session", "not-a-real-token")
+    try:
+        resp = client.get("/api/settings")
+        assert resp.status_code == 401
+    finally:
+        client.cookies.clear()
 
 
 def test_invalid_symbol_returns_clean_502_not_bare_500():

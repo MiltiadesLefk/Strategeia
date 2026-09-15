@@ -307,3 +307,17 @@ export interface SettingsStatus {
   finnhub_online: boolean;
   telegram_online: boolean;
 }
+
+export interface AuthStatus {
+  authenticated: boolean;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  ok: boolean;
+  message: string;
+}

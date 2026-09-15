@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import time
 
-from app.api.deps import require_shared_secret
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.api.deps import require_auth
 from app.config import load_app_settings, update_app_settings
 from app.data_providers.finnhub_provider import FinnhubProvider
 from app.data_providers.base import DataProviderError
@@ -15,7 +17,7 @@ from app.schemas.settings_schemas import (
 )
 from app.services.telegram_service import send_message as send_telegram_message
 
-router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_shared_secret)])
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
 
 @router.get("")
@@ -60,8 +62,36 @@ def put_settings(req: SettingsUpdateRequest) -> dict:
     return updated.redacted()
 
 
+# Same in-process, not-persisted cooldown pattern as
+# scanner.py's AUTO_TRADE_COOLDOWN_SECONDS — this is the one remaining
+# endpoint TODO.md flagged as able to trigger real per-call LLM/Finnhub
+# spend with no cooldown at all (unlike /api/trade-plans/generate's
+# auto-execute path, capped by max_concurrent_positions, and
+# /api/scan/auto-trade, which already has its own 60s cooldown). Keyed per
+# `target` rather than one shared timer, since testing Telegram shouldn't
+# block testing the LLM provider right after — they hit different
+# services with different costs and no shared budget to protect. 10s is
+# short enough not to annoy someone clicking the button while configuring
+# a provider, long enough to stop a scripted loop from draining a metered
+# key.
+TEST_CONNECTION_COOLDOWN_SECONDS = 10
+_last_test_connection_monotonic: dict[str, float] = {}
+
+
 @router.post("/test-connection", response_model=TestConnectionResponse)
 def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
+    now = time.monotonic()
+    last = _last_test_connection_monotonic.get(req.target)
+    if last is not None:
+        elapsed = now - last
+        if elapsed < TEST_CONNECTION_COOLDOWN_SECONDS:
+            raise HTTPException(
+                status_code=429,
+                detail=f"'{req.target}' was just tested {elapsed:.0f}s ago — wait "
+                f"{TEST_CONNECTION_COOLDOWN_SECONDS - elapsed:.0f}s before testing it again.",
+            )
+    _last_test_connection_monotonic[req.target] = now
+
     settings = load_app_settings()
 
     if req.target == "llm":
