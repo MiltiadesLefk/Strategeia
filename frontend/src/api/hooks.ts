@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import type {
+  ReplayOverrides,
+  ReplayResult,
   AnalysisResponse,
   AppSettings,
   ArchiveResponse,
@@ -674,5 +676,13 @@ export function useCancelValidation() {
   return useMutation({
     mutationFn: (id: number) => api.post<{ id: number; status: string }>(`/api/backtests/validations/${id}/cancel`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: validationKeys.list }),
+  });
+}
+
+// ---- Replay (read-only "What if?") ----
+
+export function useReplay() {
+  return useMutation({
+    mutationFn: (overrides: ReplayOverrides) => api.post<ReplayResult>('/api/replay', { overrides }),
   });
 }

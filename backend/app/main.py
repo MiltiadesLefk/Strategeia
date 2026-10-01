@@ -14,6 +14,7 @@ from app.api.routers import data_cache as data_cache_router
 from app.api.routers import backtest_validations as backtest_validations_router
 from app.api.routers import backtests as backtests_router
 from app.api.routers import missed_trades as missed_trades_router
+from app.api.routers import replay as replay_router
 from app.api.routers import watchers as watchers_router
 from app.api.routers import watchlist as watchlist_router
 from app.api.routers import smart_money as smart_money_router
@@ -101,6 +102,7 @@ app.include_router(strategy_router.router)
 app.include_router(backtest_validations_router.router)
 app.include_router(backtests_router.router)
 app.include_router(missed_trades_router.router)
+app.include_router(replay_router.router)
 app.include_router(smart_money_router.router)
 
 

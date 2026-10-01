@@ -1336,3 +1336,60 @@ export interface BacktestValidation {
   result?: ValidationResult | null;
   scorecard?: ValidationScorecard | null;
 }
+
+// ---- Replay ("What if?": a settings change re-decided on past plans, POST /api/replay) ----
+
+export interface ReplayOverrides {
+  min_confidence_for_trade?: number;
+  ai_overlay_objection_action?: 'cancel' | 'hold' | 'none';
+  ai_overlay_scores_confidence?: boolean;
+  allowed_directions?: 'both' | 'long' | 'short';
+}
+
+export interface ReplayStats {
+  taken: number;
+  resolved: number;
+  open: number;
+  no_result: number;
+  wins: number;
+  win_rate: number | null;
+  win_rate_low: number | null;
+  win_rate_high: number | null;
+  avg_r: number | null;
+  avg_r_low: number | null;
+  avg_r_high: number | null;
+  total_r: number;
+  small_sample: boolean;
+}
+
+export interface ReplayFlip {
+  plan_id: number;
+  symbol: string;
+  created_at: string;
+  direction: string | null;
+  flip: 'now_taken' | 'now_skipped';
+  why: string;
+  confidence_points: number | null;
+  points_after: number | null;
+  result_state: 'resolved' | 'open' | 'none';
+  result_r: number | null;
+  strategy_version: number | null;
+}
+
+export interface ReplayResult {
+  overrides: Record<string, unknown>;
+  decisions: number;
+  truncated: boolean;
+  before: ReplayStats;
+  after: ReplayStats;
+  flipped_count: number;
+  now_taken: number;
+  now_skipped: number;
+  flips_without_result: number;
+  flips: ReplayFlip[];
+  fixed_count: number;
+  baseline_disagrees: number;
+  versions: { strategy_version: number | null; decisions: number }[];
+  replayable: Record<string, string>;
+  caveats: string[];
+}
