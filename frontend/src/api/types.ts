@@ -239,6 +239,17 @@ export interface TradePlan {
   /** Number of the strategy version (rules + decision-relevant settings) this
    *  plan was made under; null/absent for plans from before versioning. */
   strategy_version?: number | null;
+  /** Silent signals: recorded, never part of confidence_score. */
+  shadow_signals?: ShadowSignal[] | null;
+}
+
+export interface ShadowSignal {
+  name: string;
+  value?: string | null;
+  /** Points it WOULD have added (direction-signed, capped); never counted. */
+  would_score: number;
+  reason: string;
+  available: boolean;
 }
 
 /** GET /api/market/session — the US session from the backend's one calendar

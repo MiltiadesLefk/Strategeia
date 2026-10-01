@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_auth
+from app.analysis.shadow_signals import shadow_signals_from_json
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
@@ -111,4 +112,5 @@ def trade_plan_to_response(record: TradePlanRecord, *, redo_at: datetime | None 
         ai_opinion_text=record.ai_opinion_text,
         ai_news_assessment=record.ai_news_assessment,
         strategy_version=record.strategy_version,
+        shadow_signals=shadow_signals_from_json(record.shadow_signals),
     )

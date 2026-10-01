@@ -111,6 +111,8 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
         "MAX_SCORE_FOR_CONFIDENCE", "CONFIDENCE_FLOOR", "CONFIDENCE_CEILING",
     ),
     "app.risk.position_sizing": ("FALLBACK_R_MULTIPLES", "MIN_RR_FOR_LEVEL_TARGET"),
+    # Which silent signals have been promoted into real scoring (none yet).
+    "app.analysis.shadow_signals": ("LIVE_SIGNALS",),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),
 }
 

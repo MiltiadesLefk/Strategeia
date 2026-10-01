@@ -198,6 +198,8 @@ def _changed(value):
         return (*value, 9.9)
     if isinstance(value, list):
         return [*value, "extra"]
+    if isinstance(value, set):
+        return {*value, "promoted_signal"}
     raise AssertionError(f"extend _changed for {type(value)}")
 
 

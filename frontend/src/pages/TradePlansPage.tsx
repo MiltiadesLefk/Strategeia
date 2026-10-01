@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { SilentSignals } from '../components/SilentSignals';
 import { useSearchParams } from 'react-router-dom';
 import { useAnalysis, useGenerateTradePlan, useMarketSession, useOpenPosition, useTradePlans } from '../api/hooks';
 import { CompanyDropdown } from '../components/CompanyDropdown';
@@ -167,6 +168,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
               Confidence {plan.confidence_score}% — {plan.signal_reasons}
             </div>
           )}
+          <SilentSignals signals={plan.shadow_signals} />
           <AiOpinionBlock plan={plan} />
         </div>
       </div>
@@ -380,6 +382,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
               </ul>
             </div>
           )}
+          <SilentSignals signals={plan.shadow_signals} />
           <AiOpinionBlock plan={plan} />
         </div>
       </div>

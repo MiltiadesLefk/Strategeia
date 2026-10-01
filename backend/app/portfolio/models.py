@@ -115,6 +115,11 @@ class TradePlanRecord(SQLModel, table=True):
     # of the StrategyVersion row whose settings + rule constants were in force
     # when it was generated. Null on plans from before versioning existed.
     strategy_version: Optional[int] = None
+    # Silent signals (analysis/shadow_signals.py): JSON list of what each new,
+    # not-yet-scored signal read on this plan and the points it WOULD have
+    # added. Recorded for later backtesting; never part of confidence_score,
+    # the direction, the sizing or any decision. Null on older plans.
+    shadow_signals: Optional[str] = None
 
 
 class PaperPosition(SQLModel, table=True):

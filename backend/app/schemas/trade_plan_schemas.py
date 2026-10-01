@@ -13,6 +13,12 @@ class TradePlanGenerateRequest(BaseModel):
     risk_pct: float | None = Field(default=None, gt=0, le=100)
 
 
+class ShadowSignalOut(BaseModel):
+    name: str
+    value: str | None = None
+    would_score: int = 0
+    reason: str = ""
+    available: bool = True
 class TradePlanResponse(BaseModel):
     id: int | None = None
     symbol: str
@@ -95,3 +101,7 @@ class TradePlanResponse(BaseModel):
     # Number of the strategy version (rules + decision-relevant settings) this
     # plan was made under; None for plans from before versioning existed.
     strategy_version: int | None = None
+    # Silent signals: what each new, not-yet-scored signal read and the points
+    # it would have added. Never counted in confidence_score. None on plans
+    # from before they were recorded.
+    shadow_signals: list[ShadowSignalOut] | None = None

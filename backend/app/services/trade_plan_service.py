@@ -35,6 +35,7 @@ from app.analysis.market_confirmation import (
 )
 from app.analysis.options_scoring import OPTIONS_SCORE_CAP, score_options_positioning
 from app.analysis.scanner_scoring import score_symbol
+from app.analysis.shadow_signals import ShadowContext, evaluate_shadow_signals, shadow_signals_from_json, shadow_signals_to_json
 from app.analysis.trend import ChartAnalysis, analyze_chart
 from app.config import AppSettings, load_app_settings
 from app.data_providers.base import AllProvidersFailedError, CompanyOverview, DataProvider, FinancialYear, NewsItem, OptionsSummary
@@ -610,6 +611,12 @@ def generate_trade_plan(
     # fetch has succeeded, so a failed evaluation leaves no version behind.
     strategy_version = current_strategy_version(session, settings).number
 
+    # Silent signals: recorded on the plan, never scored (analysis/shadow_signals.py).
+    # Evaluated after every decision input above and consumed by nothing that
+    # decides: not the score, the direction, the sizing or the overlay.
+    shadow_signals_json = shadow_signals_to_json(
+        evaluate_shadow_signals(ShadowContext(symbol=symbol, direction=provisional_direction, session=session))
+    )
     if chart.trend == "Neutral" or overlay_vetoes_trade or confidence_score < settings.min_confidence_for_trade:
         if chart.trend == "Neutral":
             reason = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
@@ -666,6 +673,7 @@ def generate_trade_plan(
             ai_opinion_text=ai_opinion_text,
             ai_news_assessment=ai_news_assessment,
             strategy_version=strategy_version,
+            shadow_signals=shadow_signals_json,
         )
         session.add(record)
         session.commit()
@@ -701,6 +709,7 @@ def generate_trade_plan(
             ai_news_assessment=ai_news_assessment,
             signal_reasons=signal_reasons,
             strategy_version=strategy_version,
+            shadow_signals=shadow_signals_from_json(shadow_signals_json),
         )
 
     direction = "long" if chart.trend == "Bullish" else "short"
@@ -794,6 +803,7 @@ def generate_trade_plan(
         ai_opinion_text=ai_opinion_text,
         ai_news_assessment=ai_news_assessment,
         strategy_version=strategy_version,
+        shadow_signals=shadow_signals_json,
     )
     session.add(record)
     session.commit()
@@ -932,4 +942,5 @@ def generate_trade_plan(
         ai_opinion_text=ai_opinion_text,
         ai_news_assessment=ai_news_assessment,
         strategy_version=strategy_version,
+        shadow_signals=shadow_signals_from_json(shadow_signals_json),
     )
