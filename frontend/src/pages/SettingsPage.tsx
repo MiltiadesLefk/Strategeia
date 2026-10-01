@@ -13,6 +13,9 @@ const LLM_OPTIONS = [
   { value: 'gemini', label: 'Google Gemini' },
 ];
 
+/** Mirrors backend config.CLAUDE_CLI_MODEL_PATTERN (a plain model name: starts with a letter or digit). */
+const CLAUDE_MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@[\]-]*$/;
+
 /** Save -> Saving… -> a brief green "Saved" confirmation -> back to Save.
  * One shared component so every card's save button behaves and looks the
  * same, instead of each card silently going back to plain "Save" with no
