@@ -6,6 +6,7 @@ import {
   BacktestsPage,
   DashboardPage,
   MarketScanPage,
+  MarketTerminalPage,
   PortfolioPage,
   SettingsPage,
   SmartMoneyPage,
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="research" element={<ResearchRedirect />} />
           <Route path="trade-plans" element={<TradePlansPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
+          <Route path="terminal" element={<MarketTerminalPage />} />
           <Route path="smart-money" element={<SmartMoneyPage />} />
           <Route path="backtests" element={<BacktestsPage />} />
           <Route path="settings" element={<SettingsPage />} />

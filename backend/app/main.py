@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.routers import terminal as terminal_router
 from app.api.routers import analysis, archive, auth, dashboard, market, portfolio, research, risk, scanner, settings, trade_plans
 from app.api.routers import signals as signals_router
 from app.api.routers import strategy as strategy_router
@@ -104,6 +105,7 @@ app.include_router(backtests_router.router)
 app.include_router(missed_trades_router.router)
 app.include_router(replay_router.router)
 app.include_router(smart_money_router.router)
+app.include_router(terminal_router.router)
 
 
 @app.get("/api/health")

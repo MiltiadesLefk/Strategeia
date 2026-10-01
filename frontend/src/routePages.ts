@@ -21,6 +21,7 @@ const loaders = {
   '/trade-plans': () => import('./pages/TradePlansPage').then((m) => ({ default: m.TradePlansPage })),
   '/portfolio': () => import('./pages/PortfolioPage').then((m) => ({ default: m.PortfolioPage })),
   '/smart-money': () => import('./pages/SmartMoneyPage').then((m) => ({ default: m.SmartMoneyPage })),
+  '/terminal': () => import('./pages/MarketTerminalPage').then((m) => ({ default: m.MarketTerminalPage })),
   '/backtests': () => import('./pages/BacktestsPage').then((m) => ({ default: m.BacktestsPage })),
   '/settings': () => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 } satisfies Record<string, () => Promise<{ default: ComponentType }>>;
@@ -33,6 +34,7 @@ export const AnalysisPage = lazy(loaders['/analysis']);
 export const TradePlansPage = lazy(loaders['/trade-plans']);
 export const PortfolioPage = lazy(loaders['/portfolio']);
 export const SmartMoneyPage = lazy(loaders['/smart-money']);
+export const MarketTerminalPage = lazy(loaders['/terminal']);
 export const BacktestsPage = lazy(loaders['/backtests']);
 export const SettingsPage = lazy(loaders['/settings']);
 

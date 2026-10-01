@@ -1393,3 +1393,120 @@ export interface ReplayResult {
   replayable: Record<string, string>;
   caveats: string[];
 }
+
+export type TerminalWindow = '1d' | '5d' | '1m';
+export type VixRegime = 'elevated' | 'calm';
+
+export interface HeatmapTile {
+  symbol: string;
+  name: string;
+  change_pct: number;
+  market_cap: number | null;
+  weight: number;
+}
+
+export interface HeatmapSector {
+  sector: string;
+  avg_change_pct: number;
+  weight: number;
+  tiles: HeatmapTile[];
+}
+
+export interface SectorEtfTile {
+  symbol: string;
+  sector: string;
+  change_pct: number | null;
+}
+
+export interface HeatmapResponse {
+  window: TerminalWindow;
+  as_of: string;
+  sampled: number;
+  universe_size: number;
+  requested_limit: number;
+  weighting: 'market_cap' | 'equal';
+  sectors: HeatmapSector[];
+  sector_etfs: SectorEtfTile[];
+  missing: string[];
+}
+
+export interface MacroTile {
+  id: string;
+  label: string;
+  group: 'index' | 'volatility' | 'currency' | 'yield';
+  symbol: string;
+  unit: 'index' | 'percent';
+  available: boolean;
+  value: number | null;
+  change: number | null;
+  change_pct: number | null;
+  as_of: string | null;
+  source: string | null;
+  sparkline: number[];
+}
+
+export interface YieldPoint {
+  label: string;
+  months: number;
+  value: number | null;
+}
+
+export interface YieldCurve {
+  points: YieldPoint[];
+  spread_10y_3m: number | null;
+  spread_10y_2y: number | null;
+  inverted: boolean | null;
+  note: string | null;
+}
+
+export interface MacroResponse {
+  as_of: string;
+  tiles: MacroTile[];
+  yield_curve: YieldCurve;
+  vix_value: number | null;
+  vix_regime: VixRegime | null;
+  vix_threshold: number;
+}
+
+export interface TerminalMover {
+  symbol: string;
+  name: string;
+  change_pct: number;
+  price: number;
+}
+
+export interface TerminalSectorMove {
+  sector: string;
+  avg_change_pct: number;
+  count: number;
+}
+
+export interface BreadthStats {
+  advancers: number;
+  decliners: number;
+  unchanged: number;
+  new_highs: number;
+  new_lows: number;
+  high_low_judged: number;
+  total: number;
+}
+
+export interface RecapResponse {
+  as_of: string;
+  sampled: number;
+  universe_size: number;
+  breadth: BreadthStats;
+  top_gainers: TerminalMover[];
+  top_losers: TerminalMover[];
+  sector_leaders: TerminalSectorMove[];
+  sector_laggards: TerminalSectorMove[];
+  etf_leaders: SectorEtfTile[];
+  etf_laggards: SectorEtfTile[];
+  vix_value: number | null;
+  vix_change_pct: number | null;
+  vix_regime: VixRegime | null;
+  summary: string;
+  ai_paragraph: string | null;
+  ai_provider: string | null;
+  missing: string[];
+}

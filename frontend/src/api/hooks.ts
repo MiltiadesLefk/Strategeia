@@ -38,6 +38,7 @@ import type {
   SmartMoneySide,
   SmartMoneyStatus,
 } from './types';
+import type { HeatmapResponse, MacroResponse, RecapResponse, TerminalWindow } from './types';
 import type { WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
 import type {
   BacktestBaseline,
@@ -684,5 +685,37 @@ export function useCancelValidation() {
 export function useReplay() {
   return useMutation({
     mutationFn: (overrides: ReplayOverrides) => api.post<ReplayResult>('/api/replay', { overrides }),
+  });
+}
+
+// ---- Market Terminal (read-only) ----
+
+const TERMINAL_REFETCH_MS = 5 * 60_000;
+
+export function useTerminalHeatmap(window: TerminalWindow, limit: number) {
+  return useQuery({
+    queryKey: ['terminal', 'heatmap', window, limit] as const,
+    queryFn: () => api.get<HeatmapResponse>(`/api/terminal/heatmap?window=${window}&limit=${limit}`),
+    refetchInterval: TERMINAL_REFETCH_MS,
+    staleTime: TERMINAL_REFETCH_MS,
+  });
+}
+
+export function useTerminalMacro() {
+  return useQuery({
+    queryKey: ['terminal', 'macro'] as const,
+    queryFn: () => api.get<MacroResponse>('/api/terminal/macro'),
+    refetchInterval: TERMINAL_REFETCH_MS,
+    staleTime: TERMINAL_REFETCH_MS,
+  });
+}
+
+/** `ai` is only ever true after the person asks for it: it costs a model call. */
+export function useTerminalRecap(ai: boolean, limit: number) {
+  return useQuery({
+    queryKey: ['terminal', 'recap', ai, limit] as const,
+    queryFn: () => api.get<RecapResponse>(`/api/terminal/recap?ai=${ai}&limit=${limit}`),
+    refetchInterval: TERMINAL_REFETCH_MS,
+    staleTime: TERMINAL_REFETCH_MS,
   });
 }
