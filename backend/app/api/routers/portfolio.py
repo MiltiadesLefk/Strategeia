@@ -40,6 +40,7 @@ def build_engine(session: Session, data_provider: DataProvider, settings: AppSet
         commission_per_trade=settings.commission_per_trade,
         max_positions_per_sector=settings.max_positions_per_sector,
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
+        max_holding_days=settings.max_holding_days,
     )
 
 

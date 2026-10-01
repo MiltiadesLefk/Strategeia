@@ -36,6 +36,15 @@ class SettingsUpdateRequest(BaseModel):
 
 
 class TestConnectionRequest(BaseModel):
+    # Trading days before a stalled position is closed at the close; 0 = no limit.
+    # Capped at 60 (about three months): the exit scan reads 3 months of bars
+    # and has to see the entry bar to count days from it.
+    max_holding_days: int | None = Field(default=None, ge=0, le=60)
+
+    @field_validator("claude_cli_model")
+    @classmethod
+    def _validate_claude_cli_model(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_claude_cli_model(value)
     target: str  # "llm" | "finnhub" | "telegram"
 
 

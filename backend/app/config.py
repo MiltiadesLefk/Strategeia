@@ -513,6 +513,18 @@ def get_infra_settings() -> InfraSettings:
             infra.auth_password = _load_or_create_auth_password(infra)
         if not infra.session_secret:
             infra.session_secret = _load_or_create_session_secret(infra)
+    # A third way out after the stop and TP1: a position that has been open this
+    # many TRADING days (bars, so weekends and holidays don't count) without
+    # touching either is closed at that day's close. Plans are labelled "1-4
+    # weeks", so 20 trading days (four weeks) is the top of the plan's own
+    # horizon: a trade still unresolved after it has outlived the thesis it was
+    # sized for and is only holding a slot and a sector cap hostage. 0 turns the
+    # limit off (positions then close only at the stop, TP1 or by hand). The
+    # upper bound (SettingsUpdateRequest) keeps the limit inside the 3-month
+    # window the exit scan reads, since the scan must see the position's entry
+    # bar to count days.
+    max_holding_days: int = 20
+
     return infra
 
 

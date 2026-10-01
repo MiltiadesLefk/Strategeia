@@ -1,4 +1,4 @@
-import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions } from '../api/hooks';
+import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useSettings } from '../api/hooks';
 import { StatCard } from '../components/StatCard';
 import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
@@ -9,11 +9,31 @@ import type { ApiError } from '../api/client';
 import type { Position } from '../api/types';
 import { useInView } from '../lib/useInView';
 
+// How a closed trade ended, in the words the rest of the app uses. The backend
+// stores the machine value (close_reason); an unknown one is shown as-is.
+const CLOSE_REASON_LABELS: Record<string, string> = {
+  stop_hit: 'Stop',
+  tp1_hit: 'Target (TP1)',
+  time_exit: 'Time limit',
+  manual: 'Manual',
+};
+function closeReasonLabel(reason: string | null): string {
+  return reason ? (CLOSE_REASON_LABELS[reason] ?? reason) : '—';
+}
+
+/** Calendar date (YYYY-MM-DD) of the daily bar a position was entered on: bars
+ *  carry the New York date for a US equity and the UTC date for a crypto pair. */
+function entryBarDate(symbol: string, openedAt: string): string {
+  const timeZone = symbol.toUpperCase().endsWith('-USD') ? 'UTC' : 'America/New_York';
+  return new Date(openedAt).toLocaleDateString('en-CA', { timeZone });
+}
+
 function ActivePositionCard({ position }: { position: Position }) {
   // Deferred until the card is near the viewport — see lib/useInView.
   const { ref, inView } = useInView<HTMLDivElement>();
   const { data: analysis, isLoading } = useAnalysis(position.symbol, '3mo', inView);
   const { mutate: closePosition, isPending: closing } = useClosePosition();
+  const { data: appSettings } = useSettings();
 
   const levels: PriceLevel[] = [
     { price: position.entry_price, color: '#2563eb', title: 'Entry' },
@@ -37,6 +57,14 @@ function ActivePositionCard({ position }: { position: Position }) {
   const currentR = currentPrice !== undefined && riskPerShare > 0 ? ((currentPrice - position.entry_price) * sign) / riskPerShare : null;
   // How much room is left before the stop, as a share of the current price.
   const roomToStopPct = currentPrice !== undefined && currentPrice > 0 ? ((currentPrice - position.stop_loss) * sign * 100) / currentPrice : null;
+  // Time limit: which trading day this is, counted from the bars actually on the
+  // chart (bars after the entry bar; today's still-forming bar counts as "today").
+  // Only shown when the entry bar is inside the loaded window, so it is never a guess.
+  const maxHoldingDays = appSettings?.max_holding_days ?? 0;
+  const candles = analysis?.candles;
+  const entryDate = entryBarDate(position.symbol, position.opened_at);
+  const tradingDay =
+    candles && candles.length > 0 && candles[0].date <= entryDate ? candles.filter((c) => c.date > entryDate).length : null;
   const slipped =
     position.planned_entry_price != null && Math.abs(position.planned_entry_price - position.entry_price) > 0.005;
 
@@ -124,6 +152,13 @@ function ActivePositionCard({ position }: { position: Position }) {
           <div className="text-muted" style={{ fontSize: 10 }}>
             {formatRelativeTime(position.opened_at)}
           </div>
+          {maxHoldingDays > 0 && (
+            <div className="text-muted tabular-nums" style={{ fontSize: 10 }}>
+              {tradingDay !== null
+                ? `day ${tradingDay} of ${maxHoldingDays}`
+                : `closes after ${maxHoldingDays} trading days`}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -144,6 +179,8 @@ export function PortfolioPage() {
 
   const openPositions = positions?.filter((p) => p.status === 'open') ?? [];
   const closedPositions = positions?.filter((p) => p.status === 'closed') ?? [];
+  const exitMix = Object.entries(stats?.exit_reasons ?? {}).sort((a, b) => b[1] - a[1]);
+  const exitMixTotal = exitMix.reduce((sum, [, n]) => sum + n, 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -200,6 +237,18 @@ export function PortfolioPage() {
         {closedPositions.length === 0 ? (
           <EmptyState>No closed trades yet.</EmptyState>
         ) : (
+          <>
+          {/* How trades ended, counted from the closed rows themselves. A large
+              share of time-limit exits means setups mostly stall instead of
+              resolving, which win rate alone hides. */}
+          {exitMixTotal > 0 && (
+            <div className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+              How trades ended:{' '}
+              {exitMix.map(([reason, n]) => `${closeReasonLabel(reason)} ${n} (${Math.round((n / exitMixTotal) * 100)}%)`).join(' · ')}
+              {' — '}
+              {sampleSizeNote(exitMixTotal)}
+            </div>
+          )}
           <table>
             <thead>
               <tr>
@@ -225,7 +274,7 @@ export function PortfolioPage() {
                   <td className="tabular-nums">{formatMoney(p.entry_price)}</td>
                   <td className="tabular-nums">{p.shares}</td>
                   <td className="tabular-nums">{formatMoney(p.close_price)}</td>
-                  <td className="text-muted">{p.close_reason ?? '—'}</td>
+                  <td className="text-muted">{closeReasonLabel(p.close_reason)}</td>
                   <td className={`tabular-nums ${p.realized_pnl && p.realized_pnl > 0 ? 'text-green' : p.realized_pnl && p.realized_pnl < 0 ? 'text-red' : ''}`}>
                     {p.realized_pnl !== null ? formatMoney(p.realized_pnl) : '—'}
                   </td>
@@ -236,6 +285,7 @@ export function PortfolioPage() {
               ))}
             </tbody>
           </table>
+          </>
         )}
       </div>
     </div>

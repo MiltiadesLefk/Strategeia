@@ -279,6 +279,8 @@ export interface AppSettings {
   auto_execute_trade_plans: boolean;
   auto_scan_enabled: boolean;
   max_concurrent_positions: number;
+  /** How closed trades ended: close_reason -> count, from the closed rows. */
+  exit_reasons: Record<string, number>;
   ai_trading_overlay_enabled: boolean;
   ai_overlay_scores_confidence: boolean;
   ai_overlay_objection_action: AiOverlayObjectionAction;
@@ -320,6 +322,8 @@ export interface TestConnectionResponse {
 /** What the AI Trading Overlay's objection actually does. One choice, not a
  *  set of flags: "cancel" and "hold" fire on the same trigger and cancel
  *  always wins, so they can never both be in effect. */
+  /** Trading days before a stalled position is closed at the close; 0 = no limit. */
+  max_holding_days: number;
 export type AiOverlayObjectionAction = 'cancel' | 'hold' | 'none';
 
 export interface SettingsStatus {
@@ -343,3 +347,4 @@ export interface LoginResponse {
   ok: boolean;
   message: string;
 }
+  max_holding_days?: number;

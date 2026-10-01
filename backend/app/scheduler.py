@@ -80,6 +80,7 @@ def _mark_to_market_job() -> None:
                 commission_per_trade=settings.commission_per_trade,
                 max_positions_per_sector=settings.max_positions_per_sector,
                 max_position_pct_of_adv=settings.max_position_pct_of_adv,
+                max_holding_days=settings.max_holding_days,
             ).mark_to_market()
         except Exception:
             logger.exception("Scheduled mark-to-market tick failed")

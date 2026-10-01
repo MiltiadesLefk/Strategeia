@@ -9,7 +9,7 @@ from app.timeutil import utcnow_naive
 
 TradePlanStatus = Literal["pending", "executed", "discarded", "no_trade"]
 PositionStatus = Literal["open", "closed"]
-CloseReason = Literal["stop_hit", "tp1_hit", "manual"]
+CloseReason = Literal["stop_hit", "tp1_hit", "time_exit", "manual"]
 
 
 class TradePlanRecord(SQLModel, table=True):

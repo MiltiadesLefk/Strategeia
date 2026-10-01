@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
 from sqlmodel import Session, select
 
@@ -18,6 +19,11 @@ class PortfolioStats:
     portfolio_value: float
     starting_cash: float
     current_cash: float
+    # How closed trades ended: close_reason -> count (stop_hit, tp1_hit, time_exit,
+    # manual). Counted from the closed rows themselves; a high share of time
+    # exits means setups mostly stall instead of resolving, which is information
+    # about the strategy that win rate alone hides.
+    exit_reasons: dict[str, int] = field(default_factory=dict)
 
 
 def compute_portfolio_stats(session: Session, data_provider: DataProvider, default_starting_cash: float) -> PortfolioStats:
@@ -58,4 +64,5 @@ def compute_portfolio_stats(session: Session, data_provider: DataProvider, defau
         portfolio_value=portfolio_value,
         starting_cash=starting_cash,
         current_cash=current_cash,
+        exit_reasons=dict(Counter(p.close_reason or "unknown" for p in closed)),
     )

@@ -162,7 +162,8 @@ scripts/            verify.py (tests + type-check + lint in one command) and ui_
 
 - Paper-trading exit rule: a position closes fully at whichever of stop-loss or TP1 hits
   first (checked against each bar's high/low). TP2 is informational only — no partial
-  scale-out yet.
+  scale-out yet. A position that touches neither is closed at the close of its 20th
+  trading day (Settings -> Maximum Holding Time; 0 turns it off).
 - The bundled `backend/data/sp500.csv` is a curated ~60-symbol large-cap subset, not the
   full S&P 500 — expand the CSV if you want a bigger scan universe.
 - Free-tier data can rate-limit or go stale under heavy use; the composite provider falls

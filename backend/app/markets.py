@@ -238,6 +238,31 @@ def is_market_open_for(symbol: str, now: datetime | None = None) -> bool:
     return is_always_on(symbol) or is_us_market_open(now)
 
 
+def is_daily_bar_final(symbol: str, bar_day: date, now: datetime | None = None) -> bool:
+    """Has the daily bar for `bar_day` stopped changing, as of `now`?
+
+    A provider hands back today's bar while the session is still running, with
+    the open, high, low and "close" of the moment, so its close is just the last
+    trade. Anything that decides on a bar's close (the position time limit) must
+    wait until the bar is final, or it would act on a price the day then moves
+    away from. `bar_day` is the bar's own calendar date: the New York date for a
+    US equity, the UTC date for a crypto pair (its day runs 00:00 to 24:00 UTC).
+
+    An equity bar is final once the session has closed and the provider has had
+    POST_CLOSE_GRACE to settle it (the same margin the post-close sweep uses).
+    A crypto bar is final once its UTC day is over. A date with no session at
+    all (a weekend or holiday that somehow carries a bar) has nothing left to
+    change, so it counts as final."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)  # naive = UTC, like every stored time
+    if is_always_on(symbol):
+        return now >= datetime.combine(bar_day + timedelta(days=1), time(0, 0), tzinfo=timezone.utc)
+    bounds = us_session_bounds(bar_day)
+    return bounds is None or now >= bounds.close + POST_CLOSE_GRACE
+
+
 def _sessions_from(day: date) -> Iterator[SessionBounds]:
     for offset in range(MAX_DAYS_TO_NEXT_SESSION + 1):
         bounds = us_session_bounds(day + timedelta(days=offset))

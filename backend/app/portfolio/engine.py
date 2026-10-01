@@ -10,7 +10,13 @@ from sqlmodel import Session, select
 from app.data_providers.base import AllProvidersFailedError, DataProvider
 from app.data_providers.cache import fresh_data_only
 from app.data_providers.universe import get_sector
-from app.markets import format_market_time, is_market_open_for, next_us_open, us_closure_reason
+from app.markets import (
+    format_market_time,
+    is_daily_bar_final,
+    is_market_open_for,
+    next_us_open,
+    us_closure_reason,
+)
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
 from app.timeutil import utcnow_naive
 
@@ -115,6 +121,7 @@ class PaperTradingEngine:
         max_positions_per_sector: int | None = None,
         max_position_pct_of_adv: float | None = None,
         clock: Clock | None = None,
+        max_holding_days: int | None = None,
     ):
         self._session = session
         self._data_provider = data_provider
@@ -125,6 +132,9 @@ class PaperTradingEngine:
         self._max_positions_per_sector = max_positions_per_sector
         self._max_position_pct_of_adv = max_position_pct_of_adv
         self._clock = resolve_clock(clock)
+        # Trading bars a position may stay open before it is closed at that
+        # bar's close; None or 0 = no limit. See _first_exit.
+        self._max_holding_days = max_holding_days if max_holding_days and max_holding_days > 0 else None
 
     def now(self) -> datetime:
         """The engine's current moment (naive UTC): real time, or a simulated
@@ -397,7 +407,22 @@ class PaperTradingEngine:
             return bars  # every bar postdates the open (fresh position, short window)
         return bars[dates > entered_on.max()]
 
-    def _first_exit(self, position: PaperPosition, bars: pd.DataFrame) -> tuple[float, str] | None:
+    @staticmethod
+    def _entry_bar_in_window(bars: pd.DataFrame, opened_at) -> bool:
+        """Whether the entry bar (the last bar at or before opened_at, see
+        _bars_after_entry) is actually in `bars`. Counting trading days since
+        entry needs it as day 0: when the window starts AFTER the position
+        opened (an undated frame, or a position older than the history the exit
+        scan reads) the age is unknowable from these bars, and the time limit
+        skips the position rather than guess."""
+        if bars.empty or "date" not in bars.columns:
+            return False
+        dates = pd.to_datetime(bars["date"], utc=True, errors="coerce").dt.tz_localize(None)
+        return bool((dates <= pd.Timestamp(opened_at)).any())
+
+    def _first_exit(
+        self, position: PaperPosition, bars: pd.DataFrame, *, holding_limit: int | None = None
+    ) -> tuple[float, str] | None:
         """Walks bars in chronological order and returns the FIRST stop/TP1
         touch, not merely whatever the latest bar happens to show.
 
@@ -409,8 +434,21 @@ class PaperTradingEngine:
 
         Within a single bar, stop is checked before TP1: when both levels sit
         inside one bar's range, daily OHLC cannot say which came first, so the
-        engine takes the unfavourable branch rather than the flattering one."""
-        for _, bar in bars.iterrows():
+        engine takes the unfavourable branch rather than the flattering one.
+
+        `holding_limit` (trading bars since the entry bar, which is bar 0 and
+        is not in `bars`) adds the third exit, a time limit: on the first bar
+        numbered at or past it, a position that neither the stop nor TP1
+        touched is closed at that bar's CLOSE. It comes last on purpose: on the
+        limit bar the stop and TP1 are still checked first, because a level
+        touched during the day happened before the close the time exit acts on.
+        It fills at the close like the entry does (the decision is made on a
+        finished bar), as a market order, so it pays slippage like a stop. A bar
+        that has not finished yet (today's, while the session runs) can never
+        trigger it: acting on its "close" would be acting on a price the day
+        then moves away from. That bar is also the last one, so the position
+        simply waits for a later run."""
+        for number, (_, bar) in enumerate(bars.iterrows(), start=1):
             high, low, bar_open = float(bar["high"]), float(bar["low"]), float(bar["open"])
             if position.direction == "long":
                 if low <= position.stop_loss:
@@ -424,12 +462,30 @@ class PaperTradingEngine:
                     return self._slip(fill, buying=True), "stop_hit"
                 if low <= position.tp1:
                     return self._exit_fill_price("short", bar_open, position.tp1, is_stop=False), "tp1_hit"
+            if holding_limit is not None and number >= holding_limit and self._bar_is_final(position.symbol, bar):
+                return self._slip(float(bar["close"]), buying=position.direction == "short"), "time_exit"
         return None
+
+    def _bar_is_final(self, symbol: str, bar: pd.Series) -> bool:
+        """Whether `bar` is finished as of the engine's clock. A bar is read by
+        its own calendar date (the date a provider stamps on it, whatever the
+        timezone it carries: New York for yfinance equities, UTC for crypto,
+        a plain date from Stooq/Nasdaq), and markets.is_daily_bar_final says
+        whether that day's session is over. An unreadable date is treated as
+        NOT final: the time exit then waits, which can only delay a close."""
+        try:
+            bar_day = pd.Timestamp(bar["date"]).date()
+        except (KeyError, ValueError, TypeError):
+            return False
+        return is_daily_bar_final(symbol, bar_day, self.now())
 
     def mark_to_market(self, *, snapshot: bool = True) -> list[PaperPosition]:
         """Closes any open position whose stop or TP1 was touched on any bar
-        since entry. v1 exit rule: whichever of stop or TP1 hits first closes
-        the full position; TP2 is informational only (see notes/Decisions.md).
+        since entry, or that has run out its holding limit (max_holding_days).
+        v1 exit rule: whichever of stop or TP1 hits first closes the full
+        position; TP2 is informational only (no partial scale-out). The time
+        limit is the third way out and only ever applies when neither level was
+        touched (see _first_exit).
 
         `snapshot=False` lets a read-only caller evaluate exits without
         appending a point to the equity curve — see api/routers/portfolio.py."""
@@ -453,7 +509,12 @@ class PaperTradingEngine:
             scope = self._bars_after_entry(bars, position.opened_at)
             if scope.empty:
                 continue
-            exit_ = self._first_exit(position, scope)
+            # The time limit counts bars from the entry bar, so it only applies
+            # when that bar is in the window (see _entry_bar_in_window).
+            holding_limit = (
+                self._max_holding_days if self._entry_bar_in_window(bars, position.opened_at) else None
+            )
+            exit_ = self._first_exit(position, scope, holding_limit=holding_limit)
             if exit_ is None:
                 continue
             fill_price, reason = exit_

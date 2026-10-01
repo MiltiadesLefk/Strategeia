@@ -45,6 +45,7 @@ class PortfolioStatsSchema(BaseModel):
     portfolio_value: float
     starting_cash: float
     current_cash: float
+    exit_reasons: dict[str, int] = {}
 
 
 class EquityPointSchema(BaseModel):

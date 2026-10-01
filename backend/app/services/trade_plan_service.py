@@ -621,6 +621,7 @@ def generate_trade_plan(
     # number, not just the verdict" pattern as ATR/MACD. options_summary and
     # earnings_history were already fetched above for scoring; this reuses
     # them rather than fetching again.
+        max_holding_days=settings.max_holding_days,
     expected_move_days = days_to_expiration(options_summary.expiration) if options_summary else None
     expected_move_pct = (
         compute_expected_move_pct(options_summary.atm_implied_volatility, expected_move_days)

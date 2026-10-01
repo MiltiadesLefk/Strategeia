@@ -126,6 +126,7 @@ export function SettingsPage() {
   const [aiOverlayScores, setAiOverlayScores] = useState(true);
   const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
 
+  const [maxHoldingDays, setMaxHoldingDays] = useState(20);
   const [justSavedKey, setJustSavedKey] = useState<string | null>(null);
   const flashTimeout = useRef<number | undefined>(undefined);
   function flashSaved(key: string) {
@@ -182,6 +183,7 @@ export function SettingsPage() {
       {
         llm_provider: llmProvider,
         ...(openrouterKey ? { openrouter_api_key: openrouterKey } : {}),
+    setMaxHoldingDays(settings.max_holding_days);
         openrouter_model: openrouterModel,
         ...(orcarouterKey ? { orcarouter_api_key: orcarouterKey } : {}),
         orcarouter_model: orcarouterModel,
@@ -262,6 +264,7 @@ export function SettingsPage() {
         max_concurrent_positions: maxConcurrentPositions,
       },
       { onSuccess: () => flashSaved('automation') },
+        max_holding_days: maxHoldingDays,
     );
   }
 
@@ -326,6 +329,7 @@ export function SettingsPage() {
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
+    setMaxHoldingDays(settings.max_holding_days);
   }
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
@@ -737,6 +741,25 @@ export function SettingsPage() {
             <span>Auto-Scan</span>
             <OnOffBadge on={autoScanEnabled} />
           </div>
+        <div>
+          <label>Maximum Holding Time (trading days)</label>
+          <input
+            type="number"
+            value={maxHoldingDays}
+            min={0}
+            max={60}
+            step={1}
+            onChange={(e) => setMaxHoldingDays(Number(e.target.value))}
+          />
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            A third way out after the stop and the first target: a position still open after this many trading days
+            (weekends and holidays don't count) is closed at that day's close, as a market order, so it pays
+            slippage like a stop. It only fires if neither the stop nor TP1 was touched that day. Trade plans are
+            labelled 1-4 weeks, so the default 20 (four weeks) is the end of that horizon; a position that stalls
+            past it ties up one of your slots and a sector cap. 0 turns the limit off. Applies to positions that
+            are already open, so lowering it can close stalled ones at the next check.
+          </div>
+        </div>
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
             {autoScanEnabled ? 'Enabled — scan and trade on a schedule, unattended.' : 'Disabled — scan and generate plans manually.'}
           </div>
