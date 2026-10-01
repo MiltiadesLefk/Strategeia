@@ -576,3 +576,41 @@ export interface CacheClearResponse {
   cleared: boolean;
   message: string;
 }
+
+export type WatchlistLayer = 'dev_filter' | 'custom' | 'bundled';
+
+export interface WatchlistEntry {
+  symbol: string;
+  name: string;
+  sector: string;
+  /** false when the sector is "Unknown": the sector cap has no opinion on it. */
+  sector_known: boolean;
+}
+
+export interface WatchlistResponse {
+  active_layer: WatchlistLayer;
+  /** What scans and screens actually use, in scan order. */
+  entries: WatchlistEntry[];
+  /** What the editor works on: the saved list if there is one, else the bundled list. */
+  editable_entries: WatchlistEntry[];
+  has_custom: boolean;
+  custom_updated_at: string | null;
+  /** Set when a saved file exists but could not be read. */
+  custom_error: string | null;
+  dev_filter: string[] | null;
+  bundled_size: number;
+  min_symbols: number;
+  max_symbols: number;
+  scan_universe_size: number;
+  scanned_count: number;
+}
+
+export interface WatchlistSymbolCheck {
+  symbol: string;
+  valid: boolean;
+  name: string | null;
+  sector: string | null;
+  sector_known: boolean;
+  in_catalogue: boolean;
+  message: string | null;
+}

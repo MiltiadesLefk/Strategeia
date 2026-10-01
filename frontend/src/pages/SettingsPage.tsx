@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSettings, useTestConnection, useUpdateSettings } from '../api/hooks';
+import { useSettings, useTestConnection, useUpdateSettings, useWatchlist } from '../api/hooks';
 import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
 import { DecisionModelField } from '../components/DecisionModelField';
 import { decisionModelInvalid } from '../lib/decisionModel';
 import { DataCacheCard } from '../components/DataCacheCard';
+import { WatchlistCard } from '../components/WatchlistCard';
 import type { AiOverlayObjectionAction } from '../api/types';
 
 const LLM_OPTIONS = [
@@ -104,6 +105,7 @@ function ResetButton({ onClick }: { onClick: () => void }) {
 
 export function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
+  const { data: watchlistInfo } = useWatchlist();
   const { mutate: update, isPending: saving } = useUpdateSettings();
   const { mutate: testLlm, data: llmTestResult, isPending: testingLlm, reset: resetLlmTest } = useTestConnection();
   const { mutate: testFinnhub, data: finnhubTestResult, isPending: testingFinnhub, reset: resetFinnhubTest } = useTestConnection();
@@ -788,13 +790,28 @@ export function SettingsPage() {
         <div>
           <label>Scan Universe Size</label>
           <select value={scanSize} onChange={(e) => setScanSize(Number(e.target.value))}>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={64}>Full bundled list (64, incl. BTC/ETH/SOL)</option>
+            {[...new Set([25, 50, 100, 200, scanSize])]
+              .sort((a, b) => a - b)
+              .map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                  {n === 200 ? ' (maximum)' : ''}
+                </option>
+              ))}
           </select>
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            How many symbols from the bundled list a market scan looks at. Every symbol costs several provider
-            requests, so a smaller universe is faster and much less likely to hit a free-tier rate limit.
+            How many symbols from the top of the Watchlist (card below) a market scan looks at. Every symbol costs
+            several provider requests, so a smaller universe is faster and much less likely to hit a free-tier rate
+            limit.
+            {watchlistInfo && (
+              <>
+                {' '}
+                Your watchlist has {watchlistInfo.entries.length} symbol{watchlistInfo.entries.length === 1 ? '' : 's'}:
+                {scanSize >= watchlistInfo.entries.length
+                  ? ' all of them are scanned.'
+                  : ` scanning the first ${scanSize} of ${watchlistInfo.entries.length}; the rest are skipped.`}
+              </>
+            )}
           </div>
         </div>
         <div>
@@ -859,7 +876,7 @@ export function SettingsPage() {
         <h3>Unattended Auto-Scan</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
           Closes the full loop: 3 times a day (Asia, London, and New York session opens), fully evaluates every
-          symbol in the bundled universe — price, volume, indicators, fundamentals, news, earnings — and either
+          symbol in the scan universe (the top of your Watchlist) — price, volume, indicators, fundamentals, news, earnings — and either
           generates (and, if Auto-Execute above is on, opens) a trade plan or explicitly records "no trade" with a
           reason. Off by default; unlike Auto-Execute, this decides which symbols to trade with no human in the loop
           at all.
@@ -898,6 +915,8 @@ export function SettingsPage() {
           <ResetButton onClick={resetAutomation} />
         </div>
       </div>
+
+      <WatchlistCard />
 
       <DataCacheCard />
     </div>

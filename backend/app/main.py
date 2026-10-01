@@ -10,6 +10,7 @@ from app.api.routers import analysis, archive, auth, dashboard, market, portfoli
 from app.api.routers import strategy as strategy_router
 from app.api.routers import calibration as calibration_router
 from app.api.routers import data_cache as data_cache_router
+from app.api.routers import watchlist as watchlist_router
 from app.config import get_infra_settings
 from app.data_providers.base import AllProvidersFailedError
 from app.database import create_db_and_tables
@@ -81,6 +82,7 @@ app.include_router(dashboard.router)
 app.include_router(market.router)
 app.include_router(archive.router)
 app.include_router(data_cache_router.router)
+app.include_router(watchlist_router.router)
 app.include_router(strategy_router.router)
 
 

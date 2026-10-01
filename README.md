@@ -61,6 +61,14 @@ This builds and runs both services:
   `scripts/preload_history.py`) as a named volume so it survives container restarts/redeploys.
 - `frontend` on port 5173, served by nginx.
 
+**Your watchlist**: the list of symbols that scans and screens use is edited in the app
+(Settings -> Watchlist) and saved to `runtime/universe.json`, in the same volume, so it survives
+`docker compose up --build` with no rebuild needed. Which list is used, strongest first: the
+`STRATEGEIA_DEV_TICKERS` environment variable (a deliberate server-side override), then the list you
+saved in the app, then the bundled `backend/data/sp500.csv`. The supplied `docker-compose.yml` sets
+`STRATEGEIA_DEV_TICKERS=NVDA,AAPL`, so until you delete that line the app uses only those two
+symbols and the Watchlist card says your saved list is being ignored.
+
 **Auth**: the dashboard has its own login screen — one user, one username+password, no
 signup (`api/routers/auth.py`). Set `AUTH_USERNAME` (defaults to `admin` if left unset)
 and `AUTH_PASSWORD` in the backend's `environment:`; leave the password unset and the
@@ -166,8 +174,12 @@ scripts/            verify.py (tests + type-check + lint in one command) and ui_
   first (checked against each bar's high/low). TP2 is informational only — no partial
   scale-out yet. A position that touches neither is closed at the close of its 20th
   trading day (Settings -> Maximum Holding Time; 0 turns it off).
-- The bundled `backend/data/sp500.csv` is a curated ~60-symbol large-cap subset, not the
-  full S&P 500 — expand the CSV if you want a bigger scan universe.
+- The bundled `backend/data/sp500.csv` is the default list; you can replace it with your own in
+  Settings -> Watchlist (up to 200 symbols, saved in `runtime/universe.json`). It holds the current S&P 500 members plus three crypto pairs (about
+  500 rows). A scan still evaluates only the first 50 rows (the Scan size setting): the hand-picked large
+  caps at the top. It lists today's members only, so a backtest over past years sees survivors and not the
+  companies that have since left the index. Refresh it with `python scripts/refresh_universe.py` (see the
+  script's header for the source).
 - Free-tier data can rate-limit or go stale under heavy use; the composite provider falls
   back automatically but surfaces an error rather than fabricating data if everything
   fails.

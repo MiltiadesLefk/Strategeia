@@ -20,6 +20,8 @@ import type {
   TestConnectionResponse,
   TradePlan,
   UniverseEntry,
+  WatchlistResponse,
+  WatchlistSymbolCheck,
 } from './types';
 import type { CalibrationReport } from './types';
 import type { StrategyHistory } from './types';
@@ -42,6 +44,7 @@ export const qk = {
   authStatus: ['auth-status'] as const,
   marketSession: ['market-session'] as const,
   cacheStatus: ['cache-status'] as const,
+  watchlist: ['watchlist'] as const,
 };
 
 // Refetch just after the next bell (open or close), so the badge and the
@@ -95,7 +98,7 @@ export function useUniverse() {
   return useQuery({
     queryKey: ['universe'] as const,
     queryFn: () => api.get<UniverseEntry[]>('/api/universe'),
-    staleTime: Infinity, // static bundled list, never changes at runtime
+    staleTime: Infinity, // only changes when the watchlist is saved or reset, which invalidates this
   });
 }
 
@@ -324,5 +327,45 @@ export function useClearCache() {
   return useMutation({
     mutationFn: () => api.post<CacheClearResponse>('/api/cache/clear'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.cacheStatus }),
+  });
+}
+
+/** The watchlist the Settings card edits: which layer is active, the saved list, the limits. */
+export function useWatchlist() {
+  return useQuery({ queryKey: qk.watchlist, queryFn: () => api.get<WatchlistResponse>('/api/watchlist') });
+}
+
+// A saved or reset watchlist changes what every symbol picker, scan and the
+// dashboard's top setups are built from, so all of those refetch.
+function useAfterWatchlistChange() {
+  const queryClient = useQueryClient();
+  return (data: WatchlistResponse) => {
+    queryClient.setQueryData(qk.watchlist, data);
+    queryClient.invalidateQueries({ queryKey: ['universe'] });
+    queryClient.invalidateQueries({ queryKey: ['scan'] });
+    queryClient.invalidateQueries({ queryKey: qk.dashboard });
+  };
+}
+
+export function useSaveWatchlist() {
+  const after = useAfterWatchlistChange();
+  return useMutation({
+    mutationFn: (symbols: string[]) => api.put<WatchlistResponse>('/api/watchlist', { symbols }),
+    onSuccess: after,
+  });
+}
+
+export function useResetWatchlist() {
+  const after = useAfterWatchlistChange();
+  return useMutation({
+    mutationFn: () => api.delete<WatchlistResponse>('/api/watchlist'),
+    onSuccess: after,
+  });
+}
+
+/** Checks that a candidate symbol really returns a quote. Saves nothing. */
+export function useValidateWatchlistSymbol() {
+  return useMutation({
+    mutationFn: (symbol: string) => api.post<WatchlistSymbolCheck>('/api/watchlist/validate', { symbol }),
   });
 }

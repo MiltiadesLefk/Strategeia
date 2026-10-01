@@ -204,6 +204,11 @@ class InfraSettings(BaseSettings):
         return self.settings_file.parent / "history.db"
 
     @property
+    def universe_file(self) -> Path:
+        """The watchlist saved from Settings: beside settings.json, in the same
+        volume, so it survives a Docker rebuild (data_providers/universe_store.py)."""
+        return self.settings_file.parent / "universe.json"
+    @property
     def generated_secret_file(self) -> Path:
         return self.settings_file.parent / "api_key.txt"
 

@@ -95,6 +95,22 @@ def _stable_macro_calendar(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolated_watchlist_store(monkeypatch, tmp_path):
+    """The watchlist saved from Settings is a file under runtime/ and the
+    effective list is read from it on every call. No test may read or write the
+    developer's real one: point the store at a tmp path that does not exist yet
+    (so every test starts on the bundled list), forget the store's in-process
+    state before and after, and drop STRATEGEIA_DEV_TICKERS so a developer's
+    shell setting can't narrow a test that expects the full list. Tests about
+    the precedence set it themselves with monkeypatch.setenv."""
+    from app.data_providers import universe, universe_store
+
+    monkeypatch.setattr(universe_store, "universe_file", lambda: tmp_path / "watchlist_runtime" / "universe.json")
+    monkeypatch.delenv("STRATEGEIA_DEV_TICKERS", raising=False)
+    universe.reset_universe_caches()
+    yield
+    universe.reset_universe_caches()
+@pytest.fixture(autouse=True)
 def _reset_in_process_cooldowns(monkeypatch):
     """Every in-process, not-persisted cooldown in the API (matching the
     established pattern — see scanner.py's AUTO_TRADE_COOLDOWN_SECONDS and
