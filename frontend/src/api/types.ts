@@ -392,6 +392,7 @@ export interface AppSettings {
   ai_overlay_scores_confidence: boolean;
   ai_overlay_objection_action: AiOverlayObjectionAction;
   min_confidence_for_trade: number;
+  research_mode: ResearchMode;
 }
 
 export interface SettingsUpdateRequest {
@@ -426,6 +427,7 @@ export interface SettingsUpdateRequest {
   ai_overlay_scores_confidence?: boolean;
   ai_overlay_objection_action?: AiOverlayObjectionAction;
   min_confidence_for_trade?: number;
+  research_mode?: ResearchMode;
 }
 
 export interface TestConnectionResponse {
@@ -466,6 +468,8 @@ export type TestConnectionArg =
  *  always wins, so they can never both be in effect. */
 export type AiOverlayObjectionAction = 'cancel' | 'hold' | 'none';
 
+/** Whether AI calls made for research (never the overlay or the narration) may search the web. */
+export type ResearchMode = 'our_data_only' | 'allow_web_search';
 export interface SettingsStatus {
   ai_online: boolean;
   ai_provider: string;

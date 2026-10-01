@@ -6,7 +6,17 @@ import subprocess
 import time
 
 from app.config import normalize_claude_cli_model
-from app.llm_providers.base import ROUTINE_TIER, LLMResult, LLMTier, model_for_tier
+from app.llm_providers.base import ROUTINE_TIER, LLMPurpose, LLMResult, LLMTier, extract_urls, model_for_tier, web_search_wanted
+
+# A research call with web search on may use exactly these two tools, named
+# explicitly: WebSearch finds pages, WebFetch reads one. Every other tool
+# (shell, file access, editing) stays unavailable. Every other call keeps the
+# empty allow-list and a single turn.
+RESEARCH_WEB_TOOLS = "WebSearch,WebFetch"
+# A search-then-read answer needs several tool turns; the default call's single
+# turn would end before any answer. Bounded so a runaway search cannot loop.
+RESEARCH_MAX_TURNS = "8"
+RESEARCH_TIMEOUT_SEC = 180
 
 
 def _served_model(parsed: object) -> str | None:
@@ -47,6 +57,16 @@ class ClaudeCodeCLIProvider:
     since a call with zero allowed tools can never trigger a permission
     prompt in the first place.
 
+    The one exception is a research call that has been cleared for the web
+    (purpose "research" and the research_mode setting on "allow_web_search",
+    see research_mode.research_tools_allowed): it makes the same call with
+    `--tools` and `--allowedTools` both set to WebSearch and WebFetch only and
+    a higher `--max-turns`. `--allowedTools` alone is what grants those two
+    tools without a permission prompt (a headless call has nobody to ask);
+    `--tools` additionally removes every other built-in tool from the model's
+    reach, which an allow-list by itself does not do. Still no
+    permission-mode override.
+
     `model` pins the model with `--model`. Without it the CLI uses whichever
     model was last chosen in an interactive session (or the account default),
     which would change the narratives and the AI overlay's objections without
@@ -57,6 +77,8 @@ class ClaudeCodeCLIProvider:
     """
 
     name = "claude_code_cli"
+    supports_web_search = True
+    web_search_note = "Uses the Claude CLI's WebSearch and WebFetch tools, which count against your Claude usage."
 
     def __init__(
         self,
@@ -100,6 +122,8 @@ class ClaudeCodeCLIProvider:
         temperature: float = 0.4,
         tier: LLMTier = ROUTINE_TIER,
         response_schema: dict | None = None,
+        purpose: LLMPurpose = "narrate",
+        web_search: bool = False,
     ) -> LLMResult:
         if not self.cli_path:
             return LLMResult("", self.name, 0, error="Claude Code CLI not found on PATH")
@@ -112,16 +136,12 @@ class ClaudeCodeCLIProvider:
             return LLMResult("", self.name, 0, error=f"Invalid Claude CLI model setting: {self._model_error}")
         model = self.model_for(tier)
 
-        argv = [
-            self.cli_path,
-            "-p",
-            "--output-format",
-            "json",
-            "--allowedTools",
-            "",
-            "--max-turns",
-            "1",
-        ]
+        use_web = web_search_wanted(purpose, web_search)
+        argv = [self.cli_path, "-p", "--output-format", "json"]
+        if use_web:
+            argv += ["--tools", RESEARCH_WEB_TOOLS, "--allowedTools", RESEARCH_WEB_TOOLS, "--max-turns", RESEARCH_MAX_TURNS]
+        else:
+            argv += ["--allowedTools", "", "--max-turns", "1"]
         if model:
             argv += ["--model", model]
         if response_schema:
@@ -137,7 +157,7 @@ class ClaudeCodeCLIProvider:
                 input=prompt,
                 text=True,
                 capture_output=True,
-                timeout=self.timeout_sec,
+                timeout=max(self.timeout_sec, RESEARCH_TIMEOUT_SEC) if use_web else self.timeout_sec,
                 shell=False,
             )
         except subprocess.TimeoutExpired:
@@ -164,4 +184,14 @@ class ClaudeCodeCLIProvider:
 
         if not text:
             return LLMResult("", self.name, latency_ms, error="Claude Code CLI returned empty output")
-        return LLMResult(text=text, provider=self.name, latency_ms=latency_ms, model=served or model or None)
+        return LLMResult(
+            text=text,
+            provider=self.name,
+            latency_ms=latency_ms,
+            model=served or model or None,
+            web_search_used=use_web,
+            # The CLI's reply does not list the pages it read, so the sources
+            # are the URLs the answer itself cites (the research rules require
+            # a source next to every web fact).
+            sources=extract_urls(text) if use_web else [],
+        )

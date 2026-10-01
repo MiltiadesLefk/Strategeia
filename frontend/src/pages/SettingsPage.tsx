@@ -6,7 +6,7 @@ import { DecisionModelField } from '../components/DecisionModelField';
 import { decisionModelInvalid } from '../lib/decisionModel';
 import { DataCacheCard } from '../components/DataCacheCard';
 import { WatchlistCard } from '../components/WatchlistCard';
-import type { AiOverlayObjectionAction, TestConnectionOverrides } from '../api/types';
+import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
 
 const LLM_OPTIONS = [
   { value: 'none', label: 'None (rule-based text)' },
@@ -17,6 +17,22 @@ const LLM_OPTIONS = [
   { value: 'gemini', label: 'Google Gemini' },
 ];
 
+/** Which providers have a real web-search mechanism for research calls (mirrors each
+ *  backend provider's `supports_web_search`). OrcaRouter documents none. */
+const WEB_SEARCH_PROVIDERS = new Set(['claude_code_cli', 'openrouter', 'openai', 'gemini']);
+
+const RESEARCH_MODES: { value: ResearchMode; label: string; help: string }[] = [
+  {
+    value: 'our_data_only',
+    label: 'Our data only',
+    help: 'Research answers use only the data this app already holds (prices, fundamentals, filings, news it has fetched). Nothing is searched on the web.',
+  },
+  {
+    value: 'allow_web_search',
+    label: 'Allow web search',
+    help: 'Research answers may search the web and must cite the pages they used. Web pages are untrusted text, and the AI is told never to follow instructions found in them. Uses more of your AI quota or credit.',
+  },
+];
 /** Mirrors backend config.CLAUDE_CLI_MODEL_PATTERN (a plain model name: starts with a letter or digit). */
 const CLAUDE_MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@[\]-]*$/;
 
@@ -143,6 +159,7 @@ export function SettingsPage() {
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
   const [aiOverlayScores, setAiOverlayScores] = useState(true);
   const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
+  const [researchMode, setResearchMode] = useState<ResearchMode>('our_data_only');
 
   const [justSavedKey, setJustSavedKey] = useState<string | null>(null);
   const flashTimeout = useRef<number | undefined>(undefined);
@@ -213,6 +230,7 @@ export function SettingsPage() {
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
+    setResearchMode(settings.research_mode ?? 'our_data_only');
   }, [settings]);
 
   // What the test buttons send: the values in the form right now, saved or not.
@@ -252,6 +270,7 @@ export function SettingsPage() {
     update(
       {
         llm_provider: llmProvider,
+        research_mode: researchMode,
         claude_cli_model: claudeCliModel.trim(),
         claude_cli_decision_model: claudeDecisionModel.trim(),
         openrouter_decision_model: openrouterDecisionModel.trim(),
@@ -369,6 +388,7 @@ export function SettingsPage() {
     setOrcarouterDecisionModel(settings.orcarouter_decision_model);
     setOpenaiDecisionModel(settings.openai_decision_model);
     setGeminiDecisionModel(settings.gemini_decision_model);
+    setResearchMode(settings.research_mode ?? 'our_data_only');
     setOpenrouterKey('');
     setOrcarouterKey('');
     setOpenaiKey('');
@@ -568,6 +588,38 @@ export function SettingsPage() {
             run the backend directly with <code>uvicorn</code> instead of Docker, or pick a key-based provider above.
           </div>
         )}
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>Research mode</div>
+          <div className="text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+            Applies only to AI calls that gather background for research pages. The AI Trading Overlay and the
+            narration never use the web, in either mode.
+          </div>
+          {RESEARCH_MODES.map((opt) => (
+            <label key={opt.value} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="research-mode"
+                value={opt.value}
+                checked={researchMode === opt.value}
+                onChange={() => setResearchMode(opt.value)}
+                style={{ width: 'auto', marginTop: 3 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</span>
+                <span className="text-muted" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
+                  {opt.help}
+                </span>
+              </span>
+            </label>
+          ))}
+          <div className={WEB_SEARCH_PROVIDERS.has(llmProvider) ? 'text-green' : 'text-muted'} style={{ fontSize: 12 }} data-testid="research-web-support">
+            {llmProvider === 'none'
+              ? 'No AI provider is selected, so there is nothing to search the web with.'
+              : WEB_SEARCH_PROVIDERS.has(llmProvider)
+                ? 'The selected provider supports web search.'
+                : 'The selected provider has no web search, so research answers will use our data only.'}
+          </div>
+        </div>
         {llmMissingKey && (
           <div className="text-red" style={{ fontSize: 12 }}>
             Enter an API key above before saving — {LLM_OPTIONS.find((o) => o.value === llmProvider)?.label} needs one.

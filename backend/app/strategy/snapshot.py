@@ -23,6 +23,9 @@ Deliberately OUT, so changing them never creates a version:
   is on. With no decision model set it is the routine model, so then the
   routine model counts too; once a decision model is set, the routine one
   stops mattering.)
+- `research_mode` (whether research calls may search the web): research only
+  produces background a person reads, never a plan, a no-trade or a position,
+  and the overlay and the narration ignore it, so it cannot change a decision.
 - `scan_universe_size`, `auto_scan_enabled` and `finnhub_enabled`: they change
   WHICH symbols are evaluated, when, or where the data comes from, not what the
   rules decide for a given symbol and given data. Measuring "the rules" across a

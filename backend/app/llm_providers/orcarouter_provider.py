@@ -4,7 +4,7 @@ import time
 
 import httpx
 
-from app.llm_providers.base import ROUTINE_TIER, LLMResult, LLMTier, model_for_tier
+from app.llm_providers.base import ROUTINE_TIER, LLMPurpose, LLMResult, LLMTier, model_for_tier, web_search_wanted
 from app.llm_providers.openai_compat import post_chat_completion
 
 ORCAROUTER_URL = "https://api.orcarouter.ai/v1/chat/completions"
@@ -17,6 +17,12 @@ class OrcaRouterProvider:
     per-request rather than pinning one."""
 
     name = "orcarouter"
+    # OrcaRouter documents no web-search option (no plugin, no ":online"
+    # model, no search tool) to turn on, so a research call asking for the web
+    # runs on our data only and says so rather than send an option the gateway
+    # may reject or silently ignore.
+    supports_web_search = False
+    web_search_note = "OrcaRouter has no documented web search, so this answer used our data only."
 
     def __init__(self, api_key: str, model: str = "orcarouter/auto", decision_model: str = ""):
         self._api_key = api_key
@@ -37,6 +43,8 @@ class OrcaRouterProvider:
         temperature: float = 0.4,
         tier: LLMTier = ROUTINE_TIER,
         response_schema: dict | None = None,
+        purpose: LLMPurpose = "narrate",
+        web_search: bool = False,
     ) -> LLMResult:
         if not self._api_key:
             return LLMResult("", self.name, 0, error="OrcaRouter API key not configured")

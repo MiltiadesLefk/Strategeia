@@ -393,6 +393,8 @@ def normalize_api_model(value: str, *, allow_slash: bool = True) -> str:
 # fire. See notes/Decisions.md.
 AiOverlayObjectionAction = Literal["cancel", "hold", "none"]
 
+# Whether research-purpose AI calls may search the web (research_mode setting).
+ResearchMode = Literal["our_data_only", "allow_web_search"]
 
 MASK_BULLET_COUNT = 16
 
@@ -550,6 +552,12 @@ class AppSettings(BaseModel):
     # rejected setups the app has been trading all along.
     min_confidence_for_trade: int = 30
 
+    # Whether AI calls made for RESEARCH (background pages a person reads) may
+    # use the provider's web search. "our_data_only" (default) keeps every call
+    # to the data the app already holds. The AI overlay and the narration never
+    # use the web in either mode, and this setting is not part of the strategy
+    # version: research never decides a trade.
+    research_mode: ResearchMode = "our_data_only"
     @model_validator(mode="before")
     @classmethod
     def _migrate_overlay_objection_action(cls, data):

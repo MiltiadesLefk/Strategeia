@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.config import AiOverlayObjectionAction, normalize_api_model, normalize_claude_cli_model
+from app.config import AiOverlayObjectionAction, ResearchMode, normalize_api_model, normalize_claude_cli_model
 from app.llm_providers.base import LLMTier
 
 
@@ -35,6 +35,7 @@ class SettingsUpdateRequest(BaseModel):
     ai_overlay_scores_confidence: bool | None = None
     ai_overlay_objection_action: AiOverlayObjectionAction | None = None
     min_confidence_for_trade: int | None = Field(default=None, ge=0, le=100)
+    research_mode: ResearchMode | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     scan_universe_size: int | None = Field(default=None, gt=0)

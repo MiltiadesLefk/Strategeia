@@ -58,3 +58,23 @@ def post_chat_completion(
     resp = httpx.post(url, headers=headers, json=payload, timeout=timeout)
     resp.raise_for_status()
     return resp
+
+
+def chat_citation_urls(data: object) -> list[str]:
+    """The URLs a chat-completions reply cites, from the `url_citation`
+    annotations on the first choice's message (OpenRouter's web plugin and
+    OpenAI-style search both report sources this way). Empty when there are
+    none or the shape is unexpected."""
+    try:
+        annotations = data["choices"][0]["message"].get("annotations") or []  # type: ignore[index]
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    urls: list[str] = []
+    for item in annotations:
+        if not isinstance(item, dict) or item.get("type") != "url_citation":
+            continue
+        cite = item.get("url_citation")
+        url = cite.get("url") if isinstance(cite, dict) else None
+        if isinstance(url, str) and url and url not in urls:
+            urls.append(url)
+    return urls
