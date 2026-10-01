@@ -2,17 +2,37 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 logger = logging.getLogger(__name__)
+
+# What SEC EDGAR sees when no contact is configured. Made up on purpose:
+# plan.md D13 (answered 2026-09-28) keeps it while the SEC traffic is two test
+# tickers, and a separate contact address gets set before the full S&P 500
+# backtest download. `.example` is a reserved domain (RFC 2606), so this can
+# never be anybody's real inbox.
+SEC_EDGAR_PLACEHOLDER_USER_AGENT = "Strategeia/1.0 (personal paper-trading research; contact@strategeia.example)"
+
+# A web address in the user-agent is what turns EDGAR's 200 into a 403 (see
+# InfraSettings.sec_edgar_user_agent). Email addresses are cut out before the
+# check: "you@example.com" is exactly the contact the SEC asks for, and its
+# domain half must not read as a link. Each alternative matches the whole
+# fragment so the warning can quote it: a scheme (http://, https://), a www.
+# name, or a bare domain with or without a path (github.com/someone/repo).
+_EMAIL_ADDRESS_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_WEB_ADDRESS_RE = re.compile(
+    r"\S*://\S*|\bwww\.\S*|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b(?:/\S*)?",
+    re.IGNORECASE,
+)
 
 
 class InfraSettings(BaseSettings):
@@ -49,16 +69,70 @@ class InfraSettings(BaseSettings):
     # configured" needs its own flag: api_shared_secret alone can't tell
     # the two apart once it's a string defaulting to "".
     allow_unauthenticated_api: bool = False
-    # Deliberately separate from data/ (which holds the bundled, read-only
-    # sp500.csv baked into the Docker image) so a single volume mount at
-    # runtime/ can persist the db + settings without hiding sp500.csv.
     # SEC EDGAR's fair-access policy requires a User-Agent that identifies the
     # requester with a contact address, and it rejects strings containing a URL
     # (verified: any UA with "github.com" in it returns 403 where the same
     # request with an email-shaped contact returns 200). The default is a
-    # neutral placeholder deliberately — set SEC_EDGAR_USER_AGENT in .env to
-    # your own contact if you use the insider-scoring feature in earnest.
-    sec_edgar_user_agent: str = "Strategeia/1.0 (personal paper-trading research; contact@strategeia.example)"
+    # neutral placeholder deliberately (SEC_EDGAR_PLACEHOLDER_USER_AGENT
+    # above). To send your own contact, set SEC_EDGAR_USER_AGENT in
+    # backend/.env for a local run, or in the gitignored .env next to
+    # docker-compose.yml, which passes it into the container (plan.md F-7).
+    # Form: "Name/1.0 (purpose; you@example.com)" — plain ASCII, no link.
+    sec_edgar_user_agent: str = SEC_EDGAR_PLACEHOLDER_USER_AGENT
+
+    @field_validator("sec_edgar_user_agent")
+    @classmethod
+    def _sec_user_agent_or_placeholder(cls, value: str) -> str:
+        """docker-compose.yml passes SEC_EDGAR_USER_AGENT=${SEC_EDGAR_USER_AGENT:-},
+        so a deployment that never set it still delivers the variable, as "".
+        pydantic-settings reads a variable set to "" as the value "", not as
+        "absent, use the default" (the same trap notes/Decisions.md records
+        for AUTH_USERNAME), and EDGAR refuses requests that don't say who sent
+        them — insider scoring would quietly drop to zero. Blank therefore
+        means the placeholder.
+
+        Runs of whitespace, line breaks included, collapse to one space, and a
+        value that still can't travel as an HTTP header falls back to the
+        placeholder, loudly: http.client raises ValueError on a line break and
+        UnicodeEncodeError on anything outside Latin-1 (a name in Greek
+        letters, say). sec_edgar_provider._fetch converts network errors only,
+        so either would escape the provider chain and fail every trade-plan
+        evaluation of a US stock, not just cost the insider signal. Printable
+        ASCII is the bar (RFC 9110 has senders keep header values to ASCII).
+
+        A web address is only warned about, never replaced: the operator's own
+        contact is still the right thing to send, and the check is a pattern
+        that can misfire. The placeholder gets no warning at all — keeping it
+        for now is a deliberate choice (plan.md D13), and a warning on every
+        start would teach whoever reads the logs to skip warnings."""
+        value = " ".join(value.split())
+        if not value:
+            return SEC_EDGAR_PLACEHOLDER_USER_AGENT
+        if not (value.isascii() and value.isprintable()):
+            # The value itself isn't logged: it's someone's name and address.
+            logger.warning(
+                "SEC_EDGAR_USER_AGENT has characters an HTTP header can't carry (only "
+                "plain printable ASCII is safe; Greek or accented letters are not), so "
+                "every SEC EDGAR request would fail. Using the built-in placeholder "
+                "instead. Rewrite it in plain ASCII, as "
+                "'Name/1.0 (purpose; you@example.com)'."
+            )
+            return SEC_EDGAR_PLACEHOLDER_USER_AGENT
+        web_address = _WEB_ADDRESS_RE.search(_EMAIL_ADDRESS_RE.sub(" ", value))
+        if web_address:
+            logger.warning(
+                "SEC_EDGAR_USER_AGENT contains what looks like a web address (%r). SEC "
+                "EDGAR answers 403 to any user-agent with a link in it, which switches "
+                "insider-trade scoring off. Use the form "
+                "'Name/1.0 (purpose; you@example.com)': an email address is fine, a "
+                "link is not.",
+                web_address.group(0).strip("()[]<>{};,+\"'"),
+            )
+        return value
+
+    # Deliberately separate from data/ (which holds the bundled, read-only
+    # sp500.csv baked into the Docker image) so a single volume mount at
+    # runtime/ can persist the db + settings without hiding sp500.csv.
     db_path: str = "runtime/strategeia.db"
     settings_path: str = "runtime/settings.json"
 

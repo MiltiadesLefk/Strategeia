@@ -26,6 +26,25 @@ services:
       - ALLOW_UNAUTHENTICATED_API=true
       - AUTH_PASSWORD=
       - API_SHARED_SECRET=
+      # Auth for the Claude Code CLI baked into the backend image (the
+      # `claude_code_cli` LLM provider). Generate one on a machine where
+      # you're logged in with `claude setup-token`, then put
+      # CLAUDE_CODE_OAUTH_TOKEN=... in a gitignored `.env` next to this
+      # file — compose reads it for this substitution. Blank = the CLI is
+      # present but unauthenticated, so narratives fall back to rule-based.
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Beta: every screen (Company dropdown, Market Scan, dashboard, auto-scan)
+      # sees only these symbols — see data_providers/universe.py. Remove the
+      # line to scan the full bundled universe again.
+      - STRATEGEIA_DEV_TICKERS=NVDA,AAPL
+      # The contact SEC EDGAR sees on each insider-trade request (the SEC
+      # asks every program that downloads from it to say who runs it). Set
+      # it in the same gitignored `.env` as CLAUDE_CODE_OAUTH_TOKEN above,
+      # as SEC_EDGAR_USER_AGENT="Name/1.0 (purpose; you@example.com)":
+      # plain ASCII, no link — the SEC answers 403 to a user-agent with a
+      # URL in it. Blank = the made-up placeholder, kept for now (plan.md
+      # D13); set a separate address before the S&P 500 backtest run.
+      - SEC_EDGAR_USER_AGENT=${SEC_EDGAR_USER_AGENT:-}
     restart: unless-stopped
 
   frontend:
