@@ -391,17 +391,18 @@ def _seed_high_short_volume(session, symbol="AAPL"):
 
 def test_a_tradeable_plan_records_shadow_signals(session, monkeypatch):
     response = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    # The FINRA signal, plus the 8-K signal (unavailable here: no stored 8-Ks for the symbol).
-    assert [s.name for s in response.shadow_signals] == [SIGNAL_NAME, "sec_8k_negative_items"]
-    assert response.shadow_signals[0].available is False  # nothing ingested: not a guess
+    # Looked up by name: other silent signals register alongside these (news_cards: no labelled news stored here).
+    by_name = {s.name: s for s in response.shadow_signals}
+    assert {SIGNAL_NAME, "sec_8k_negative_items"} <= set(by_name)
+    assert by_name[SIGNAL_NAME].available is False  # nothing ingested: not a guess
     record = session.get(TradePlanRecord, response.id)
-    assert json.loads(record.shadow_signals)[0]["name"] == SIGNAL_NAME
+    assert SIGNAL_NAME in {s["name"] for s in json.loads(record.shadow_signals)}
 
 
 def test_a_no_trade_record_records_them_too(session, monkeypatch):
     response = _generate(session, monkeypatch, FakeFlatDataProvider())
     assert response.direction is None
-    assert response.shadow_signals and response.shadow_signals[0].name == SIGNAL_NAME
+    assert SIGNAL_NAME in {s.name for s in response.shadow_signals}
 
 
 def test_shadow_signals_never_change_a_decision(session, monkeypatch):
@@ -409,7 +410,7 @@ def test_shadow_signals_never_change_a_decision(session, monkeypatch):
     # Ingest data the scorer reads as an unusually high ratio against a long.
     _seed_high_short_volume(session)
     with_signal = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    scored = with_signal.shadow_signals[0]
+    scored = next(s for s in with_signal.shadow_signals if s.name == SIGNAL_NAME)
     assert scored.available and scored.would_score == -1  # it did read the data...
     for field in (
         "direction", "entry", "stop", "tp1", "tp2", "rr1", "rr2", "suggested_shares", "confidence_score",

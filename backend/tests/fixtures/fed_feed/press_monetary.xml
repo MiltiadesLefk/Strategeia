@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+    <channel>
+        <title>FRB: Press Release - Monetary Policy</title>
+        <link><![CDATA[https://www.federalreserve.gov/feeds/feeds.htm]]></link>
+        <description><![CDATA[Press releases about monetary policy from the Federal Reserve Board]]></description>
+        <language>en</language>
+                <item>
+            <title>Federal Reserve issues FOMC statement</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm]]></guid>
+            <description><![CDATA[Federal Reserve issues FOMC statement]]></description>
+            <category>Monetary Policy</category>
+            <pubDate><![CDATA[Wed, 16 Sep 2026 18:00:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Federal Reserve Board and Federal Open Market Committee release economic projections from the September 15-16 FOMC meeting</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916b.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916b.htm]]></guid>
+            <description><![CDATA[Federal Reserve Board and Federal Open Market Committee release economic projections from the September 15-16 FOMC meeting]]></description>
+            <category>Monetary Policy</category>
+            <pubDate><![CDATA[Wed, 16 Sep 2026 18:00:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Minutes of the Board&#39;s discount rate meetings on July 20 and July 29, 2026</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260825a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260825a.htm]]></guid>
+            <description><![CDATA[Minutes of the Board&#39;s discount rate meetings on July 20 and July 29, 2026]]></description>
+            <category>Monetary Policy</category>
+            <pubDate><![CDATA[Tue, 25 Aug 2026 18:00:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Minutes of the Federal Open Market Committee, July 28–29, 2026</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260819a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260819a.htm]]></guid>
+            <description><![CDATA[Minutes of the Federal Open Market Committee, July 28–29, 2026]]></description>
+            <category>Monetary Policy</category>
+            <pubDate><![CDATA[Wed, 19 Aug 2026 18:00:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Minutes of the Federal Open Market Committee, June 16-17, 2026</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260708a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260708a.htm]]></guid>
+            <description><![CDATA[Minutes of the Federal Open Market Committee, June 16-17, 2026]]></description>
+            <category>Monetary Policy</category>
+            <pubDate><![CDATA[Wed, 8 Jul 2026 18:00:00 GMT]]></pubDate>    
+        </item>
+
+    </channel>
+</rss>

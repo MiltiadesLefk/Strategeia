@@ -25,6 +25,8 @@ from app.backtest.service import recover_on_startup as recover_interrupted_backt
 from app.database import create_db_and_tables
 from app.scheduler import start_scheduler, stop_scheduler
 from app.watchers.sec_watcher import register_sec_watcher
+from app.watchers.fed_watcher import register_fed_watcher
+from app.watchers.posts_watcher import register_posts_watcher
 
 
 @asynccontextmanager
@@ -33,6 +35,8 @@ async def lifespan(app: FastAPI):
     # A backtest left running by a previous process can never finish: mark it failed.
     recover_interrupted_backtests()
     register_sec_watcher()  # sec_watcher: the SEC filings watcher (idle until the Watchers switch is on)
+    register_fed_watcher()  # fed_watcher: Fed statements and speeches (market-wide, alert-only)
+    register_posts_watcher()  # posts_watcher: posts from an unofficial archive feed
     start_scheduler()
     yield
     stop_scheduler()

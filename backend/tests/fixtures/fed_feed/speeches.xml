@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+    <channel>
+        <title>FRB: Speeches</title>
+        <link><![CDATA[https://www.federalreserve.gov/feeds/feeds.htm]]></link>
+        <description><![CDATA[Speeches of Federal Reserve Officials]]></description>
+        <language>en</language>
+                <item>
+            <title>Bowman, Modernizing Financial Regulation: Initial Observations from eSLR</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/speech/bowman20261001a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/speech/bowman20261001a.htm]]></guid>            
+            <description><![CDATA[Speech At the Atlantic Council 2026 CEO &amp; Senior Management Summit, Washington, D.C.]]></description>
+            <category>Speech</category>
+            <pubDate><![CDATA[Thu, 1 Oct 2026 19:00:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Jefferson, The U.S. Economy and Monetary Policy</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/speech/jefferson20261001a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/speech/jefferson20261001a.htm]]></guid>            
+            <description><![CDATA[Speech At the Darden School of Business, University of Virginia, Charlottesville, Virginia]]></description>
+            <category>Speech</category>
+            <pubDate><![CDATA[Thu, 1 Oct 2026 17:30:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Waller, The Data Version of Godzilla versus Kong: FRED Takes on AI</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/speech/waller20261001a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/speech/waller20261001a.htm]]></guid>            
+            <description><![CDATA[Speech At &quot;Navigating Trust, AI and Storytelling in a World of Data,&quot; FRED Con 2026, Federal Reserve Bank of St. Louis, St. Louis, Missouri]]></description>
+            <category>Speech</category>
+            <pubDate><![CDATA[Thu, 1 Oct 2026 14:00:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Cook, The Dual Mandate in Rural America</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/speech/cook20260930a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/speech/cook20260930a.htm]]></guid>            
+            <description><![CDATA[Speech At the 2026 Investing in Rural America Conference, Federal Reserve Bank of Richmond, Asheville, North Carolina]]></description>
+            <category>Speech</category>
+            <pubDate><![CDATA[Wed, 30 Sep 2026 19:25:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Waller, Payments in the Age of AI Agents</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/speech/waller20260928a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/speech/waller20260928a.htm]]></guid>            
+            <description><![CDATA[Speech At Sibos 2026, Miami, Florida]]></description>
+            <category>Speech</category>
+            <pubDate><![CDATA[Tue, 29 Sep 2026 19:00:00 GMT]]></pubDate>    
+        </item>
+        <item>
+            <title>Warsh, In Our Time</title>
+            <link><![CDATA[https://www.federalreserve.gov/newsevents/speech/warsh20260828a.htm]]></link>
+            <guid><![CDATA[https://www.federalreserve.gov/newsevents/speech/warsh20260828a.htm]]></guid>            
+            <description><![CDATA[Speech At “Financial Innovation: Implications for Payments and Policy,” an economic policy symposium sponsored by the Federal Reserve Bank of Kansas City, Jackson Hole, Wyoming]]></description>
+            <category>Speech</category>
+            <pubDate><![CDATA[Fri, 28 Aug 2026 14:00:00 GMT]]></pubDate>    
+        </item>
+
+    </channel>
+</rss>

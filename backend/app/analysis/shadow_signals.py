@@ -113,6 +113,8 @@ def _load_builtin_signals() -> None:
     # Imported lazily: the built-in scorers import this module to register.
     from app.analysis import short_volume_scoring  # noqa: F401
     from app.analysis import filing_8k_scoring  # noqa: F401
+    from app.analysis import fed_event_window  # noqa: F401
+    from app.analysis import post_mentions  # noqa: F401
 
 
 def _unavailable(name: str, reason: str) -> ShadowSignal:
