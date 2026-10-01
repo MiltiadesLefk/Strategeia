@@ -9,6 +9,7 @@ import type {
   EquityPoint,
   LoginRequest,
   LoginResponse,
+  MarketSession,
   Position,
   PortfolioStats,
   ResearchResponse,
@@ -32,7 +33,35 @@ export const qk = {
   settings: ['settings'] as const,
   settingsStatus: ['settings-status'] as const,
   authStatus: ['auth-status'] as const,
+  marketSession: ['market-session'] as const,
 };
+
+// Refetch just after the next bell (open or close), so the badge and the
+// Execute buttons flip within seconds of it — bounded so a sleeping laptop
+// or a skewed clock still catches up within a few minutes.
+const MARKET_SESSION_MIN_REFETCH_MS = 5_000;
+const MARKET_SESSION_MAX_REFETCH_MS = 5 * 60_000;
+const MARKET_SESSION_BELL_MARGIN_MS = 2_000;
+
+/**
+ * The US market session from the backend's calendar — the one source of
+ * truth for holidays and early closes, shared with the engine that refuses
+ * off-hours fills. Components tick their own countdowns from next_open /
+ * next_close between fetches.
+ */
+export function useMarketSession() {
+  return useQuery({
+    queryKey: qk.marketSession,
+    queryFn: () => api.get<MarketSession>('/api/market/session'),
+    refetchInterval: (query) => {
+      const session = query.state.data;
+      if (!session) return MARKET_SESSION_MAX_REFETCH_MS;
+      const nextBell = new Date(session.is_open ? session.next_close : session.next_open).getTime();
+      const wait = nextBell - Date.now() + MARKET_SESSION_BELL_MARGIN_MS;
+      return Math.min(Math.max(wait, MARKET_SESSION_MIN_REFETCH_MS), MARKET_SESSION_MAX_REFETCH_MS);
+    },
+  });
+}
 
 export function useScan(symbols?: string) {
   return useQuery({

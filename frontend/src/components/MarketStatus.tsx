@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
-import { marketState, marketStateLabel, timeUntilNextTransition, type MarketState } from '../lib/marketHours';
+import { useMarketSession } from '../api/hooks';
+import type { MarketSessionState } from '../api/types';
+import { marketStateLabel, timeUntilNextTransition } from '../lib/marketHours';
+import { useNow } from '../lib/useNow';
 import { formatRelativeTime } from './common';
 
-const TONE: Record<MarketState, { color: string; bg: string }> = {
+const TONE: Record<MarketSessionState, { color: string; bg: string }> = {
   open: { color: 'var(--green)', bg: 'var(--green-bg)' },
   pre: { color: 'var(--amber)', bg: 'var(--amber-bg)' },
   after: { color: 'var(--amber)', bg: 'var(--amber-bg)' },
-  weekend: { color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.05)' },
+  closed: { color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.05)' },
+  holiday: { color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.05)' },
 };
 
 /**
@@ -15,21 +18,36 @@ const TONE: Record<MarketState, { color: string; bg: string }> = {
  * data behind it is the last daily close (cached up to 15 minutes), not a
  * live tick.
  *
+ * The session (holidays and 1:00 pm early closes included) comes from the
+ * backend's calendar, the same one the paper engine uses to refuse off-hours
+ * fills, so the badge can't say "open" on a day the engine won't trade. The
+ * countdown ticks locally every 30 s between fetches.
+ *
  * `asOf` is when the client last actually received this data (react-query's
  * dataUpdatedAt). With provider TTLs between 15 minutes and a day, "when is
  * this from?" is the question the dashboard most needed to answer and never
  * did.
  */
 export function MarketStatus({ asOf }: { asOf?: number }) {
-  const [now, setNow] = useState(() => new Date());
+  const { data: session, isError } = useMarketSession();
+  const now = useNow();
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  const dataAge = asOf ? `data ${formatRelativeTime(new Date(asOf).toISOString())}` : '';
 
-  const state = marketState(now);
-  const tone = TONE[state];
+  if (!session) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span className="badge badge-neutral">{isError ? 'Market status unavailable' : 'Market status…'}</span>
+        {dataAge && (
+          <span className="text-muted" style={{ fontSize: 12 }}>
+            {dataAge}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  const tone = TONE[session.state];
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -43,11 +61,11 @@ export function MarketStatus({ asOf }: { asOf?: number }) {
             display: 'inline-block',
           }}
         />
-        {marketStateLabel(state)}
+        {marketStateLabel(session)}
       </span>
       <span className="text-muted" style={{ fontSize: 12 }}>
-        {timeUntilNextTransition(now)}
-        {asOf ? ` · data ${formatRelativeTime(new Date(asOf).toISOString())}` : ''}
+        {timeUntilNextTransition(session, now)}
+        {dataAge ? ` · ${dataAge}` : ''}
       </span>
     </div>
   );

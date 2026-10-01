@@ -1,78 +1,55 @@
 /**
- * US cash-session status, computed client-side.
+ * Presentation helpers for the US market session.
  *
- * A trading dashboard's most load-bearing piece of context is "is the market
- * open right now" — which nothing in this app surfaced. It showed a local
- * wall clock instead, and a permanently-green "Live Market Data" badge that
- * was unconditional markup rather than a reading of anything.
- *
- * Done with Intl rather than a tz library so it stays dependency-free and
- * DST-correct. Mirrors backend `app/markets.py`; like that module it
- * deliberately ignores market holidays — the cost of being wrong on
- * Thanksgiving is a mislabeled badge, not a bad trade.
+ * The session itself — weekends, NYSE holidays, 1:00 pm early closes — comes
+ * from the backend's calendar (`GET /api/market/session`, see
+ * `backend/app/markets.py`) via `useMarketSession`. It used to be computed
+ * here with a hardcoded 09:30–16:00 weekday rule that didn't know holidays;
+ * keeping a second copy of the holiday table in TypeScript would just be a
+ * second place for it to go wrong, and the engine that refuses off-hours
+ * fills reads the backend's copy. Only the countdown is computed client-side,
+ * from the absolute next_open / next_close times, so it ticks between fetches.
  */
 
-export type MarketState = 'open' | 'pre' | 'after' | 'weekend';
+import type { MarketSession } from '../api/types';
 
-const OPEN_MINUTES = 9 * 60 + 30; // 09:30 ET
-const CLOSE_MINUTES = 16 * 60; // 16:00 ET
-
-/** Minutes since midnight, plus weekday, in America/New_York. */
-function newYorkParts(at: Date): { minutes: number; weekday: number } {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(at);
-
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '0';
-  // Intl can render midnight as "24" in hour12:false; normalise it.
-  const hour = Number(get('hour')) % 24;
-  const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return {
-    minutes: hour * 60 + Number(get('minute')),
-    weekday: Math.max(0, weekdayNames.indexOf(get('weekday'))),
-  };
-}
-
-export function marketState(at: Date = new Date()): MarketState {
-  const { minutes, weekday } = newYorkParts(at);
-  if (weekday === 0 || weekday === 6) return 'weekend';
-  if (minutes < OPEN_MINUTES) return 'pre';
-  if (minutes >= CLOSE_MINUTES) return 'after';
-  return 'open';
-}
-
-export function marketStateLabel(state: MarketState): string {
-  switch (state) {
+export function marketStateLabel(session: Pick<MarketSession, 'state' | 'holiday_name'>): string {
+  switch (session.state) {
     case 'open':
       return 'Market open';
     case 'pre':
       return 'Pre-market';
     case 'after':
       return 'After hours';
-    case 'weekend':
+    case 'closed':
       return 'Market closed';
+    case 'holiday':
+      return session.holiday_name ? `Closed: ${session.holiday_name}` : 'Market holiday';
   }
 }
 
-/** Human "opens in 2h 15m" / "closes in 40m" for the status line. */
-export function timeUntilNextTransition(at: Date = new Date()): string {
-  const { minutes, weekday } = newYorkParts(at);
-  const state = marketState(at);
-
-  if (state === 'open') return `closes in ${formatGap(CLOSE_MINUTES - minutes)}`;
-  if (state === 'pre') return `opens in ${formatGap(OPEN_MINUTES - minutes)}`;
-
-  // After hours or weekend: count forward to the next weekday open.
-  const daysAhead = state === 'weekend' ? (weekday === 6 ? 2 : 1) : weekday === 5 ? 3 : 1;
-  const minutesToMidnight = 24 * 60 - minutes;
-  return `opens in ${formatGap(minutesToMidnight + (daysAhead - 1) * 24 * 60 + OPEN_MINUTES)}`;
+/** The instant the market next changes state: its close while open, else its next open. */
+export function nextBell(session: MarketSession): Date {
+  return new Date(session.is_open ? session.next_close : session.next_open);
 }
 
-function formatGap(totalMinutes: number): string {
+/** Human "opens in 2h 15m" / "closes in 40m (early close)" for the status line. */
+export function timeUntilNextTransition(session: MarketSession, now: Date = new Date()): string {
+  const gap = formatGap((nextBell(session).getTime() - now.getTime()) / 60_000);
+  if (session.is_open) return `closes in ${gap}${session.next_close_is_early ? ' (early close, 1:00 pm ET)' : ''}`;
+  return `opens in ${gap}`;
+}
+
+/**
+ * 24/7 instruments with no session at all — the universe's `<COIN>-USD`
+ * crypto pairs. Mirrors backend `markets.is_always_on` (a naming convention,
+ * the same one CompanyIcon uses for crypto logos), not a calendar.
+ */
+export function isAlwaysOpenSymbol(symbol: string): boolean {
+  return symbol.toUpperCase().endsWith('-USD');
+}
+
+export function formatGap(totalMinutes: number): string {
   const mins = Math.max(0, Math.round(totalMinutes));
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);

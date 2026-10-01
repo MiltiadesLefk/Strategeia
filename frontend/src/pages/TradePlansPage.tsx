@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAnalysis, useGenerateTradePlan, useOpenPosition, useTradePlans } from '../api/hooks';
+import { useAnalysis, useGenerateTradePlan, useMarketSession, useOpenPosition, useTradePlans } from '../api/hooks';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { DirectionBadge, TradePlanStatusBadge } from '../components/Badge';
 import { PipelineSteps } from '../components/PipelineSteps';
@@ -9,8 +9,10 @@ import { RatioGauge } from '../components/RatioGauge';
 import { IconBadge } from '../components/IconBadge';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber } from '../components/common';
+import { isAlwaysOpenSymbol, marketStateLabel, timeUntilNextTransition } from '../lib/marketHours';
+import { useNow } from '../lib/useNow';
 import type { ApiError } from '../api/client';
-import type { TradePlan } from '../api/types';
+import type { MarketSession, TradePlan } from '../api/types';
 
 const STATUS_FILTERS = [
   { value: 'active', label: 'Pending & Executed' },
@@ -68,9 +70,41 @@ function AiOpinionBlock({ plan }: { plan: TradePlan }) {
   );
 }
 
+/** The viewer's own clock for a UTC instant: "Mon 16:45". The notes quote New
+ *  York time (the rule is defined there); this says what that means locally. */
+function formatLocalTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Why Execute is unavailable for a pending plan right now, or null. Mirrors
+ * the two refusals POST /api/portfolio/positions makes, so the button is
+ * disabled with the reason rather than failing on click:
+ * - a plan made while the market was closed waits for its redo at the next
+ *   open, and only the fresh plan may execute (D10 = C) — even in the minutes
+ *   between the bell and the redo;
+ * - an equity can't be filled while the US market is closed: the only price
+ *   is the last session's close. Crypto never closes.
+ */
+function executeBlockedReason(plan: TradePlan, session: MarketSession | undefined, now: Date): string | null {
+  if (plan.redo_at) {
+    return (
+      'Made while the market was closed: it will be redone from fresh data at the next open ' +
+      `(${formatLocalTime(plan.redo_at)} your time), and only that fresh plan can be executed.`
+    );
+  }
+  if (isAlwaysOpenSymbol(plan.symbol) || !session || session.is_open) return null;
+  return (
+    `${marketStateLabel(session)}: the only price now is the last session's close, which nobody can trade at. ` +
+    `Execute is available once the US market opens (${timeUntilNextTransition(session, now)}).`
+  );
+}
+
 function TradePlanCard({ plan }: { plan: TradePlan }) {
   const { mutate: open, isPending, isSuccess, error: openError } = useOpenPosition();
   const { data: analysis } = useAnalysis(plan.direction ? plan.symbol : null);
+  const { data: session } = useMarketSession();
+  const now = useNow();
 
   if (plan.direction === null) {
     return (
@@ -109,6 +143,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
       : [];
 
   const executed = plan.status === 'executed' || isSuccess;
+  const blockedReason = executeBlockedReason(plan, session, now);
 
   return (
     <div className="card">
@@ -386,18 +421,30 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
         ) : plan.status === 'pending' ? (
           <>
             <div>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>Ready to Execute?</div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                {plan.redo_at ? 'Waiting for the next open' : blockedReason ? 'Market closed' : 'Ready to Execute?'}
+              </div>
               <div className="text-muted" style={{ fontSize: 13, maxWidth: 480 }}>
-                This trade plan was built from real-time market data. Review it, then execute it as a simulated
-                paper position — no real money or broker order is involved.
+                {plan.redo_at ? (
+                  // The backend's own note says what happened and when, in
+                  // New York time; the viewer's clock is added alongside.
+                  <>
+                    {plan.auto_execute_note ?? 'Made while the market was closed: it will be redone from fresh data at the next open.'}{' '}
+                    ({formatLocalTime(plan.redo_at)} your time.)
+                  </>
+                ) : (
+                  (blockedReason ??
+                  'This trade plan was built from real-time market data. Review it, then execute it as a simulated paper position — no real money or broker order is involved.')
+                )}
               </div>
               {/* Distinguishes "pending because auto-execute is off" from
                   "pending because auto-execute deliberately declined to fire" —
                   the AI Trading Overlay disagreement is the one case worth a
                   visibly different (amber, not muted) treatment, since it's
                   the app actively asking you to make the call it wouldn't
-                  make unattended. */}
-              {plan.auto_execute_note?.startsWith('Auto-execute held') ? (
+                  make unattended. A deferred plan's note is already the text
+                  above. */}
+              {plan.redo_at ? null : plan.auto_execute_note?.startsWith('Auto-execute held') ? (
                 <div className="badge badge-amber" style={{ marginTop: 10, maxWidth: 480, whiteSpace: 'normal', display: 'inline-block' }}>
                   ⚠ {plan.auto_execute_note}
                 </div>
@@ -409,7 +456,12 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                 )
               )}
             </div>
-            <button className="btn btn-primary" disabled={isPending} onClick={() => plan.id && open(plan.id)}>
+            <button
+              className="btn btn-primary"
+              disabled={isPending || blockedReason !== null}
+              title={blockedReason ?? undefined}
+              onClick={() => plan.id && open(plan.id)}
+            >
               {isPending ? 'Executing…' : 'Execute Trade Plan'}
             </button>
           </>
@@ -507,6 +559,11 @@ export function TradePlansPage() {
                   <td className="tabular-nums">{p.confidence_score ?? '—'}</td>
                   <td>
                     <TradePlanStatusBadge status={p.status} />
+                    {p.redo_at && (
+                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }} title={p.auto_execute_note ?? undefined}>
+                        redo at the open, {formatLocalTime(p.redo_at)}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -149,12 +149,17 @@ export interface TradePlan {
   ai_provider?: string | null;
   status?: string | null;
   /** What happened at the auto-execute step, in plain English — executed,
-   *  skipped with a reason, or held for manual review because the AI Trading
-   *  Overlay's stance was the flat opposite of the rule-based direction.
+   *  skipped with a reason, held for manual review because the AI Trading
+   *  Overlay's stance was the flat opposite of the rule-based direction, or
+   *  not executed because the market was closed (see redo_at).
    *  With ai_overlay_vetoes_trade on (the default once the overlay is on) a
    *  contradiction never reaches this step — the evaluation ends as a
    *  no_trade record with the overlay named in `reason` instead. */
   auto_execute_note?: string | null;
+  /** Set while a plan made with its market closed waits to be redone from
+   *  fresh data at the next open (ISO UTC). Such a plan can't be executed by
+   *  hand — only the fresh plan can. */
+  redo_at?: string | null;
   created_at?: string | null;
   technical_score?: number | null;
   fundamental_score?: number | null;
@@ -184,6 +189,23 @@ export interface TradePlan {
   ai_opinion_score?: number | null;
   ai_opinion_text?: string | null;
   ai_news_assessment?: string | null;
+}
+
+/** GET /api/market/session — the US session from the backend's one calendar
+ *  (weekends, NYSE holidays, 1:00 pm early closes). */
+export type MarketSessionState = 'open' | 'pre' | 'after' | 'closed' | 'holiday';
+
+export interface MarketSession {
+  state: MarketSessionState;
+  is_open: boolean;
+  /** The first open / close still ahead (ISO UTC). While open, next_open is
+   *  the NEXT trading day's; next_close is 1:00 pm ET on an early-close day. */
+  next_open: string;
+  next_close: string;
+  next_close_is_early: boolean;
+  /** Set only when state is 'holiday'. */
+  holiday_name: string | null;
+  as_of: string;
 }
 
 export interface Position {
