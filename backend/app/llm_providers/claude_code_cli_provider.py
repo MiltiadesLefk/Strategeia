@@ -93,7 +93,13 @@ class ClaudeCodeCLIProvider:
         return self.cli_path is not None
 
     def generate(
-        self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4, tier: LLMTier = ROUTINE_TIER
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 300,
+        temperature: float = 0.4,
+        tier: LLMTier = ROUTINE_TIER,
+        response_schema: dict | None = None,
     ) -> LLMResult:
         if not self.cli_path:
             return LLMResult("", self.name, 0, error="Claude Code CLI not found on PATH")
@@ -118,6 +124,12 @@ class ClaudeCodeCLIProvider:
         ]
         if model:
             argv += ["--model", model]
+        if response_schema:
+            # The CLI's own structured-output mode: it validates the answer
+            # against the schema before returning it (and works within the
+            # single-turn limit above). Passed as one argv element, never
+            # through a shell.
+            argv += ["--json-schema", json.dumps(response_schema, separators=(",", ":"))]
         start = time.monotonic()
         try:
             proc = subprocess.run(
@@ -141,6 +153,11 @@ class ClaudeCodeCLIProvider:
         try:
             parsed = json.loads(proc.stdout)
             text = (parsed.get("result", "") or "") if isinstance(parsed, dict) else ""
+            # With --json-schema the validated object arrives in its own
+            # `structured_output` field of the envelope (`result` may repeat it
+            # as text or be empty, depending on CLI version): prefer the object.
+            if response_schema and isinstance(parsed, dict) and isinstance(parsed.get("structured_output"), dict):
+                text = json.dumps(parsed["structured_output"])
             served = _served_model(parsed)
         except json.JSONDecodeError:
             text = proc.stdout.strip()

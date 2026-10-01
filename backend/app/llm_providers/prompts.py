@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.analysis.ground_truth import GroundTruthSnapshot, build_ground_truth, render_ground_truth
 from app.analysis.trend import ChartAnalysis
 from app.data_providers.base import CompanyOverview, FinancialYear, NewsItem
 
@@ -148,18 +149,10 @@ AI_OPINION_SYSTEM_PREAMBLE = (
 )
 
 
-def _volume_ratio_txt(volume_ratio: float) -> str:
-    """A 0.0x reading is almost always a missing number, not a real one: the
-    quote's `volume` field reads 0 outside regular trading hours, before the
-    session has printed anything. Handed to the model as a literal "0.0x" it
-    reads as "nobody is trading this", which is a serious red flag and a
-    false one — observed live, where the overlay built its whole objection on
-    a pre-market 0.0x on a name that trades 42m shares a day. Reported as
-    unavailable instead, the same graceful-degradation shape the rest of the
-    prompt already uses for missing fundamentals and news."""
-    if volume_ratio <= 0:
-        return "not available right now (no volume reported yet — outside regular trading hours)"
-    return f"{volume_ratio:.1f}x"
+# Where the overlay prompt's data section starts. The service reads everything
+# after it as "the data the model was given" when it checks the figures the
+# model quotes (analysis/ground_truth.find_ungrounded_figures).
+AI_OPINION_DATA_MARKER = "\n\nData:\n"
 
 
 def build_ai_opinion_prompt(
@@ -173,8 +166,18 @@ def build_ai_opinion_prompt(
     rule_based_direction: str | None,
     rule_based_confidence: int,
     rule_based_news_reasons: list[str] | None = None,
+    past_lessons: str = "",
+    ground_truth: GroundTruthSnapshot | None = None,
 ) -> str:
-    fundamentals_txt = "Fundamentals: not available for this symbol (e.g. a crypto pair).\n"
+    # The fixed fact block, computed without AI (analysis/ground_truth.py). A
+    # caller with none gets one built from the arguments, so the prompt always
+    # carries it.
+    if ground_truth is None:
+        ground_truth = build_ground_truth(
+            symbol, chart, volume_ratio=volume_ratio, earnings_date=earnings_date,
+            rule_based_direction=rule_based_direction, rule_based_confidence_pct=rule_based_confidence,
+        )
+    fundamentals_txt ="Fundamentals: not available for this symbol (e.g. a crypto pair).\n"
     if overview is not None:
         parts = []
         if overview.market_cap:
@@ -216,12 +219,9 @@ def build_ai_opinion_prompt(
     )
 
     return (
-        f"{AI_OPINION_SYSTEM_PREAMBLE}\n\n"
-        "Data:\n"
-        f"Symbol: {symbol}\nPrice: ${chart.price:.2f}\nTrend: {chart.trend}\nMomentum: {chart.momentum}\n"
-        f"RSI(14): {chart.rsi14:.0f}\nPrice vs 20-day EMA: {chart.pct_from_ema20 * 100:+.1f}%\n"
-        f"Volume vs 20-day average: {_volume_ratio_txt(volume_ratio)}\n"
-        f"{fundamentals_txt}{years_txt}{earnings_txt}{news_txt}{verdict_txt}\n"
+        f"{AI_OPINION_SYSTEM_PREAMBLE}{AI_OPINION_DATA_MARKER}"
+        f"{render_ground_truth(ground_truth)}\n\n"
+        f"{fundamentals_txt}{years_txt}{earnings_txt}{news_txt}{verdict_txt}{past_lessons}\n"
         "Give your own independent stance, trade_verdict and confidence now, as the single-line "
         "JSON object specified above — nothing else."
     )

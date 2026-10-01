@@ -8,6 +8,7 @@ from app.llm_providers.null_provider import NullLLMProvider
 from app.llm_providers.openai_provider import OpenAIProvider
 from app.llm_providers.openrouter_provider import OpenRouterProvider
 from app.llm_providers.orcarouter_provider import OrcaRouterProvider
+from app.llm_providers.structured import accepts_response_schema
 
 
 def get_llm_provider(settings: AppSettings) -> LLMProvider:
@@ -30,12 +31,25 @@ def get_llm_provider(settings: AppSettings) -> LLMProvider:
     return NullLLMProvider()
 
 
-def generate_with_tier(provider: LLMProvider, prompt: str, tier: LLMTier = ROUTINE_TIER, **kwargs) -> LLMResult:
+def generate_with_tier(
+    provider: LLMProvider,
+    prompt: str,
+    tier: LLMTier = ROUTINE_TIER,
+    *,
+    response_schema: dict | None = None,
+    **kwargs,
+) -> LLMResult:
     """provider.generate(...) for a tier. The routine tier is the default, so
     it is not passed at all: a provider (or a test double) written before tiers
     existed keeps working for every narrative call. Only the decision tier is
     passed explicitly, and a provider that cannot take it is a bug worth a
-    loud TypeError, not a silent downgrade of a decision to a routine model."""
+    loud TypeError, not a silent downgrade of a decision to a routine model.
+
+    `response_schema` (a JSON schema dict) asks for structured output. Unlike a
+    tier it is only a hint, so a provider whose `generate` does not take it is
+    called without it and the caller's lenient parser covers the gap."""
+    if response_schema is not None and accepts_response_schema(provider.generate):
+        kwargs["response_schema"] = response_schema
     if tier == ROUTINE_TIER:
         return provider.generate(prompt, **kwargs)
     return provider.generate(prompt, tier=tier, **kwargs)

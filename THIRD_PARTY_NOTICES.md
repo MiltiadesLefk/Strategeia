@@ -43,7 +43,7 @@ holder is new.
 
 | Our file | Source (repo@short-commit) | Source file | License | What we changed |
 |---|---|---|---|---|
-| (none yet) | | | | |
+| `backend/app/services/lesson_service.py` | vongchu/TradingAgents_TauricResearch@01477f9 | `tradingagents/graph/reflection.py` | Apache-2.0 | Kept the idea and wording shape of the short review prompt (2-4 plain sentences: was the call right, what held, one lesson), reworded; everything else is new (facts-only prompt built from our trade records, SPY comparison from real bars, untrusted-text handling, failure handling, scheduling). |
 
 ---
 

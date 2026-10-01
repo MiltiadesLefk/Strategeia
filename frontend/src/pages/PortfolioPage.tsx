@@ -1,4 +1,6 @@
-import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useSettings } from '../api/hooks';
+import { Fragment, useState } from 'react';
+import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useSettings, useSettingsStatus } from '../api/hooks';
+import { LessonCell, LessonDetailRow } from '../components/TradeLesson';
 import { StatCard } from '../components/StatCard';
 import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
@@ -189,6 +191,9 @@ export function PortfolioPage() {
   const { data: equity } = useEquityCurve();
   const { data: positions, isLoading: positionsLoading } = usePositions();
   const { mutate: resetPortfolio, isPending: resetting, error: resetError } = useResetPortfolio();
+  // lesson column: which closed trade's lesson is open, and whether an AI provider can write one
+  const [openLessonId, setOpenLessonId] = useState<number | null>(null);
+  const lessonAiOnline = useSettingsStatus().data?.ai_online ?? false;
 
   function handleReset() {
     if (window.confirm('Reset the paper account? This closes out all positions and equity history and starts fresh at the configured starting cash. This cannot be undone.')) {
@@ -283,11 +288,13 @@ export function PortfolioPage() {
                 <th>R</th>
                 <th title="Best price reached during the trade, in R (MFE)">MFE</th>
                 <th title="Worst price reached during the trade, in R (MAE)">MAE</th>
+                <th title="An AI-written note on how the trade went, compared with SPY">Lesson</th>
               </tr>
             </thead>
             <tbody>
               {closedPositions.map((p) => (
-                <tr key={p.id}>
+                <Fragment key={p.id}>
+                <tr>
                   <td style={{ fontWeight: 600 }}>
                     <TickerLink symbol={p.symbol} iconSize={24} />
                   </td>
@@ -308,7 +315,12 @@ export function PortfolioPage() {
                   </td>
                   <td className="tabular-nums text-muted">{formatR(p.mfe_r)}</td>
                   <td className="tabular-nums text-muted">{formatAdverseR(p.mae_r)}</td>
+                  <td>
+                    <LessonCell position={p} open={openLessonId === p.id} onToggle={() => setOpenLessonId(openLessonId === p.id ? null : p.id)} aiOnline={lessonAiOnline} />
+                  </td>
                 </tr>
+                {openLessonId === p.id && p.lesson_text && <LessonDetailRow position={p} colSpan={11} aiOnline={lessonAiOnline} />}
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -57,9 +57,29 @@ function AiOpinionBlock({ plan }: { plan: TradePlan }) {
           </span>
         )}
       </div>
+      {plan.ai_opinion_parse === 'failed' && (
+        <div className="badge badge-amber" style={{ display: 'block', marginBottom: 8, whiteSpace: 'normal' }} role="status">
+          AI overlay answered but its reply could not be read. No stance or verdict was recorded, so it had no say in
+          this trade. The raw reply is shown below.
+        </div>
+      )}
       <div className="text-muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
         {plan.ai_opinion_text}
       </div>
+      {plan.ai_opinion_parse === 'lenient' && (
+        <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+          The reply was not in the exact format asked for; the fields above were recovered from it.
+        </div>
+      )}
+      {plan.ai_grounding_warnings && (
+        <div
+          style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5 }}
+          title="Figures the AI quoted that were not in the data it was given. Shown for your information only; they never change the verdict or the score."
+        >
+          <span style={{ fontWeight: 700, color: 'var(--amber)' }}>Check these figures:</span>{' '}
+          <span className="text-muted">{plan.ai_grounding_warnings.split('\n').filter(Boolean).join('; ')}</span>
+        </div>
+      )}
       {plan.ai_news_assessment && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
           <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 2 }}>AI's read of the news</div>

@@ -24,6 +24,7 @@ from app.portfolio.engine import PaperTradingEngine
 from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_auto_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
+from app.services.lesson_service import is_real_llm, run_lesson_catchup
 
 logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
@@ -128,6 +129,24 @@ def _market_open_redo_job() -> None:
             logger.exception("Scheduled market-open redo tick failed")
 
 
+# Lessons for closed trades are written by their own job, never by the exit sweep:
+# a slow or failing AI call can therefore never delay or break closing a position.
+# Every few minutes it finds recently closed positions with no lesson and writes a
+# few (see services/lesson_service.run_lesson_catchup); with no real AI provider
+# configured it returns before doing any work.
+LESSON_CATCHUP_INTERVAL_MINUTES = 5
+
+def _lesson_catchup_job() -> None:
+    try:
+        settings = load_app_settings()
+        llm_provider = get_llm_provider(settings)
+        if not is_real_llm(llm_provider):
+            return  # cheap exit before building the data provider or opening the database
+        data_provider = get_data_provider(settings)
+        with Session(engine) as session:
+            run_lesson_catchup(session, data_provider, llm_provider)
+    except Exception:
+        logger.exception("Scheduled lesson catch-up tick failed")
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -157,6 +176,26 @@ def start_scheduler() -> BackgroundScheduler:
         _market_open_redo_job,
         CronTrigger(**MARKET_OPEN_REDO_CRON, timezone=US_MARKET_TZ),
         id="market_open_redo",
+    )
+    _scheduler.add_job(
+        _missed_trades_refresh_job,
+        CronTrigger(
+            day_of_week="mon-fri",
+            hour=MISSED_TRADES_REFRESH_TIME_ET[0],
+            minute=MISSED_TRADES_REFRESH_TIME_ET[1],
+            timezone=US_MARKET_TZ,
+        ),
+        id="missed_trades_refresh",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _lesson_catchup_job,
+        "interval",
+        minutes=LESSON_CATCHUP_INTERVAL_MINUTES,
+        id="lesson_catchup",
+        max_instances=1,
+        coalesce=True,
     )
     _scheduler.start()
     return _scheduler

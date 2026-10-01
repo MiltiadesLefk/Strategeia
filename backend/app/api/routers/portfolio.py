@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.deps import get_app_settings, get_data_provider, get_session, require_auth
+from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_auth
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
+from app.llm_providers.base import LLMProvider
 from app.markets import format_market_time
 from app.portfolio.engine import (
     DuplicatePositionError,
@@ -27,6 +30,7 @@ from app.schemas.portfolio_schemas import (
     PositionSchema,
 )
 from app.services.deferred_evaluation_service import pending_redo_for_plan
+from app.services.lesson_service import generate_lesson, is_real_llm
 from app.strategy.service import plan_strategy_versions
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[Depends(require_auth)])
@@ -138,6 +142,46 @@ def close_position(
     price = data_provider.get_quote(position.symbol).price
     closed = build_engine(session, data_provider, settings).close_position(position, price, req.reason)
     return position_to_schema(closed, plan_strategy_versions(session, [closed.trade_plan_id]))
+
+
+# Each manual lesson spends a call on the user's AI provider, and the button can be
+# double-clicked. A short per-position wait (in-process, not persisted, like the other
+# cooldowns here) stops that without blocking lessons for other positions.
+LESSON_REQUEST_COOLDOWN_SECONDS = 20
+_last_lesson_request_monotonic: dict[int, float] = {}
+
+
+@router.post("/positions/{position_id}/lesson", response_model=PositionSchema)
+def write_position_lesson(
+    position_id: int,
+    session: Session = Depends(get_session),
+    data_provider: DataProvider = Depends(get_data_provider),
+    llm_provider: LLMProvider = Depends(get_llm_provider),
+) -> PositionSchema:
+    """Write (or rewrite) the AI lesson for one closed position. This is how a position
+    closed before lessons existed gets one: the background job only covers recent closes.
+    A model failure is not an HTTP error: the position comes back with `lesson_error`
+    set (and any earlier lesson kept)."""
+    position = session.get(PaperPosition, position_id)
+    if position is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+    if position.status != "closed":
+        raise HTTPException(status_code=400, detail="Only a closed position gets a lesson")
+    if not is_real_llm(llm_provider):
+        raise HTTPException(status_code=400, detail="No AI provider is configured (Settings -> AI Provider)")
+    now = time.monotonic()
+    last = _last_lesson_request_monotonic.get(position_id)
+    if last is not None and now - last < LESSON_REQUEST_COOLDOWN_SECONDS:
+        raise HTTPException(
+            status_code=429,
+            detail=f"A lesson was just requested for this position; wait "
+            f"{LESSON_REQUEST_COOLDOWN_SECONDS - (now - last):.0f}s before asking again.",
+        )
+    _last_lesson_request_monotonic[position_id] = now
+    outcome = generate_lesson(session, position, data_provider, llm_provider)
+    if outcome.status == "skipped":
+        raise HTTPException(status_code=409, detail=outcome.detail)
+    return position_to_schema(position, plan_strategy_versions(session, [position.trade_plan_id]))
 
 
 @router.get("/stats", response_model=PortfolioStatsSchema)

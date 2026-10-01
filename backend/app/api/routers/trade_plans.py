@@ -86,6 +86,8 @@ def trade_plan_to_response(record: TradePlanRecord, *, redo_at: datetime | None 
         ai_overlay_score=record.ai_overlay_score,
         ai_trade_verdict=record.ai_trade_verdict,
         ai_decision_model=record.ai_decision_model,
+        ai_opinion_parse=record.ai_opinion_parse,
+        ai_grounding_warnings=record.ai_grounding_warnings,
         # Recomputed from the stored dimensions rather than persisted: it is
         # a pure function of columns already on the row, so a stored copy
         # could only ever drift out of step with them.

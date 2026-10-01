@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, replace
 from datetime import date, datetime
@@ -18,7 +17,9 @@ from app.analysis.earnings_history_scoring import (
     historical_earnings_move_pct,
     score_earnings_surprise_track_record,
 )
+from app.analysis.ai_opinion import PARSE_FAILED, ai_opinion_json_schema, parse_ai_opinion_reply
 from app.analysis.ai_overlay_scoring import overlay_opposes_trade, score_ai_overlay
+from app.analysis.ground_truth import GroundTruthSnapshot, build_ground_truth, find_ungrounded_figures
 from app.analysis.expected_move import compute_expected_move_pct, days_to_expiration, score_expected_move
 from app.analysis.indicators import latest_atr
 from app.analysis.insider_scoring import INSIDER_SCORE_CAP, score_insider_activity
@@ -40,7 +41,7 @@ from app.data_providers.base import AllProvidersFailedError, CompanyOverview, Da
 from app.llm_providers.base import LLMProvider
 from app.llm_providers.base import DECISION_TIER
 from app.llm_providers.factory import generate_with_fallback, generate_with_tier
-from app.llm_providers.prompts import build_ai_opinion_prompt, build_trade_plan_take_prompt
+from app.llm_providers.prompts import AI_OPINION_DATA_MARKER, build_ai_opinion_prompt, build_trade_plan_take_prompt
 from app.knowledge.point_in_time import is_simulated
 from app.markets import format_market_time, us_closure_reason
 from app.portfolio.engine import (
@@ -58,6 +59,7 @@ from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
 from app.services.archive_service import archive_fetched_data
 from app.services.deferred_evaluation_service import queue_market_open_redo
+from app.services.lesson_notes import past_lessons_block
 from app.services.telegram_service import notify_trade_plan
 from app.strategy.service import current_strategy_version
 
@@ -240,34 +242,29 @@ class AiOpinion:
     # The model that gave this opinion (the decision tier's model), so a plan
     # can say who stopped or waved through the trade. None when no call was made.
     decision_model: str | None = None
+    # How the reply was read: "structured" | "lenient" | "failed" (None when no
+    # call was made). A model that keeps answering in prose is a guardrail
+    # silently scoring 0, so the plan records which path produced the opinion.
+    parse_path: str | None = None
+    # Specific figures the model quoted that were not in the data it was given
+    # (analysis/ground_truth.find_ungrounded_figures). Display and log only:
+    # nothing reads this when deciding anything about the trade.
+    grounding_warnings: list[str] | None = None
 
 
 def _parse_ai_opinion(raw_text: str) -> AiOpinion:
-    """Best-effort parse of the AI overlay's structured JSON response. A
-    provider that ignores the format instruction (or a flaky one that wraps
-    it in prose/markdown) just means no stance/score/news_assessment get
-    extracted — the raw text is always kept as `reasoning` and shown as-is,
-    never dropped, never raises."""
-    try:
-        data = json.loads(raw_text.strip())
-        stance = data.get("stance")
-        if stance not in ("bullish", "bearish", "neutral"):
-            stance = None
-        # Unrecognised or absent verdict stays None rather than defaulting to
-        # "take": a model that ignored the field has not said the trade is
-        # fine, and overlay_opposes_trade falls back to the stance for it.
-        trade_verdict = data.get("trade_verdict")
-        if trade_verdict not in ("take", "pass"):
-            trade_verdict = None
-        score = data.get("confidence")
-        score = max(0, min(100, int(score))) if isinstance(score, (int, float)) else None
-        reasoning = data.get("reasoning")
-        text = reasoning.strip() if isinstance(reasoning, str) and reasoning.strip() else raw_text.strip()
-        news_assessment = data.get("news_assessment")
-        news_assessment = news_assessment.strip() if isinstance(news_assessment, str) and news_assessment.strip() else None
-        return AiOpinion(stance, trade_verdict, score, text, news_assessment)
-    except (json.JSONDecodeError, AttributeError, TypeError):
-        return AiOpinion(text=raw_text.strip())
+    """Read the AI overlay's reply: strict schema validation first, then a
+    lenient extraction of a JSON object from damaged output, then a graceful
+    give-up that keeps the raw text and claims nothing (see
+    analysis/ai_opinion.py). Never raises. An unrecognised or absent verdict
+    stays None rather than defaulting to "take": a model that ignored the field
+    has not said the trade is fine, and overlay_opposes_trade falls back to the
+    stance for it."""
+    parsed = parse_ai_opinion_reply(raw_text)
+    return AiOpinion(
+        parsed.stance, parsed.trade_verdict, parsed.score, parsed.text, parsed.news_assessment,
+        parse_path=parsed.parse_path,
+    )
 
 
 def _maybe_get_ai_opinion(
@@ -283,6 +280,8 @@ def _maybe_get_ai_opinion(
     rule_based_direction: str | None,
     confidence_score: int,
     rule_based_news_reasons: list[str],
+    past_lessons: str = "",
+    ground_truth: GroundTruthSnapshot | None = None,
 ) -> AiOpinion:
     """The AI Trading Overlay (Settings, off by default): an independent
     second read of the SAME raw data, alongside — never blended into — the
@@ -296,18 +295,44 @@ def _maybe_get_ai_opinion(
     keyword read to contrast against."""
     if not settings.ai_trading_overlay_enabled or llm_provider.name == "none" or not llm_provider.is_configured():
         return AiOpinion()
+    if ground_truth is None:
+        ground_truth = build_ground_truth(
+            symbol, chart, volume_ratio=volume_ratio, earnings_date=earnings_date,
+            rule_based_direction=rule_based_direction, rule_based_confidence_pct=confidence_score,
+        )
     prompt = build_ai_opinion_prompt(
         symbol, chart, volume_ratio, overview, financial_years, news, earnings_date, rule_based_direction,
-        confidence_score, rule_based_news_reasons,
+        confidence_score, rule_based_news_reasons, past_lessons=past_lessons, ground_truth=ground_truth,
     )
     # The decision tier: this verdict can stop a trade, so it gets the stronger
     # model when one is set. Which model answers is the only thing the tier
-    # changes; the overlay is still only ever able to stop a trade.
-    result = generate_with_tier(llm_provider, prompt, DECISION_TIER)
+    # changes; the overlay is still only ever able to stop a trade. The reply
+    # is asked for in the provider's own structured-output mode where it has one
+    # (response_schema), and read back with parse_ai_opinion_reply either way.
+    result = generate_with_tier(
+        llm_provider, prompt, DECISION_TIER, response_schema=ai_opinion_json_schema(),
+    )
     if result.error or not result.text:
         logger.warning("AI opinion call failed for %s: %s", symbol, result.error)
         return AiOpinion()
-    return replace(_parse_ai_opinion(result.text), decision_model=result.model)
+    opinion = replace(_parse_ai_opinion(result.text), decision_model=result.model)
+    if opinion.parse_path == PARSE_FAILED:
+        # Loud on purpose: with the overlay on, an unreadable reply means the
+        # guardrail could not judge this trade at all, and it would otherwise
+        # look exactly like "the AI had no objection".
+        logger.warning(
+            "AI overlay answered for %s but its reply could not be read (no usable stance or verdict); "
+            "no objection was recorded. Provider %s, model %s.",
+            symbol, llm_provider.name, result.model,
+        )
+    # An honesty signal only: figures the model quoted that were not in the data
+    # it was shown. Never read by the verdict, the score or the sizing.
+    data_text = prompt.split(AI_OPINION_DATA_MARKER, 1)[-1]
+    warnings = find_ungrounded_figures(f"{opinion.text or ''} {opinion.news_assessment or ''}", ground_truth, data_text)
+    if warnings:
+        logger.warning("AI overlay for %s quoted figures not in its data: %s", symbol, "; ".join(warnings))
+        opinion = replace(opinion, grounding_warnings=warnings)
+    return opinion
 
 
 def _defer_to_market_open(
@@ -364,6 +389,36 @@ def _overlay_contradicts_direction(direction: str | None, opinion: AiOpinion) ->
     return overlay_opposes_trade(direction, opinion.stance, opinion.trade_verdict)
 
 
+def _overlay_ground_truth(
+    settings: AppSettings,
+    symbol: str,
+    chart: ChartAnalysis,
+    quote,
+    volume_ratio: float,
+    atr: float | None,
+    overview: CompanyOverview | None,
+    earnings_date: date | None,
+    options_summary: OptionsSummary | None,
+    direction: str | None,
+    rule_based_confidence: int,
+    rule_based_score: int,
+    score_breakdown: tuple[tuple[str, int], ...],
+) -> GroundTruthSnapshot | None:
+    """The fixed fact block for the overlay prompt, from figures this
+    evaluation already holds (analysis/ground_truth.py). Built only when the
+    overlay is on, since nothing else reads it."""
+    if not settings.ai_trading_overlay_enabled:
+        return None
+    return build_ground_truth(
+        symbol, chart,
+        quote_price=quote.price, change_pct=quote.change_pct_24h, volume_ratio=volume_ratio, atr=atr,
+        week52_low=overview.week52_low if overview else None,
+        week52_high=overview.week52_high if overview else None,
+        earnings_date=earnings_date, options_summary=options_summary,
+        rule_based_direction=direction, rule_based_confidence_pct=rule_based_confidence,
+        rule_based_points=clamp_points(rule_based_score), rule_based_points_max=MAX_SCORE_FOR_CONFIDENCE,
+        score_breakdown=score_breakdown,
+    )
 def generate_trade_plan(
     symbol: str,
     account_size: float,
@@ -499,6 +554,21 @@ def generate_trade_plan(
     opinion = _maybe_get_ai_opinion(
         settings, llm_provider, symbol, chart, volume_ratio, overview, financial_years, news, earnings_date,
         provisional_direction, rule_based_confidence, news_reasons,
+        # lesson notes: earlier AI write-ups of closed trades in this symbol, shown to the
+        # overlay as notes only. Like everything the overlay sees, they can only inform an
+        # opinion that may stop this trade; they cannot start or reshape one.
+        past_lessons=past_lessons_block(session, symbol) if settings.ai_trading_overlay_enabled else "",
+        # ground truth: the fixed fact block the overlay's prompt carries (computed here, without AI).
+        ground_truth=_overlay_ground_truth(
+            settings, symbol, chart, quote, volume_ratio, atr14, overview, earnings_date, options_summary,
+            provisional_direction, rule_based_confidence, rule_based_score,
+            (
+                ("technical", scan_result.score), ("fundamentals", fundamental_score), ("news", news_score),
+                ("market confirmation", market_confirmation_score), ("VIX regime", vix_regime_score),
+                ("options", options_score), ("insider", insider_score), ("expected move", expected_move_score),
+                ("earnings track record", earnings_surprise_score), ("macro events", macro_event_score),
+            ),
+        ),
     )
     ai_opinion_stance = opinion.stance
     ai_opinion_score = opinion.score
@@ -506,6 +576,8 @@ def generate_trade_plan(
     ai_news_assessment = opinion.news_assessment
     ai_trade_verdict = opinion.trade_verdict
     ai_decision_model = opinion.decision_model
+    ai_opinion_parse = opinion.parse_path
+    ai_grounding_warnings = "\n".join(opinion.grounding_warnings) if opinion.grounding_warnings else None
 
     # Rung 1 of the ladder: a disagreeing overlay costs conviction, scored
     # like any other dimension. Never a bonus, so it can only ever talk the
@@ -584,6 +656,8 @@ def generate_trade_plan(
             ai_overlay_score=ai_overlay_score,
             ai_trade_verdict=ai_trade_verdict,
             ai_decision_model=ai_decision_model,
+            ai_opinion_parse=ai_opinion_parse,
+            ai_grounding_warnings=ai_grounding_warnings,
             confidence_points=clamp_points(combined_score),
             confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
             signal_reasons=signal_reasons,
@@ -617,6 +691,8 @@ def generate_trade_plan(
             ai_overlay_score=ai_overlay_score,
             ai_trade_verdict=ai_trade_verdict,
             ai_decision_model=ai_decision_model,
+            ai_opinion_parse=ai_opinion_parse,
+            ai_grounding_warnings=ai_grounding_warnings,
             confidence_points=clamp_points(combined_score),
             confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
             ai_opinion_stance=ai_opinion_stance,
@@ -708,6 +784,8 @@ def generate_trade_plan(
         ai_overlay_score=ai_overlay_score,
         ai_trade_verdict=ai_trade_verdict,
         ai_decision_model=ai_decision_model,
+        ai_opinion_parse=ai_opinion_parse,
+        ai_grounding_warnings=ai_grounding_warnings,
         confidence_points=clamp_points(combined_score),
         confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         signal_reasons=signal_reasons,
@@ -844,6 +922,8 @@ def generate_trade_plan(
         ai_overlay_score=ai_overlay_score,
         ai_trade_verdict=ai_trade_verdict,
         ai_decision_model=ai_decision_model,
+        ai_opinion_parse=ai_opinion_parse,
+        ai_grounding_warnings=ai_grounding_warnings,
         confidence_points=clamp_points(combined_score),
         confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         signal_reasons=signal_reasons,

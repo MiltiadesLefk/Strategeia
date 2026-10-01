@@ -14,6 +14,12 @@ class NullLLMProvider:
         return True
 
     def generate(
-        self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4, tier: LLMTier = ROUTINE_TIER
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 300,
+        temperature: float = 0.4,
+        tier: LLMTier = ROUTINE_TIER,
+        response_schema: dict | None = None,  # no model to constrain
     ) -> LLMResult:
         return LLMResult(text=prompt, provider=self.name, latency_ms=0)

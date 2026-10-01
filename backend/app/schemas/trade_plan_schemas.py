@@ -66,6 +66,12 @@ class TradePlanResponse(BaseModel):
     # The model that gave that verdict (the overlay's decision tier). None when
     # the overlay did not run.
     ai_decision_model: str | None = None
+    # "structured" | "lenient" | "failed": how the overlay's reply was read.
+    # "failed" means it answered but nothing usable could be read from it.
+    ai_opinion_parse: str | None = None
+    # Newline-separated figures the overlay quoted that were not in the data it
+    # was given. Display only; None when there were none (or no overlay).
+    ai_grounding_warnings: str | None = None
     # Plain-English outcome of the auto-execute step (executed / skipped-with-
     # reason / held for manual review on overlay disagreement / deferred
     # because the market was closed). Null on a no_trade record — auto-execute

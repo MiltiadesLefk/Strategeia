@@ -190,6 +190,17 @@ export function useClosePosition() {
   });
 }
 
+/** Write (or rewrite) the AI lesson for one closed position. A model failure comes back as a 200
+ *  with `lesson_error` set on the position, so a refetch of the positions list shows it. */
+export function useWriteLesson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (positionId: number) => api.post<Position>(`/api/portfolio/positions/${positionId}/lesson`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.positions });
+    },
+  });
+}
 export function usePortfolioStats() {
   return useQuery({ queryKey: qk.stats, queryFn: () => api.get<PortfolioStats>('/api/portfolio/stats') });
 }

@@ -5,6 +5,7 @@ import time
 import httpx
 
 from app.llm_providers.base import ROUTINE_TIER, LLMResult, LLMTier, model_for_tier
+from app.llm_providers.openai_compat import post_chat_completion
 
 ORCAROUTER_URL = "https://api.orcarouter.ai/v1/chat/completions"
 
@@ -29,25 +30,31 @@ class OrcaRouterProvider:
         return bool(self._api_key)
 
     def generate(
-        self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4, tier: LLMTier = ROUTINE_TIER
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 300,
+        temperature: float = 0.4,
+        tier: LLMTier = ROUTINE_TIER,
+        response_schema: dict | None = None,
     ) -> LLMResult:
         if not self._api_key:
             return LLMResult("", self.name, 0, error="OrcaRouter API key not configured")
         model = self.model_for(tier)
         start = time.monotonic()
         try:
-            resp = httpx.post(
+            resp = post_chat_completion(
+                self.name,
                 ORCAROUTER_URL,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                json={
+                self._api_key,
+                {
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": max_tokens,
                     "temperature": temperature,
                 },
-                timeout=30,
+                response_schema=response_schema,
             )
-            resp.raise_for_status()
             data = resp.json()
             text = data["choices"][0]["message"]["content"]
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:

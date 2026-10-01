@@ -41,6 +41,10 @@ class LLMResult:
 class LLMProvider(Protocol):
     name: str
 
+    # `response_schema` (a JSON schema dict) is optional and a hint: a provider
+    # with a structured-output mode uses it, one without may omit the parameter
+    # entirely (see structured.accepts_response_schema). The caller validates
+    # the reply either way.
     def generate(
         self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4, tier: LLMTier = ROUTINE_TIER
     ) -> LLMResult: ...

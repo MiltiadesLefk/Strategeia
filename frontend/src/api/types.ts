@@ -227,6 +227,12 @@ export interface TradePlan {
   ai_trade_verdict?: 'take' | 'pass' | null;
   /** Model that gave that verdict (the overlay's decision tier); null when the overlay did not run. */
   ai_decision_model?: string | null;
+  /** How the overlay's reply was read: 'structured' (matched the form), 'lenient'
+   *  (pulled out of a damaged reply) or 'failed' (answered, nothing usable). */
+  ai_opinion_parse?: 'structured' | 'lenient' | 'failed' | null;
+  /** Newline-separated figures the overlay quoted that were not in the data it
+   *  was given. An honesty signal only; never affects the verdict or score. */
+  ai_grounding_warnings?: string | null;
   ai_opinion_score?: number | null;
   ai_opinion_text?: string | null;
   ai_news_assessment?: string | null;
@@ -288,6 +294,15 @@ export interface Position {
   exit_resolution?: string | null;
   /** Whether the rest of the entry day was checked hour by hour: 'hourly' | 'daily_only'; null = not yet. */
   entry_day_check?: string | null;
+  /** The AI-written lesson for a closed trade (2-4 sentences). Null until one is written, and
+   *  also null when the AI could not write one: nothing templated stands in (see lesson_error). */
+  lesson_text?: string | null;
+  lesson_provider?: string | null;
+  lesson_model?: string | null;
+  /** When the lesson was written, or last tried. */
+  lesson_at?: string | null;
+  /** Why the last attempt failed (short); an earlier lesson, if any, is kept. */
+  lesson_error?: string | null;
 }
 
 export interface PortfolioStats {

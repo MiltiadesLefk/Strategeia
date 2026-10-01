@@ -92,6 +92,15 @@ class TradePlanRecord(SQLModel, table=True):
     # model, which can differ from the one that wrote ai_take_text). None when
     # the overlay did not run, and on rows from before this was recorded.
     ai_decision_model: Optional[str] = None
+    # How the overlay's reply was read: "structured" (passed the schema),
+    # "lenient" (a JSON object was pulled out of a damaged reply) or "failed"
+    # (nothing usable; no objection could be recorded). Null when the overlay
+    # did not answer, and on rows from before this was recorded.
+    ai_opinion_parse: Optional[str] = None
+    # Figures the overlay's reasoning quoted that were not in the data it was
+    # shown, one per line (analysis/ground_truth.py). An honesty signal for the
+    # reader: it never feeds the verdict, the score or the sizing. Null = none.
+    ai_grounding_warnings: Optional[str] = None
     signal_reasons: Optional[str] = None  # "; "-joined, human-readable — not JSON, kept simple
     # What happened at the auto-execute step, in plain English — executed,
     # skipped (insufficient cash / duplicate / at position cap / sector cap /
@@ -153,6 +162,18 @@ class PaperPosition(SQLModel, table=True):
     # hour by hour: "hourly" once every hour is covered, "daily_only" when the hourly
     # history could not reach back to that day. None = not checked yet.
     entry_day_check: Optional[str] = None
+    # The after-the-fact lesson an AI wrote for this closed trade (see
+    # services/lesson_service.py): 2-4 sentences, plain text. Null until one is
+    # written, and ALSO null when the AI could not write one: no template stands
+    # in for it, because a canned "lesson" would be invented insight. lesson_at is
+    # when the last attempt was made (a success, or a failure the retry delay is
+    # counted from); lesson_error is why the last attempt failed (short), and is
+    # cleared by a later success.
+    lesson_text: Optional[str] = None
+    lesson_provider: Optional[str] = None
+    lesson_model: Optional[str] = None
+    lesson_at: Optional[datetime] = None
+    lesson_error: Optional[str] = None
 
 
 DeferredEvaluationStatus = Literal["pending", "done", "skipped", "failed"]
