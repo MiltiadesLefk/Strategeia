@@ -52,7 +52,9 @@ from app.knowledge.point_in_time import (
 )
 from app.knowledge.store import (
     MAX_DEDUPE_KEY_LENGTH,
+    FactStats,
     RecordedFact,
+    fact_stats,
     facts_known_as_of,
     latest_known,
     make_dedupe_key,
@@ -67,6 +69,7 @@ __all__ = [
     "SEC_EDGAR_TZ",
     "US_EASTERN_TZ",
     "FactKind",
+    "FactStats",
     "KnownAtBasis",
     "KnownFact",
     "LookAheadError",
@@ -74,6 +77,7 @@ __all__ = [
     "as_of",
     "current_as_of",
     "end_of_local_day_utc",
+    "fact_stats",
     "facts_known_as_of",
     "is_simulated",
     "latest_known",

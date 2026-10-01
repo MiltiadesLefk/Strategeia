@@ -54,6 +54,7 @@ from app.portfolio.engine import (
 from app.portfolio.models import TradePlanRecord
 from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
+from app.services.archive_service import archive_fetched_data
 from app.services.deferred_evaluation_service import queue_market_open_redo
 from app.services.telegram_service import notify_trade_plan
 
@@ -406,6 +407,13 @@ def generate_trade_plan(
     provisional_direction = "long" if chart.trend == "Bullish" else "short" if chart.trend == "Bearish" else None
 
     overview, financial_years, news = _fetch_fundamentals_and_news(symbol, data_provider)
+    # Save exactly what was just fetched, dated, for future backtests. After
+    # the fetch and outside every scorer on purpose: it never changes a number
+    # here, and archive_fetched_data swallows its own failures so a database
+    # hiccup can't fail (or alter) a trade decision.
+    archive_fetched_data(
+        session, symbol, overview=overview, financial_years=financial_years, news=news, data_provider=data_provider
+    )
     earnings_date = data_provider.get_earnings_date(symbol)
     news_score, news_reasons = score_news_sentiment(news, provisional_direction)
     fundamental_score, fundamental_reasons = (

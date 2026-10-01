@@ -3,6 +3,7 @@ import { api } from './client';
 import type {
   AnalysisResponse,
   AppSettings,
+  ArchiveResponse,
   AuthStatus,
   AutoScanResponse,
   DashboardSummary,
@@ -25,6 +26,7 @@ export const qk = {
   scan: (symbols?: string) => ['scan', symbols] as const,
   analysis: (symbol: string, range: string) => ['analysis', symbol, range] as const,
   research: (symbol: string) => ['research', symbol] as const,
+  archive: (symbol: string) => ['archive', symbol] as const,
   tradePlans: ['trade-plans'] as const,
   positions: ['positions'] as const,
   stats: ['stats'] as const,
@@ -110,6 +112,20 @@ export function useResearch(symbol: string | null) {
   return useQuery({
     queryKey: qk.research(symbol ?? ''),
     queryFn: () => api.get<ResearchResponse>(`/api/research/${symbol}`),
+    enabled: !!symbol,
+  });
+}
+
+/**
+ * What the dated archive holds for one symbol. Read-only on the backend. The
+ * research request is what fills the archive, so callers should mount this
+ * after the research data has loaded (or it can show the counts from before
+ * that visit).
+ */
+export function useArchive(symbol: string | null) {
+  return useQuery({
+    queryKey: qk.archive(symbol ?? ''),
+    queryFn: () => api.get<ArchiveResponse>(`/api/archive/${symbol}`),
     enabled: !!symbol,
   });
 }

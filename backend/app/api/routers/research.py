@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlmodel import Session
 
-from app.api.deps import get_data_provider, get_llm_provider, require_auth
+from app.api.deps import get_data_provider, get_llm_provider, get_session, require_auth
 from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
 from app.schemas.research_schemas import ResearchResponse
@@ -16,5 +17,8 @@ def research(
     symbol: str,
     data_provider: DataProvider = Depends(get_data_provider),
     llm_provider: LLMProvider = Depends(get_llm_provider),
+    session: Session = Depends(get_session),
 ) -> ResearchResponse:
-    return get_research(symbol.upper(), data_provider, llm_provider)
+    # The session is only for the dated archive of the news/fundamentals this
+    # request fetches; the response itself doesn't depend on it.
+    return get_research(symbol.upper(), data_provider, llm_provider, session)

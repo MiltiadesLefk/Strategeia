@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAnalysis, useResearch, useUniverse } from '../api/hooks';
+import { useAnalysis, useArchive, useResearch, useUniverse } from '../api/hooks';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { RangeTabs } from '../components/RangeTabs';
 import { Tabs } from '../components/Tabs';
@@ -98,6 +98,46 @@ function NewsList({ symbol, news }: { symbol: string; news: ResearchResponse['ne
           <div key={n.headline}>{body}</div>
         );
       })}
+    </div>
+  );
+}
+
+// The dated archive's own account of itself: how much of this symbol's news
+// and fundamentals we have saved, and since when. Mounted only after the
+// research data has loaded, because loading it is what saves the latest items.
+function ArchivePanel({ symbol }: { symbol: string }) {
+  const { data, isLoading, error } = useArchive(symbol);
+  if (isLoading) return null;
+  // The panel is a footnote; if it can't load, the page is better without it
+  // than with an error banner about something optional.
+  if (error || !data) return null;
+  const since = data.first_archived_at
+    ? new Date(data.first_archived_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  return (
+    <div className="card" data-testid="archive-panel">
+      <h3 style={{ marginBottom: 8 }}>Saved history</h3>
+      {since ? (
+        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+          <span className="tabular-nums" style={{ fontWeight: 600 }}>
+            {data.news_count} news {data.news_count === 1 ? 'item' : 'items'}
+          </span>{' '}
+          and{' '}
+          <span className="tabular-nums" style={{ fontWeight: 600 }}>
+            {data.fundamentals_count} fundamentals {data.fundamentals_count === 1 ? 'snapshot' : 'snapshots'}
+          </span>{' '}
+          saved for {symbol} since {since}.
+        </div>
+      ) : (
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          Nothing saved for {symbol} yet. News and fundamentals are saved the first time they are loaded.
+        </div>
+      )}
+      <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 8 }}>
+        Free data sources only show today&apos;s news and fundamentals, so the app saves what it loads, with the time it
+        became public. A backtest can only use news from the day this archive began ({data.totals.symbols}{' '}
+        {data.totals.symbols === 1 ? 'symbol' : 'symbols'} so far); earlier days have no recorded news.
+      </div>
     </div>
   );
 }
@@ -437,6 +477,8 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
               <NewsList symbol={data.symbol} news={data.news} />
             </div>
           )}
+
+          {tab === 'news' && <ArchivePanel symbol={data.symbol} />}
 
           {tab === 'catalysts' && (
             <div className="card">

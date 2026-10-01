@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.knowledge import point_in_time as pit
@@ -35,6 +36,21 @@ _KIND_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 # Keys longer than this are hashed by `make_dedupe_key` (a news headline plus
 # URL can run to hundreds of characters; the unique index doesn't need them).
 MAX_DEDUPE_KEY_LENGTH = 200
+
+
+@dataclass(frozen=True)
+class FactStats:
+    """How much of one kind (or several) is stored. `first_fetched_at` is when
+    this program FIRST saved something, i.e. the date a backtest can start
+    trusting the stream; `first_known_at` can be older (a news item's own
+    publish time) and says nothing about when we began recording."""
+
+    count: int
+    symbols: int
+    first_known_at: datetime | None
+    last_known_at: datetime | None
+    first_fetched_at: datetime | None
+    last_fetched_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -318,3 +334,42 @@ def latest_known(
     Same look-ahead guard and `include_future` warning as `facts_known_as_of`."""
     found = facts_known_as_of(session, kind, as_of=as_of, symbol=symbol, limit=1, include_future=include_future)
     return found[0] if found else None
+
+
+def fact_stats(
+    session: Session,
+    kind: str | Iterable[str],
+    symbol: str | None = None,
+    as_of: datetime | None = None,
+) -> FactStats:
+    """Counts and date range for facts of `kind`, with the same `known_at <=
+    cutoff` guard as every other reader (no `include_future` escape: a summary
+    has no business counting what a simulated moment couldn't know)."""
+    cutoff = _resolve_cutoff(as_of, False)
+    query = select(
+        func.count(col(KnownFact.id)),
+        func.count(func.distinct(KnownFact.symbol)),
+        func.min(KnownFact.known_at),
+        func.max(KnownFact.known_at),
+        func.min(KnownFact.fetched_at),
+        func.max(KnownFact.fetched_at),
+    ).where(col(KnownFact.kind).in_(_kinds(kind)), KnownFact.known_at <= cutoff)
+    normalised = _normalise_symbol(symbol)
+    if normalised is not None:
+        query = query.where(KnownFact.symbol == normalised)
+    count, symbols, first_known, last_known, first_fetched, last_fetched = session.exec(query).one()
+
+    def _dt(value):
+        # SQLite's min()/max() over a DateTime column comes back as a string.
+        if value is None or isinstance(value, datetime):
+            return value
+        return datetime.fromisoformat(str(value))
+
+    return FactStats(
+        count=int(count or 0),
+        symbols=int(symbols or 0),
+        first_known_at=_dt(first_known),
+        last_known_at=_dt(last_known),
+        first_fetched_at=_dt(first_fetched),
+        last_fetched_at=_dt(last_fetched),
+    )

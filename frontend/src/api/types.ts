@@ -84,6 +84,45 @@ export interface NewsItem {
   published_at: string;
 }
 
+export interface ArchivedNewsItem {
+  headline: string;
+  publisher: string;
+  url: string;
+  published_at: string;
+  known_at: string;
+  known_at_basis: 'source' | 'fetched' | 'derived';
+  fetched_at: string;
+}
+
+export interface ArchivedFundamentals {
+  known_at: string;
+  fetched_at: string;
+  revenue_ttm: number | null;
+  eps_ttm: number | null;
+  market_cap: number | null;
+  latest_fiscal_year: number | null;
+  financial_years: number;
+}
+
+export interface ArchiveTotals {
+  news_count: number;
+  fundamentals_count: number;
+  symbols: number;
+  first_archived_at: string | null;
+  last_archived_at: string | null;
+}
+
+export interface ArchiveResponse {
+  symbol: string;
+  news_count: number;
+  fundamentals_count: number;
+  first_archived_at: string | null;
+  last_archived_at: string | null;
+  recent_news: ArchivedNewsItem[];
+  recent_fundamentals: ArchivedFundamentals[];
+  totals: ArchiveTotals;
+}
+
 export interface ResearchResponse {
   symbol: string;
   name: string;

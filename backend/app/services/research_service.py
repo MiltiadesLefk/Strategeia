@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from sqlmodel import Session
+
 from app.analysis.insight_text import research_summary_text
 from app.analysis.trend import analyze_chart
 from app.data_providers.base import AllProvidersFailedError, DataProvider
@@ -9,6 +11,7 @@ from app.llm_providers.base import LLMProvider
 from app.llm_providers.factory import generate_with_fallback
 from app.llm_providers.prompts import build_research_summary_prompt
 from app.schemas.research_schemas import FinancialYearSchema, NewsItemSchema, ResearchResponse
+from app.services.archive_service import archive_fetched_data
 from app.timeutil import utcnow_naive
 
 EARNINGS_SOON_DAYS = 45
@@ -50,7 +53,15 @@ def _derive_catalysts(overview, financials_years, earnings_date, chart) -> list[
     return catalysts
 
 
-def get_research(symbol: str, data_provider: DataProvider, llm_provider: LLMProvider) -> ResearchResponse:
+def get_research(
+    symbol: str,
+    data_provider: DataProvider,
+    llm_provider: LLMProvider,
+    session: Session | None = None,
+) -> ResearchResponse:
+    """`session` is optional and only used to save the news and fundamentals
+    just fetched into the dated archive (best-effort; see archive_service).
+    Without one, nothing is saved and the page works exactly the same."""
     overview = data_provider.get_company_overview(symbol)
     ohlcv = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
     chart = analyze_chart(ohlcv)
@@ -65,6 +76,10 @@ def get_research(symbol: str, data_provider: DataProvider, llm_provider: LLMProv
         news = data_provider.get_news(symbol, limit=5)
     except AllProvidersFailedError:
         news = []
+
+    archive_fetched_data(
+        session, symbol, overview=overview, financial_years=financial_years, news=news, data_provider=data_provider
+    )
 
     earnings_date = data_provider.get_earnings_date(symbol)
     has_upcoming_earnings = bool(earnings_date and (earnings_date - date.today()).days <= EARNINGS_SOON_DAYS)
