@@ -66,7 +66,7 @@ fake: no real broker is connected.
  AUTO-EXECUTE (on by default) ─ safety checks ─▶ PAPER POSITION opened ("executed")
      │
      ▼
- EXIT CHECKS every 15 min during US market hours ─ stop or TP1 touched ─▶ position CLOSED
+ EXIT CHECKS every 15 min during US market hours ─ stop or TP1 touched, or 20 trading days up ─▶ position CLOSED
      │
      ▼
  STATISTICS AND EQUITY CURVE ─ computed from the real simulated trades
@@ -120,6 +120,9 @@ pills (AI, AI overlay, Finnhub, Telegram) that expand when something is down, an
   - **Key Catalysts**,
   - **Upcoming Earnings**, with analyst estimates under "About These Estimates",
   - **Recent News**. Links are only clickable if they're normal web links, for safety.
+  - **Saved history** (News tab): how many news items and fundamentals snapshots the app has saved for
+    this stock, and since when, with a note that a backtest can only use news from the day the archive
+    began (§11).
 - **Generate Trade Plan →** button.
 
 ### Trade Plans
@@ -147,7 +150,12 @@ pills (AI, AI overlay, Finnhub, Telegram) that expand when something is down, an
 ### Portfolio
 - **Stat cards**, **Active Positions** (entry, planned entry, stop, TP1, TP2, shares, current P&L) with
   a **close** button that closes at the market.
-- **Closed Positions:** exit price, reason (stop, TP1 or manual), P&L and result in R.
+- **Closed Positions:** exit price, reason (Stop, Target (TP1), Time limit or Manual), P&L and result
+  in R. A line above the table counts how the closed trades ended, with the share of each, straight
+  from the closed rows. A high share of time-limit exits means setups mostly stall instead of resolving.
+- Each open position shows **"day 7 of 20"** under its opened date: the number of trading days since
+  entry, counted from the real bars on its chart (shown only when the entry day is in that chart's
+  history; otherwise it says "closes after 20 trading days").
 - **Equity Curve.**
 - **Reset** button: wipes positions, equity history and cash, and restarts at the Starting Cash
   setting. Plan history is kept.
@@ -162,7 +170,8 @@ Grouped into cards. Every setting is listed in §12:
 - **Unattended Auto-Scan**.
 
 Keys are shown masked (the last 4 characters only), and there's a **Test Connection** button for each
-provider.
+provider. When **Claude Code CLI** is the chosen provider, the AI card also shows a **Model** box
+(example aliases `sonnet`, `opus`, `haiku`, or a full id). Blank means "whatever the CLI is set to".
 
 ### Login
 Username and password. Three wrong tries lock that device out for 15 minutes, and a login lasts 7
@@ -180,7 +189,8 @@ days. (In the current `docker-compose.yml` the login is switched off; see §13.)
    direction.
 4. **Every other check,** scored *for the trade's direction*, so evidence that supports a short counts
    *for* a short:
-   - fundamentals and news,
+   - fundamentals and news (the app also saves what it fetched here into the dated archive, §11; this
+     never changes the score),
    - the weekly chart and SPY,
    - VIX,
    - options positioning,
@@ -260,7 +270,9 @@ setting), which is 5 of 16 points.
 - **Share count:** (account × risk %) ÷ (entry − stop). With 1% risk on $100,000, a trade risks
   $1,000. Then it's capped by the cash the account can really use, and at the open by 1% of the
   stock's average daily volume.
-- **Time horizon** is labelled "1–4 weeks". It's a label only: there's no time-based exit yet.
+- **Time horizon** is labelled "1–4 weeks". It is also enforced: a position still open after the
+  **maximum holding time** (default **20 trading days**, the top of that range; §7) is closed at that
+  day's close.
 
 ---
 
@@ -293,16 +305,32 @@ setting), which is 5 of 16 points.
   recovered isn't missed. **The entry day's bar is skipped.**
 - A position closes **fully** at whichever comes first, **stop** or **TP1**. TP2 is for information
   only.
+- **Time limit (third way out).** If neither was touched, a position that has been open for the
+  **maximum holding time** is closed at the **close** of that day. The days are **trading days**
+  counted from the bars (the entry day is day 0 and is not counted), so weekends and holidays don't
+  count; a crypto pair trades every day, so each calendar day counts. It is a market order, so it pays
+  slippage like a stop. The time exit comes **last**: on that same day the stop is checked first, then
+  TP1, and only if both are clear does the time limit close it. The close used is that day's final one:
+  **a day still in progress is never used** (a US stock's day is final 30 minutes after the closing
+  bell, 13:30 on an early-close day; a crypto day at midnight UTC), so during the session the
+  position simply waits for the next check. Set the maximum to **0** to switch the limit off.
 - **If one day touches both** the stop and TP1, it's counted as a **stop**. A daily bar can't show
   which came first, so the engine takes the cautious answer.
 - **Gaps:** a day that opens past the stop fills at the **open** (worse). A day that opens past the
   target fills at the **open** (better).
 - Stop exits pay slippage (a market order). Target exits don't (a resting limit order).
 - A **manual close** from the Portfolio page closes at the current market price.
+- **Why a time limit:** a stalled position used to sit open forever, holding one of the 5 slots and
+  a sector slot while its original reason aged. Turning the limit on changed behaviour for stalled
+  positions: ones already open longer than the limit close at the next check (at the close of the day their limit
+  ran out), and win rate and Avg R
+  now include those results. The limit needs the entry day to be in the 3 months of history the exit
+  check reads, so the maximum is capped at 60 trading days.
 
 ### Statistics
 Portfolio value, total return (including open positions at current prices), win rate, total closed
-trades, **Avg R** (the average result per closed trade, in R), active positions and cash. The
+trades, **Avg R** (the average result per closed trade, in R), active positions and cash, plus the
+**exit mix**: how many closed trades ended at the stop, TP1, the time limit or by hand. The
 **equity curve** is built from snapshots taken when a position opens, when one closes by hand, and on
 each scheduled exit-check pass. Opening the Dashboard or Portfolio page runs the exit check too, but
 never adds a point, so the curve follows time and trades, not page views. If a page load closes a
@@ -365,7 +393,14 @@ updating each year:
 ### Providers (chosen in Settings)
 - **None:** the default. Clear rule-based text instead of AI.
 - **Claude Code CLI:** uses your own Claude login (no API key). The app runs `claude -p` with **every
-  tool switched off**, so it can only read what the app sends it.
+  tool switched off**, so it can only read what the app sends it. The model is **pinned** (default
+  `sonnet`, set in Settings): without a pin the CLI answers with whichever model you last picked in an
+  interactive session, so the narratives and the AI overlay's objections could change model without any
+  sign of it. `sonnet`, `opus` and `haiku` always mean the latest model of that family; a full id such
+  as `claude-sonnet-5-5` fixes one exact version. A blank value means "don't pin": whatever the CLI is
+  set to. The sidebar shows the pin (for example `AI · claude_code_cli (sonnet)`), and **Test
+  Connection** reports the model that really answered. This also works in Docker: the image installs
+  the same CLI, and the app only adds `--model <name>` to the command.
 - **OpenRouter, OrcaRouter, OpenAI, Gemini:** with your own key.
 
 ### What the AI writes
@@ -488,10 +523,33 @@ times:
 - The same fact saved twice is kept once. If better evidence shows it was public *earlier*, its
   "known at" moves earlier; it never moves later.
 
-**Today this is the foundation only:** the table and its rules exist, but no source writes to it yet.
-The planned sources are the news and fundamentals archive, insider trades, company
-announcements (8-K), FINRA short selling, Fed speeches, posts, Congress trades and big funds' holdings, and the watchers that collect them. Each new signal is backtested on these dates before
-it may earn points.
+**The news and fundamentals archive.** The first thing written to this table is the app's own record of
+what it fetches. Yahoo and the other free sources only show **today's** news and **today's**
+fundamentals; none of them can say what the headlines were on 12 March. The only way a future backtest
+can replay a past day is if the app wrote that day down when it happened. So, whenever the app loads
+the news and company numbers for a stock (the Analysis page's research panel, or when it evaluates a
+stock for a trade plan), it also saves them:
+
+| Saved | Known at | Saved again when |
+|---|---|---|
+| **News item** (headline, publisher, link, the source's own time stamp) | The item's own publish time if the source gave one with its time zone; otherwise the moment we fetched it | Never: the same link for the same stock is kept once |
+| **Fundamentals snapshot** (company name, trailing revenue and EPS, market cap, P/E, 52-week range, the yearly revenue and net income history) | The moment we fetched it (no free source says when a figure first became public) | A slow-moving number changed: trailing revenue or EPS, the company name, or the yearly history (a new fiscal year or a revision) |
+
+- A snapshot is not re-saved just because the price moved. Market cap, P/E and the 52-week range change
+  with every price tick, so they are stored with each snapshot but don't count as a change by themselves.
+- The archive **adds nothing to a stock's score and makes no extra downloads**: it only keeps what was
+  already fetched. It is **best-effort**: if saving fails, the page or trade plan carries on as if
+  nothing happened (the failure is written to the log). It also never writes during a backtest.
+- **Honest limit:** the archive only exists from the day the app first saved something. A backtest
+  of an earlier day has no recorded news for it, and must say so rather than treat "nothing saved"
+  as "nothing happened". The Saved history card on the Analysis page shows that start date.
+- It stays small: a news item and a snapshot are a few hundred bytes each, repeated fetches add nothing,
+  and nothing is deleted automatically.
+- `GET /api/archive/{symbol}` shows what's saved (§16). It only reads.
+
+Other planned sources (insider trades as dated facts, company announcements (8-K), FINRA short selling,
+Fed speeches, posts, Congress trades and big funds' holdings) will use the same table, and each new
+signal is backtested on these dates before it may earn points.
 
 ---
 
@@ -503,6 +561,7 @@ it may earn points.
 |---|---|---|
 | AI provider | none | Which AI writes the narratives (§9) |
 | Model and key per provider | per provider | For example OpenRouter `anthropic/claude-3.5-haiku`, OpenAI `gpt-4o-mini`, Gemini `gemini-1.5-flash`, OrcaRouter `orcarouter/auto` |
+| Claude CLI model | `sonnet` | The model the Claude Code CLI is pinned to (`--model`). An alias or a full id; letters, digits and `. _ - : @ [ ]` only, up to 64 characters. Blank = don't pin, use whatever the CLI is set to (§9) |
 | Finnhub enabled, and key | off | Adds Finnhub as the first source for what it offers |
 | AI Trading Overlay | off | The second opinion (§9) |
 | Count disagreement in the confidence score | on | The overlay can cost 0 to −3 points |
@@ -518,6 +577,7 @@ it may earn points.
 | Auto-execute trade plans | on | Opens a position as soon as a plan is made, if the market is open (otherwise the plan is redone at the next open, §8) |
 | Unattended auto-scan | off | The 3-times-a-day loop (§8) |
 | Max open positions | 5 | — |
+| Maximum holding time | 20 trading days | A position still open after this many trading days is closed at that day's close (§7). 0 = no limit. Up to 60 |
 | Max positions per sector | 2 | — |
 | Max position, as a % of average daily volume | 1% | — |
 
@@ -559,8 +619,12 @@ it may earn points.
   at the last price, which nobody could trade at either.
 - **One-off market closures** (a national day of mourning, a storm) must be added to the calendar by
   hand when announced (§8).
-- **Exits:** a position closes fully at the stop or TP1. There's no partial exit, no trailing stop and
-  no time limit.
+- **Exits:** a position closes fully at the stop, TP1 or the time limit (§7). There's no partial exit
+  and no trailing stop.
+- **The time limit counts bars it can see.** A missing bar in the data delays it by a day, and a
+  position whose entry day is older than the 3 months of history the exit check reads is never
+  time-limited (its age can't be counted from real bars). A new limit applies to positions that are
+  already open.
 - **One day touching both levels** always counts as a stop (the cautious choice).
 - **A position's first day isn't exit-checked.** The exit check skips the whole daily bar a position
   opened on. Now that US stocks only open during the session, a stop touched later on the entry day
@@ -569,6 +633,8 @@ it may earn points.
 - **Intraday charts (1D, 1W)** only come from Yahoo, with no fallback, and their time axis is in UTC.
 - **The macro calendar covers 2026 only.** It needs extending before the year runs out.
 - **The cache is in memory,** so it's lost on every restart.
+- **News and fundamentals history only exists from the day the archive began** (§11). Backtests of
+  earlier days have no recorded news or past fundamentals.
 - **Yahoo can temporarily block** heavy use.
 - **The SEC contact** is still the made-up address, by choice for now. The SEC asks for a
   real contact, so set a separate email (not your personal one) as `SEC_EDGAR_USER_AGENT` before the
@@ -607,7 +673,7 @@ touches `backend/runtime/` or the Docker app.
 | Folder | What's in it | Survives a Docker rebuild? |
 |---|---|---|
 | `backend/data/` | The stock list (`sp500.csv`), built into the image | No: it's rebuilt from the repo |
-| `backend/runtime/` (in Docker, the `backend_runtime` volume) | The database (`strategeia.db`: plans, positions, equity points, account, the queue of plans waiting to be redone at the market open, and the dated facts table `knownfact` from §11, still empty until its first source is built), `settings.json`, and the generated password, API key and session secret | **Yes** |
+| `backend/runtime/` (in Docker, the `backend_runtime` volume) | The database (`strategeia.db`: plans, positions, equity points, account, the queue of plans waiting to be redone at the market open, and the dated facts table `knownfact` from §11, which holds the saved news items and fundamentals snapshots), `settings.json`, and the generated password, API key and session secret | **Yes** |
 
 ---
 
@@ -623,7 +689,8 @@ Every route except login, auth status and health needs you logged in (or an API 
 | `GET /api/scan`, `GET /api/universe` | Scan results; the stock list |
 | `POST /api/scan/auto-trade` | Runs the evaluation loop now (60-second cooldown) |
 | `GET /api/analysis/{symbol}?range=` | Chart data and indicators |
-| `GET /api/research/{symbol}` | The research panel data |
+| `GET /api/research/{symbol}` | The research panel data. Also saves the news and fundamentals it just fetched into the archive (§11) |
+| `GET /api/archive/{symbol}?limit=` | What the news and fundamentals archive holds for a stock: counts, when saving began, the most recent items (with the time each became public) and the archive's overall size. Read-only |
 | `POST /api/trade-plans/generate`, `GET /api/trade-plans`, `GET /api/trade-plans/{id}` | Make a plan, list plans, get one plan |
 | `GET /api/portfolio/positions`, `POST /api/portfolio/positions` | List positions; open a position from a plan (refused with a 400 while the market is closed, or while the plan waits for its redo) |
 | `POST /api/portfolio/positions/{id}/close` | Close at the market |
@@ -654,6 +721,7 @@ Every route except login, auth status and health needs you logged in (or an API 
 | **R:R** | Reward-to-risk ratio of a plan |
 | **Avg R** | The average result per closed trade, in R (also called expectancy) |
 | **Slippage / bps** | The small cost of filling at a worse price. 1 bps = 0.01%. |
+| **Time limit** | The maximum number of trading days a position may stay open. After it, the position closes at that day's close (§7). |
 | **VIX** | The market's "fear gauge" |
 | **SPY** | The fund that tracks the S&P 500, used as "the market" |
 | **Put/call ratio** | Bets on a fall vs bets on a rise in the options market |
@@ -661,5 +729,6 @@ Every route except login, auth status and health needs you logged in (or an API 
 | **Form 4** | The SEC filing an insider must submit within 2 business days of trading their company's stock |
 | **Drawdown** | The biggest fall from a peak |
 | **Known at** | The moment a piece of information became public. A backtest may only use facts known before its simulated moment (§11). |
+| **Archive** | The app's own dated record of the news and fundamentals it has loaded. It is the only source of past news a backtest can use (§11). |
 | **Look-ahead** | A backtest mistake: using information that wasn't public yet at the simulated moment, which makes results look better than they could have been |
 | **Bollinger bands, MACD, VWAP** | Common chart indicators. VWAP is only shown on intraday ranges. |
