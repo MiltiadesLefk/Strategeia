@@ -91,6 +91,25 @@ This app has no built-in TLS termination or reverse proxy — put it behind what
 already run for that (nginx/Caddy/Traefik, or your platform's own ingress), or bind
 `HOST` to a VPN/Tailscale-only interface instead of a public one.
 
+**SEC contact (insider trades)**: the backend downloads insider-trade filings (Form 4)
+from SEC EDGAR, and the SEC asks every program that does that to say who runs it, with a
+contact address in the request's User-Agent. `backend/.env` never reaches the container
+(it isn't copied into the image), so for Docker put the value in a gitignored `.env` file
+next to `docker-compose.yml` (the same file that holds `CLAUDE_CODE_OAUTH_TOKEN`), then
+run `docker compose up -d` to recreate the backend with it:
+
+```
+SEC_EDGAR_USER_AGENT="Strategeia/1.0 (personal research; you@example.com)"
+```
+
+Plain ASCII only, and no link: the SEC answers `403 Forbidden` to a user-agent with a URL
+in it, which quietly switches insider scoring off (the backend logs a warning at startup
+if it spots one). Left unset or blank, the built-in made-up placeholder
+(`contact@strategeia.example`) is sent instead. That's fine while testing with a couple of tickers, where the SEC traffic is tiny. Before the S&P 500 backtest run, whose
+one-time insider download is the heavy part, set a separate address that isn't your
+personal one: a new free account or a relay alias (a Gmail `+something` address still
+shows your real one). For a local, non-Docker run, the same line goes in `backend/.env`.
+
 ## Configuring AI / data providers
 
 Everything works out of the box with zero configuration (free data, rule-based text).
@@ -113,7 +132,7 @@ cd backend
 .venv\Scripts\python -m pytest tests -v
 ```
 
-372 tests cover the technical-analysis math, risk/position-sizing formulas, scanner
+The backend tests cover the technical-analysis math, risk/position-sizing formulas, scanner
 scoring, the paper-trading engine (open → mark-to-market → close, with real assertions
 on realized P&L/R), data-provider fallback behavior, the LLM provider abstraction, and
 the auth/login/lockout behavior above.
@@ -135,8 +154,8 @@ frontend/src/
   components/chart/ CandlestickChart (lightweight-charts) + RevenueChart/EquityCurveChart (Chart.js)
   api/               fetch client, TS types, react-query hooks
 
-notes/              build log in Obsidian-flavored markdown (Decisions/Issues/Progress) —
-                    not read by the app, just a record of why things are the way they are
+scripts/            verify.py (tests + type-check + lint in one command) and ui_check.py
+                    (screenshots the app in a real browser against a throwaway database)
 ```
 
 ## Known limitations (v1)
@@ -149,3 +168,13 @@ notes/              build log in Obsidian-flavored markdown (Decisions/Issues/Pr
 - Free-tier data can rate-limit or go stale under heavy use; the composite provider falls
   back automatically but surfaces an error rather than fabricating data if everything
   fails.
+
+## More documentation
+
+[FEATURES.md](FEATURES.md) describes what the app does, page by page, how every decision is
+scored, and where the data comes from.
+
+## Credits and licenses
+
+Code copied or adapted from other open-source projects, their licenses, and the outside data/logo
+services the app uses are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
