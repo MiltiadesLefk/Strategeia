@@ -1,12 +1,14 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthGate } from './components/AuthGate';
 import { DashboardLayout } from './layout/DashboardLayout';
-import { DashboardPage } from './pages/DashboardPage';
-import { MarketScanPage } from './pages/MarketScanPage';
-import { AnalysisPage } from './pages/AnalysisPage';
-import { TradePlansPage } from './pages/TradePlansPage';
-import { PortfolioPage } from './pages/PortfolioPage';
-import { SettingsPage } from './pages/SettingsPage';
+import {
+  AnalysisPage,
+  DashboardPage,
+  MarketScanPage,
+  PortfolioPage,
+  SettingsPage,
+  TradePlansPage,
+} from './routePages';
 
 // Research was folded into Analysis (one page per symbol: chart + technicals
 // pinned above, fundamentals/news/earnings as tabs below) — this keeps any

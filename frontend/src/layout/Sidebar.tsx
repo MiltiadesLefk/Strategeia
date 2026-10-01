@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useLogout, useSettingsStatus } from '../api/hooks';
 import type { SettingsStatus } from '../api/types';
 import logo from '../assets/logo.png';
+import { prefetchRoute } from '../routePages';
 
 function Icon({ path }: { path: string }) {
   return (
@@ -176,6 +177,8 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
             to={item.to}
             end={item.end}
             onClick={onClose}
+            onMouseEnter={() => prefetchRoute(item.to)}
+            onFocus={() => prefetchRoute(item.to)}
             style={({ isActive }) => ({
               display: 'flex',
               alignItems: 'center',

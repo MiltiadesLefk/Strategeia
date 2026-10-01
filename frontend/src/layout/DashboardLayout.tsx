@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { RouteBoundary } from '../components/RouteBoundary';
+import { prefetchAllWhenIdle } from '../routePages';
 import { Sidebar } from './Sidebar';
 
 export function DashboardLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Only mounts once signed in, so the login screen never downloads the pages.
+  useEffect(() => {
+    prefetchAllWhenIdle();
+  }, []);
 
   return (
     <div className="app-shell">
@@ -19,7 +26,9 @@ export function DashboardLayout() {
           <span style={{ fontWeight: 700, fontSize: 15 }}>Strategeia</span>
         </button>
         <main className="app-main">
-          <Outlet />
+          <RouteBoundary>
+            <Outlet />
+          </RouteBoundary>
         </main>
       </div>
     </div>
