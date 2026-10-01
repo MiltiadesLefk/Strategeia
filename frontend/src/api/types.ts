@@ -1097,3 +1097,95 @@ export interface WatcherRunResponse {
   suppressed: number;
   actions: string[];
 }
+
+export type SmartMoneySide = 'buys' | 'sells' | 'all';
+
+export interface SmartMoneyInsiderTrade {
+  symbol: string;
+  insider: string | null;
+  role_tags: string[];
+  officer_title: string | null;
+  code: string | null;
+  side: 'buy' | 'sell' | 'other';
+  shares: number | null;
+  price: number | null;
+  value: number | null;
+  transaction_date: string | null;
+  known_at: string;
+  filed_after_days: number | null;
+  is_10b5_1: boolean;
+  filing_url: string | null;
+}
+
+export interface SmartMoneyInsiderTrades {
+  days: number;
+  side: SmartMoneySide;
+  symbol: string | null;
+  min_value: number;
+  total: number;
+  shown: number;
+  buy_value: number;
+  sell_value: number;
+  buy_count: number;
+  sell_count: number;
+  trades: SmartMoneyInsiderTrade[];
+}
+
+export interface SmartMoneyInsiderCluster {
+  symbol: string;
+  start_date: string;
+  end_date: string;
+  insider_count: number;
+  trade_count: number;
+  total_value: number;
+  unpriced_trades: number;
+  role_tags: string[];
+  insiders: string[];
+  any_10b5_1: boolean;
+  visible_from: string;
+}
+
+export interface SmartMoneyInsiderClusters {
+  days: number;
+  symbols_checked: number;
+  clusters: SmartMoneyInsiderCluster[];
+}
+
+export interface SmartMoneyInsiderSummary {
+  symbol: string;
+  window_days: number;
+  data_loaded: boolean;
+  buy_count: number;
+  sell_count: number;
+  buy_value: number;
+  sell_value: number;
+  net_value: number;
+  cluster_count: number;
+  newest_filing: string | null;
+  would_score_long: number;
+  would_score_short: number;
+  score_reasons: string[];
+}
+
+export interface SmartMoneyStatus {
+  has_data: boolean;
+  trade_rows: number;
+  symbols: number;
+  oldest_filing: string | null;
+  newest_filing: string | null;
+  last_stored_at: string | null;
+  symbol_list: string[];
+  sec_contact_is_placeholder: boolean;
+  ingest_command: string;
+}
+
+export interface SmartMoneyRefreshResponse {
+  symbols_requested: number;
+  symbols_processed: number;
+  symbols_remaining: number;
+  filings_seen: number;
+  filings_ingested: number;
+  rows_created: number;
+  unknown_symbols: string[];
+  errors: string[];
+}

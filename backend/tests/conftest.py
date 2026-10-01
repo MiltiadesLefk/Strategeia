@@ -135,6 +135,7 @@ def _reset_in_process_cooldowns(monkeypatch):
     monkeypatch.setattr("app.api.routers.data_cache._last_cache_clear_monotonic", None)
     monkeypatch.setattr("app.api.routers.missed_trades._last_missed_trades_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.signals._last_finra_refresh_monotonic", None)
+    monkeypatch.setattr("app.api.routers.smart_money._last_insider_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.portfolio._last_lesson_request_monotonic", {})
     monkeypatch.setattr("app.api.routers.watchers._last_watcher_run_monotonic", {})
     # The backtest start cooldown and the process-wide job manager (one run at a time).

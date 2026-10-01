@@ -13,6 +13,7 @@ import { AiNoteCard, ErrorBanner, EmptyState, LoadingSpinner, formatMoney, forma
 import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
 import { DataFreshness } from '../components/DataFreshness';
 import { Flash } from '../components/Flash';
+import { InsiderPanel } from '../components/smartmoney/InsiderPanel';
 import { isAlwaysOpenSymbol } from '../lib/marketHours';
 import { INTRADAY_FALLBACK_RANGE, INTRADAY_UNAVAILABLE_MESSAGE, isIntradayRange } from '../lib/intraday';
 import type { ApiError } from '../api/client';
@@ -539,6 +540,8 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
               <CatalystsList catalysts={data.catalysts} />
             </div>
           )}
+
+          {tab === 'overview' && !data.symbol.endsWith('-USD') && <InsiderPanel symbol={data.symbol} />}
         </>
       )}
     </>

@@ -28,6 +28,14 @@ import type { CalibrationReport } from './types';
 import type { MissedTradeRefresh, MissedTradeReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
+import type {
+  SmartMoneyInsiderClusters,
+  SmartMoneyInsiderSummary,
+  SmartMoneyInsiderTrades,
+  SmartMoneyRefreshResponse,
+  SmartMoneySide,
+  SmartMoneyStatus,
+} from './types';
 import type { WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
 import type {
   BacktestBaseline,
@@ -565,5 +573,53 @@ export function useSetWatcherEnabled() {
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) =>
       api.put<WatcherStatus>(`/api/watchers/${encodeURIComponent(name)}`, { enabled }),
     onSuccess: invalidate,
+  });
+}
+
+const smartMoneyKeys = {
+  all: ['smart-money'] as const,
+  status: ['smart-money', 'status'] as const,
+  trades: (days: number, side: string, symbol: string, minValue: number) =>
+    ['smart-money', 'insiders', days, side, symbol, minValue] as const,
+  clusters: (days: number, symbol: string) => ['smart-money', 'clusters', days, symbol] as const,
+  summary: (symbol: string) => ['smart-money', 'summary', symbol] as const,
+};
+
+export function useSmartMoneyStatus() {
+  return useQuery({ queryKey: smartMoneyKeys.status, queryFn: () => api.get<SmartMoneyStatus>('/api/smart-money/status') });
+}
+
+export function useSmartMoneyInsiders(params: { days: number; side: SmartMoneySide; symbol: string; minValue: number }) {
+  const q = new URLSearchParams({ days: String(params.days), side: params.side, min_value: String(params.minValue) });
+  if (params.symbol) q.set('symbol', params.symbol);
+  return useQuery({
+    queryKey: smartMoneyKeys.trades(params.days, params.side, params.symbol, params.minValue),
+    queryFn: () => api.get<SmartMoneyInsiderTrades>(`/api/smart-money/insiders?${q}`),
+  });
+}
+
+export function useSmartMoneyClusters(days: number, symbol: string) {
+  const q = new URLSearchParams({ days: String(days) });
+  if (symbol) q.set('symbol', symbol);
+  return useQuery({
+    queryKey: smartMoneyKeys.clusters(days, symbol),
+    queryFn: () => api.get<SmartMoneyInsiderClusters>(`/api/smart-money/insiders/clusters?${q}`),
+  });
+}
+
+export function useSmartMoneySummary(symbol: string) {
+  return useQuery({
+    queryKey: smartMoneyKeys.summary(symbol),
+    queryFn: () => api.get<SmartMoneyInsiderSummary>(`/api/smart-money/insiders/summary/${encodeURIComponent(symbol)}`),
+    enabled: !!symbol,
+  });
+}
+
+/** Load Form 4 filings from SEC for the watchlist (a few symbols per call), then refetch every Smart Money view. */
+export function useRefreshSmartMoneyInsiders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<SmartMoneyRefreshResponse>('/api/smart-money/insiders/refresh'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: smartMoneyKeys.all }),
   });
 }
