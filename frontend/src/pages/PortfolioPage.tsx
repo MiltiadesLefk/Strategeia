@@ -3,6 +3,8 @@ import { StatCard } from '../components/StatCard';
 import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { TradeExcursionsCard } from '../components/TradeExcursionsCard';
+import { formatAdverseR } from '../lib/excursion';
+import { CalibrationCard } from '../components/CalibrationCard';
 import { EquityCurveChart } from '../components/chart/EquityCurveChart';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR, formatRelativeTime, sampleSizeNote } from '../components/common';
@@ -234,6 +236,7 @@ export function PortfolioPage() {
       </div>
 
       {stats && <TradeExcursionsCard excursions={stats.excursions} />}
+
       <div className="card">
         <h3 style={{ marginBottom: 12 }}>Closed Positions</h3>
         {closedPositions.length === 0 ? (
@@ -285,6 +288,8 @@ export function PortfolioPage() {
                   <td className={`tabular-nums ${p.realized_r && p.realized_r > 0 ? 'text-green' : p.realized_r && p.realized_r < 0 ? 'text-red' : ''}`}>
                     {formatR(p.realized_r)}
                   </td>
+                  <td className="tabular-nums text-muted">{formatR(p.mfe_r)}</td>
+                  <td className="tabular-nums text-muted">{formatAdverseR(p.mae_r)}</td>
                 </tr>
               ))}
             </tbody>
@@ -292,6 +297,8 @@ export function PortfolioPage() {
           </>
         )}
       </div>
+
+      <CalibrationCard />
     </div>
   );
 }

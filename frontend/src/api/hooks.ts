@@ -21,6 +21,7 @@ import type {
   TradePlan,
   UniverseEntry,
 } from './types';
+import type { CalibrationReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
 
@@ -32,6 +33,7 @@ export const qk = {
   tradePlans: ['trade-plans'] as const,
   positions: ['positions'] as const,
   stats: ['stats'] as const,
+  calibration: ['calibration'] as const,
   strategyVersions: ['strategy-versions'] as const,
   equityCurve: ['equity-curve'] as const,
   dashboard: ['dashboard'] as const,
@@ -153,6 +155,7 @@ export function useGenerateTradePlan() {
 export function useStrategyVersions() {
   return useQuery({ queryKey: qk.strategyVersions, queryFn: () => api.get<StrategyHistory>('/api/strategy/versions') });
 }
+
 export function usePositions() {
   return useQuery({ queryKey: qk.positions, queryFn: () => api.get<Position[]>('/api/portfolio/positions') });
 }
@@ -303,6 +306,10 @@ export function useTestConnection() {
   return useMutation({
     mutationFn: (target: 'llm' | 'finnhub' | 'telegram') => api.post<TestConnectionResponse>('/api/settings/test-connection', { target }),
   });
+}
+
+export function useCalibration() {
+  return useQuery({ queryKey: qk.calibration, queryFn: () => api.get<CalibrationReport>('/api/portfolio/calibration') });
 }
 
 /** Read-only numbers for the Settings page's data-cache card. */

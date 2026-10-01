@@ -429,6 +429,64 @@ export interface LoginResponse {
   message: string;
 }
 
+// --- Confidence calibration (GET /api/portfolio/calibration) ---
+
+export interface CalibrationBand {
+  label: string;
+  min_points: number;
+  max_points: number;
+  n: number;
+  wins: number;
+  /** Percent, 0-100. Null for an empty band. */
+  win_rate: number | null;
+  /** Wilson 95% interval on the win rate, percent. */
+  win_rate_low: number | null;
+  win_rate_high: number | null;
+  avg_r: number | null;
+  /** Bootstrap 95% interval on the average R; null below two trades. */
+  avg_r_low: number | null;
+  avg_r_high: number | null;
+  total_pnl: number;
+  small_sample: boolean;
+}
+
+export type CalibrationVerdict = 'not_enough_data' | 'no_variation' | 'no_clear_relationship' | 'positive' | 'negative';
+
+/** Spearman rank correlation (information coefficient) with its sample and interval. */
+export interface CalibrationIc {
+  key: string;
+  label: string;
+  n: number;
+  ic: number | null;
+  /** Permutation test, two-sided. */
+  p_value: number | null;
+  /** Set for score components only: p-value adjusted for testing several at once. */
+  p_value_adjusted: number | null;
+  ci_low: number | null;
+  ci_high: number | null;
+  verdict: CalibrationVerdict;
+  note: string;
+  /** Score components only: trades where the component was not zero. */
+  n_nonzero: number | null;
+}
+
+export interface CalibrationReport {
+  closed_trades: number;
+  analyzed_trades: number;
+  excluded: { no_linked_plan: number; missing_r: number; outside_bands: number; total: number };
+  points_max: number;
+  min_trades_for_reading: number;
+  min_trades_per_band: number;
+  reliable: boolean;
+  headline: string;
+  bands: CalibrationBand[];
+  overall: CalibrationBand | null;
+  ic: CalibrationIc;
+  ic_by_direction: CalibrationIc[];
+  components: CalibrationIc[];
+  components_tested: number;
+  notes: string[];
+}
 
 /** GET /api/strategy/versions — which rules and settings produced the plans. */
 export interface StrategyVersion {
@@ -455,6 +513,7 @@ export interface StrategyHistory {
   /** The version the current settings map to; null until they produce a plan. */
   current_number: number | null;
 }
+
 /** The on-disk half of the provider cache; mirrors schemas/cache_schemas.py. */
 export interface PersistentCacheStatus {
   file_name: string;
