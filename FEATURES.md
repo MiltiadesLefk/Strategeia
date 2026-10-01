@@ -137,6 +137,7 @@ pills (AI, AI overlay, Finnhub, Telegram) that expand when something is down, an
   - the AI take (with the provider named, or marked as rule-based),
   - the AI overlay's opinion, if that's switched on,
   - the "why it didn't auto-execute" note,
+  - a **v3**-style chip: the strategy version the plan was made under (§4),
   - a chart with the entry, stop and target lines.
 - **Pending plans** can be executed by hand, but only while the US market is open (crypto: any
   time). While it's closed, the **Execute** button is greyed out and says why.
@@ -144,8 +145,10 @@ pills (AI, AI overlay, Finnhub, Telegram) that expand when something is down, an
   executed, even in the first minutes after the bell: it is redone from fresh data at 09:45 New
   York time (the card also shows that time on your own clock), and only the new plan can be
   executed.
-- **History:** every plan, including **"no trade"** decisions with their reason. Plans waiting for
-  their redo are marked "redo at the open".
+- **History:** every plan, including **"no trade"** decisions with their reason, and the strategy
+  version each was made under. Plans waiting for their redo are marked "redo at the open".
+- **Strategy history:** a card under the history table listing each strategy version, what changed
+  from the one before and how many plans and closed trades it produced (§4).
 
 ### Portfolio
 - **Stat cards**, **Active Positions** (entry, planned entry, stop, TP1, TP2, shares, current P&L) with
@@ -153,10 +156,19 @@ pills (AI, AI overlay, Finnhub, Telegram) that expand when something is down, an
 - **Closed Positions:** exit price, reason (Stop, Target (TP1), Time limit or Manual), P&L and result
   in R. A line above the table counts how the closed trades ended, with the share of each, straight
   from the closed rows. A high share of time-limit exits means setups mostly stall instead of resolving.
+  Two compact columns, **MFE** and **MAE**, show the best and worst price each trade reached, in R (§7).
+- **Trade excursions:** a small block above the closed table with the average best and worst price of
+  winners and of losers, the winners' exit efficiency, and how many losers were at least +1R ahead
+  first, with a plain-English reading and the sample size. Trades closed before this was tracked show
+  a dash and are left out of the averages (§7).
 - Each open position shows **"day 7 of 20"** under its opened date: the number of trading days since
   entry, counted from the real bars on its chart (shown only when the entry day is in that chart's
   history; otherwise it says "closes after 20 trading days").
 - **Equity Curve.**
+- **Does confidence predict results?** A report card on the closed trades: a table by confidence band
+  (trades, win rate and average R with their 95% intervals, total P&L), the information coefficient,
+  a per-part table, how many closed trades were left out, and a short "how to read this". With under
+  20 trades it says loudly that the numbers are noise (§5).
 - **Reset** button: wipes positions, equity history and cash, and restarts at the Starting Cash
   setting. Plan history is kept.
 
@@ -167,7 +179,9 @@ Grouped into cards. Every setting is listed in §12:
 - **Finnhub (optional, free tier)**,
 - **Paper Account**,
 - **Telegram Notifications**,
-- **Unattended Auto-Scan**.
+- **Unattended Auto-Scan**,
+- **Data cache** (read-only numbers about the cache and the price history store, plus a Clear cache
+  button; §11).
 
 Keys are shown masked (the last 4 characters only), and there's a **Test Connection** button for each
 provider. When **Claude Code CLI** is the chosen provider, the AI card also shows a **Model** box
@@ -219,6 +233,41 @@ A plan's **status** is one of: `pending` (waiting for you, or for its redo at th
 `executed` (a position was opened), `no_trade` (it was rejected, with a reason) or `discarded`
 (replaced by a newer plan, such as the fresh one a redo makes).
 
+### Strategy versions: which rules made a plan
+
+Every plan, including every "no trade" decision, is stamped with a **strategy version** such as
+**v3**. A version is one exact combination of the settings and rules that decide what comes out of a
+stock's data. If you change the confidence bar, the same stock can become a plan instead of a "no
+trade", so results can only be compared fairly if each plan says which rules it was made under.
+
+**What counts as part of the strategy** (changing any of these makes a new version):
+
+| Group | What |
+|---|---|
+| Settings | Minimum confidence, default risk per trade, slippage, commission, max open positions, max positions per sector, max position as a % of daily volume, maximum holding days, auto-execute, and whether the AI overlay is on |
+| Only while the AI overlay is on | Count disagreement in the confidence score, the objection action, the AI provider and its model, and the overlay's own scoring numbers. Switch the overlay off and changing these does nothing, so they don't matter then |
+| Rules in the code | The named numbers behind the scoring and sizing: score caps, trend and RSI thresholds, the stop rules (ATR multiple, stop buffer, fallback stop), the target rules, the VIX and put/call thresholds, the insider-buying minimum, the confidence scale, the exit-check window and the entry price-drift limit. If a developer changes one, the next plan gets a new version without anyone remembering to record it |
+
+**What does not count** (changing it never makes a version): API keys and the Telegram settings; which
+AI writes the plan's text (it changes wording, not the decision); the scan universe size, auto-scan
+on/off and Finnhub on/off (they change *which* stocks are looked at or where data comes from, not
+what the rules decide for a given stock); starting cash and the exit-check interval; and the
+hand-typed macro calendar dates and market-hours tables.
+
+**How versions are created.** A version is made **when a plan is generated**, never when you edit a
+setting and never when you open a page. Edit settings and look at nothing: no version exists yet.
+Generate the next plan and the app finds (or creates) the version for the settings and rules in force
+at that moment. Going back to settings you used before reuses their old version number instead of
+making a new one. Versions are numbered 1, 2, 3 in the order they were first used.
+
+**Old plans** from before this existed have no version and show a dash. Nothing is back-filled,
+because what the rules were then can't be known.
+
+**Where you see it.** A small **v3** chip on the plan card, a **Strategy** column in the Trade Plans
+history, and a **Strategy history** card at the bottom of Trade Plans. It lists each version with its
+date, what changed from the one before it in plain words ("min confidence 30 -> 38"), and how many
+plans and closed trades were made under it. A position's version is its plan's version.
+
 ---
 
 ## 5. The confidence score, part by part
@@ -246,11 +295,49 @@ winning.
 |---|---|---|
 | **VIX** | 0 or −1 | VIX at **25 or higher**, a fearful market |
 | **Options-implied move** | 0 or −1 | The options market prices a move of at least **1.5×** the stock's normal (ATR-based) move over the same period |
-| **Macro events** | 0 or −1 | A **Fed decision, CPI or jobs report today or tomorrow**. The dates are hand-kept for **2026 only** (§14). |
+| **Macro events** | 0 or −1 | A **Fed decision, CPI or jobs report today or tomorrow**. The dates are hand-kept: Fed decisions for **2026 and 2027**, CPI and jobs reports for **2026 only so far** (§14). |
 | **AI overlay** | 0 to −3 | Only if the overlay is on and would not take the trade: **−1** under 45% conviction, **−2** from 45–64%, **−3** at 65% or more |
 
 **The bar:** a plan needs a trend **and** at least **30%** confidence (the `min_confidence_for_trade`
 setting), which is 5 of 16 points.
+
+### Does the confidence score predict results? (the calibration report)
+
+A score that sounds precise is only useful if higher scores really do come with better trades. The
+**Portfolio** page ends with a card that checks this, using **only your closed paper trades** and the
+plan each one came from. Nothing in it is typed in or smoothed, and opening the page changes nothing.
+
+- **By confidence band.** Closed trades are grouped by evidence points (not by percentage, since the
+  score only has 17 possible values): 6 or fewer, 7-8, 9-10 and 11 or more points out of 16. For each
+  group the card shows the number of trades, the **win rate**, the **average R**, and the total
+  profit or loss. The win rate comes with a **95% interval** (the Wilson interval, which stays honest
+  at small sizes) and the average R with a 95% interval from resampling the trades. The win-rate bar
+  has the interval drawn on it, so a small group visibly covers most of the bar. A group with fewer
+  than **20 trades** is flagged "few" and drawn in amber. A win means a profit after fees, the same
+  rule as the Win Rate card.
+- **Information coefficient (IC).** One number from -1 to +1: do plans with more points tend to end
+  with a better R? It is the **Spearman rank correlation** between the plan's points and the trade's
+  R. 0 means no link; for trading signals, even 0.05 to 0.15 is interesting. It is shown with its
+  number of trades, a 95% interval and a **p-value** (from shuffling the results at random 5,000
+  times: how often would luck alone look this strong?). The same is shown for long trades only and
+  short trades only.
+- **Which parts of the score matter.** The same IC for each stored part of the score (chart,
+  fundamentals, news, weekly chart and SPY, options, insider buying, earnings surprise, and the AI
+  overlay, VIX, expected-move and macro penalties), each with its own trade count. A part that was not
+  recorded on older plans is counted only on the plans that have it. A part that never changes
+  (for example a penalty that is always 0) says "No variation". Because several parts are tested
+  together, their p-values are adjusted upwards (Bonferroni): test enough things and one looks good by luck.
+- **A reading, never a finding too early.** Below **20 closed trades** every row says "Not enough data"
+  and a warning at the top tells you to treat the numbers as noise. At 20 or more, a part is reported as
+  "rises with results" or "falls with results" only if its adjusted p-value is below 0.05; otherwise it
+  says "No clear link".
+- **Nothing is dropped silently.** The card says how many closed trades were left out and why: no
+  linked plan (for example a manually opened position), no recorded R, or a score outside every band.
+- The random steps use fixed seeds, so the same trades always give the same report.
+
+It reads the table of stored trades; it does not call the market data providers and uses no AI. It
+describes what happened, it does not predict. The code is `backend/app/portfolio/calibration.py` (the
+report) and `signal_stats.py` (the statistics).
 
 ---
 
@@ -326,6 +413,44 @@ setting), which is 5 of 16 points.
   ran out), and win rate and Avg R
   now include those results. The limit needs the entry day to be in the 3 months of history the exit
   check reads, so the maximum is capped at 60 trading days.
+
+### Best and worst price during a trade (MFE and MAE)
+Win rate can't tell you whether stops are too tight or exits too slow. Two numbers per closed trade
+can:
+- **MFE** (maximum favourable excursion): the furthest the price moved **in the trade's favour**
+  between entry and exit.
+- **MAE** (maximum adverse excursion): the furthest it moved **against** the trade.
+
+Both are stored as plain positive distances, for a long or a short, as a **percent of the entry price**
+and in **R** (multiples of the initial risk, entry to stop). A trade that exited at its stop has an MAE
+of about 1R (more if it gapped through).
+
+How they are worked out, with the same honesty rules as the exit check:
+- Only the bars the position was **open for** count: the entry day is skipped, and nothing after the
+  exit is looked at.
+- A daily bar can't say whether its high or its low came first, so the **exit day** counts only what
+  is certain: its open and the **exit price**. A stop-hit day does not count its low (that may be far
+  below the fill and came after the position was gone) or its high; a TP1-hit day does not count its
+  high or low beyond the fill. Leaving something out only makes an excursion look smaller, never better.
+  A time-limit exit happens at the close, so that whole day counts.
+- They are saved when the position closes. A **manual close** fetches the bars at that moment; if the
+  price history can't be fetched, the close still goes through and the figures stay empty.
+- If the bars aren't available, or the entry day is outside the history window, the figures are
+  **empty, never guessed**.
+- An **open** position's figures are computed on the fly each time the positions list is read, and are
+  never stored. Trades closed before this feature existed show a dash.
+- A **backfill** function (`backfill_excursions` in `backend/app/portfolio/excursion_service.py`)
+  can fill in older closed trades from the price history. It does not run by itself; it only touches
+  rows that have no figures (so running it twice changes nothing), and it leaves a row empty when it
+  can't place the exit day honestly.
+
+The **Trade excursions** block on the Portfolio page averages them over closed trades that have the
+figures: winners' and losers' average best and worst price in R, **exit efficiency** (realized R
+divided by the best R reached, for winners), how many losers were at least **+1R ahead** first, and
+how many winners came within 0.2R of the stop. Read it like this: losers that were far ahead first
+suggest slow exits; winners that nearly hit the stop suggest the stop may be too tight. Because the
+whole position closes at TP1, a winner leaves at its target, so exit efficiency stays near 100% by
+design; the best price **after** an exit is unknowable and is never shown.
 
 ### Statistics
 Portfolio value, total return (including open positions at current prices), win rate, total closed
@@ -456,8 +581,10 @@ For each kind of data, the app asks the first source that offers it. If that fai
 **Other sources:**
 - **Stock logos:** Elbstream (by ticker), with coloured letters when there's no logo.
 - **Crypto logos:** the `spothq/cryptocurrency-icons` set, via jsDelivr.
-- **Macro calendar:** a hand-kept table of 2026 Fed decisions, CPI and jobs reports, checked against
-  federalreserve.gov and bls.gov.
+- **Macro calendar:** a hand-kept table of Fed decisions (2026 and 2027), CPI and jobs reports (2026;
+  the 2027 dates were not yet published by the Bureau of Labor Statistics when this was last checked),
+  read from federalreserve.gov and bls.gov. If a day falls outside what the table covers, the app
+  logs one warning and the macro penalty stays at 0 for the missing events.
 - **Telegram:** for messages.
 - **The AI providers** from §9.
 
@@ -470,7 +597,8 @@ projects, are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
   check and the re-quote at execution) it never uses old values; that part fails safely instead.
 
 ### Cache: how long answers are reused
-Answers are kept in memory, so refreshing a page doesn't call the sources again:
+Answers are kept in memory, so refreshing a page doesn't call the sources again, and **also saved to a
+file** (`runtime/cache.db`), so a restart or redeploy starts with them instead of empty:
 
 | Data | Reused for |
 |---|---|
@@ -483,7 +611,45 @@ Answers are kept in memory, so refreshing a page doesn't call the sources again:
 - Identical requests arriving at the same moment are merged into one.
 - The browser reuses answers for 15 seconds.
 - The sidebar's check every 60 seconds only reads your settings.
-- The cache is **emptied on every backend restart**.
+- **Saved to disk.** Every answer is also written to `runtime/cache.db`, a small file kept apart from the
+  trading database (so it can be deleted at any time and never bloats a backup). After a restart the
+  app reads answers from it while they are still fresh, so a redeploy doesn't send a whole scan's worth of
+  requests back to Yahoo. The time limits above are counted by the clock, so they keep running while the
+  app is stopped.
+- **Old data still survives a restart.** The "last good value" shown during a provider outage (above) is
+  kept in the file too, for up to 14 days. A redeploy in the middle of a Yahoo outage therefore still
+  shows the last real numbers, and the exit check and the execution re-quote still refuse every old
+  value, from memory or from the file.
+- **Safe to lose.** If the file can't be written (full disk, locked, damaged), the app carries on with
+  the in-memory cache alone; a damaged file is replaced. Answers are stored as plain data, never as
+  executable objects. The file holds at most 200 MB (the least recently used answers go first), and one
+  answer bigger than 100 KB (a multi-year download) is not saved there: those belong in the price
+  history store below.
+- Set `PERSIST_CACHE_DB=false` (§12) to keep the cache in memory only. The **Data cache** card on the
+  Settings page shows what is held, how often answers were reused since the app started, and has a
+  **Clear cache** button (30-second cooldown) that empties both the memory and the file.
+
+### Price history store (for research)
+A backtest needs years of daily prices for hundreds of stocks. Asking Yahoo for that every time would be
+thousands of requests, so the app can **download each stock's history once and keep it** in
+`runtime/history.db`. After the first download, a later top-up only fetches the few newest days.
+
+- **Load it** with `backend/.venv/Scripts/python scripts/preload_history.py AAPL MSFT` (also
+  `--benchmarks` for SPY and ^VIX, `--sp500` for the bundled list, `--years N`, `--report` to see what is
+  held). It pauses between requests and can be re-run safely.
+- **Only real, finished days.** A missing day stays missing: nothing is filled forward or guessed. A day's
+  bar is saved only once the day is over (the half-formed bar Yahoo returns during a session is never
+  kept), and a bar with a blank price is dropped.
+- **A failed download changes nothing.** What is already stored stays, and the failure is reported.
+- **No peeking at the future.** A request for prices up to a date returns nothing later than it. Inside a
+  simulated run the end date is also limited to the last day finished at the simulated moment.
+- **No seams.** Yahoo adjusts old prices after each dividend, so new days can't simply be added to old
+  ones. Every top-up overlaps the stored days by about a week and compares them; if they disagree the
+  whole history is downloaded again. Prices from a different source than the stored ones (say Nasdaq while
+  Yahoo is down) are not mixed in.
+- Only **daily** prices for now; intraday bars are planned. The live scan and exit check do **not** use
+  this store: they always use fresh data.
+- It is not part of the cache: **Clear cache** leaves it alone. The Data cache card shows its size and range.
 
 ### The stock list
 - `backend/data/sp500.csv`: **64 symbols** (BTC-USD, ETH-USD and SOL-USD at the top, then large US
@@ -593,6 +759,7 @@ signal is backtested on these dates before it may earn points.
 | `SEC_EDGAR_USER_AGENT` | a made-up contact (`contact@strategeia.example`) | The contact the SEC sees on each insider-trade download. Write it as `Name/1.0 (purpose; you@example.com)`: plain English letters, no link (the SEC refuses links). **In Docker**, put it in the `.env` file next to `docker-compose.yml`, which passes it in. Blank means the made-up contact (§14) |
 | `CORS_ORIGINS` | `http://localhost:5173` | Which web address may call the API |
 | `STRATEGEIA_DEV_TICKERS` | unset | The test filter (§11) |
+| `PERSIST_CACHE_DB` | true | Save fetched market data to `runtime/cache.db` so a restart starts warm (§11). Set to false for a memory-only cache |
 | `CLAUDE_CODE_OAUTH_TOKEN` | empty | Lets the Claude CLI work inside Docker |
 
 ---
@@ -626,13 +793,36 @@ signal is backtested on these dates before it may earn points.
   time-limited (its age can't be counted from real bars). A new limit applies to positions that are
   already open.
 - **One day touching both levels** always counts as a stop (the cautious choice).
+- **Best/worst price figures (MFE/MAE) are daily-bar approximations.** The exit day counts only its
+  open and the exit price, so the true range can be a little wider; a stop-hit day's real low and a
+  target-hit day's real high are never counted (§7). Trades closed before the figures existed, or with
+  no price history at the time, show a dash until the backfill is run by hand. The best price *after*
+  an exit is unknowable, so "were the targets too near?" cannot be answered from these numbers.
 - **A position's first day isn't exit-checked.** The exit check skips the whole daily bar a position
   opened on. Now that US stocks only open during the session, a stop touched later on the entry day
   is missed if the next day's prices stay above it.
 - **Slippage is a flat 5 bps.** It doesn't grow for thin stocks or big orders.
 - **Intraday charts (1D, 1W)** only come from Yahoo, with no fallback, and their time axis is in UTC.
-- **The macro calendar covers 2026 only.** It needs extending before the year runs out.
-- **The cache is in memory,** so it's lost on every restart.
+- **The macro calendar is partly 2026-only.** Fed decisions are listed through the end of 2027, but
+  CPI and jobs-report dates stop at the end of 2026 because the Bureau of Labor Statistics had not
+  published its 2027 schedule when this was last checked (2026-10-01). Past the end of a series the
+  macro penalty is simply 0 (and one warning is logged), which means "not tracked", not "calm". The
+  dates are typed in by hand; a test starts failing 60 days before any series runs out.
+- **The calibration report needs many trades.** With a few dozen closed trades its intervals are still
+  wide and it can only say "no clear link". It also looks at all closed trades together, whatever
+  market mood or settings were in force when they opened (§5).
+- **Strategy versions only see named numbers.** The version fingerprint covers the settings and the
+  named constants in the code (§4). A number typed directly inside a function, or a rule changed
+  without touching any constant, doesn't change it by itself; a developer bumps a manual "rules
+  revision" number for that. Plans from before versioning have no version.
+- **The cache file holds recent answers only.** A restart starts warm, but answers past their time limit
+  are refetched, and old "last good" values are dropped after 14 days. Multi-year downloads aren't saved
+  in the cache file at all (they go in the price history store, §11).
+- **The price history store is only as good as its source.** Yahoo's daily prices are adjusted for
+  splits and dividends as of the day they're fetched, so the store re-downloads a stock's whole history
+  when it notices a shift (§11). If Yahoo is down, other sources' prices are not mixed in, so a stock's
+  history can lag until Yahoo is back (or until a forced reload). Only daily prices are stored, and a
+  stock with fewer years of history than asked for simply has fewer bars.
 - **News and fundamentals history only exists from the day the archive began** (§11). Backtests of
   earlier days have no recorded news or past fundamentals.
 - **Yahoo can temporarily block** heavy use.
@@ -664,6 +854,7 @@ touches `backend/runtime/` or the Docker app.
 **Docker:** `docker compose up --build -d` from the repo root.
 - The backend runs on port 8000.
 - The frontend runs on port 5173, served by nginx.
+- Each page loads as its own small file, so the login screen and pages without charts download far less (the biggest file is about 230 kB, 74 kB compressed). The next page is fetched in the background while you work. A tab left open across an update shows "The app was updated" with a Reload button.
 - Two optional values come from a gitignored `.env` file next to `docker-compose.yml`:
   `CLAUDE_CODE_OAUTH_TOKEN` (the Claude CLI) and `SEC_EDGAR_USER_AGENT` (the SEC contact, §12).
   `backend/.env` isn't copied into the image.
@@ -673,7 +864,7 @@ touches `backend/runtime/` or the Docker app.
 | Folder | What's in it | Survives a Docker rebuild? |
 |---|---|---|
 | `backend/data/` | The stock list (`sp500.csv`), built into the image | No: it's rebuilt from the repo |
-| `backend/runtime/` (in Docker, the `backend_runtime` volume) | The database (`strategeia.db`: plans, positions, equity points, account, the queue of plans waiting to be redone at the market open, and the dated facts table `knownfact` from §11, which holds the saved news items and fundamentals snapshots), `settings.json`, and the generated password, API key and session secret | **Yes** |
+| `backend/runtime/` (in Docker, the `backend_runtime` volume) | The cache file `cache.db` (§11; safe to delete), the price history file `history.db` (§11; deleting it means downloading again), the database (`strategeia.db`: plans, positions, equity points, account, the queue of plans waiting to be redone at the market open, the dated facts table `knownfact` from §11, which holds the saved news items and fundamentals snapshots, and the strategy-version table `strategyversion` from §4), `settings.json`, and the generated password, API key and session secret | **Yes** |
 
 ---
 
@@ -691,12 +882,15 @@ Every route except login, auth status and health needs you logged in (or an API 
 | `GET /api/analysis/{symbol}?range=` | Chart data and indicators |
 | `GET /api/research/{symbol}` | The research panel data. Also saves the news and fundamentals it just fetched into the archive (§11) |
 | `GET /api/archive/{symbol}?limit=` | What the news and fundamentals archive holds for a stock: counts, when saving began, the most recent items (with the time each became public) and the archive's overall size. Read-only |
-| `POST /api/trade-plans/generate`, `GET /api/trade-plans`, `GET /api/trade-plans/{id}` | Make a plan, list plans, get one plan |
-| `GET /api/portfolio/positions`, `POST /api/portfolio/positions` | List positions; open a position from a plan (refused with a 400 while the market is closed, or while the plan waits for its redo) |
+| `POST /api/trade-plans/generate`, `GET /api/trade-plans`, `GET /api/trade-plans/{id}` | Make a plan, list plans, get one plan. Each carries its `strategy_version` (empty for plans from before versioning) |
+| `GET /api/strategy/versions` | Every strategy version (§4), newest first: its number, date, the full settings and rules snapshot, what changed from the version before, and how many plans, no-trade decisions, opened positions and closed trades were made under it. Also the number of plans with no version, and which version the current settings map to (empty until a plan is generated under them). Read-only: it never creates a version |
+| `GET /api/portfolio/positions`, `POST /api/portfolio/positions` | List positions (each shows its plan's `strategy_version`, and its best and worst price as `mfe_pct`, `mae_pct`, `mfe_r`, `mae_r`: stored for a closed position, live for an open one); open a position from a plan (refused with a 400 while the market is closed, or while the plan waits for its redo) |
 | `POST /api/portfolio/positions/{id}/close` | Close at the market |
-| `GET /api/portfolio/stats`, `GET /api/portfolio/equity-curve` | Statistics; the equity curve |
+| `GET /api/portfolio/stats`, `GET /api/portfolio/equity-curve` | Statistics (including the `excursions` block, §7); the equity curve |
+| `GET /api/portfolio/calibration` | The confidence report card (§5): win rate and average R per confidence band, the information coefficient overall, by direction and per score part, each with its trade count and intervals, plus how many closed trades were left out. Read-only; it runs no exit check |
 | `POST /api/portfolio/reset` | Reset the paper account |
 | `GET /api/settings`, `PUT /api/settings`, `GET /api/settings/status`, `POST /api/settings/test-connection` | Read or save settings, check status, test a provider |
+| `GET /api/cache/status`, `POST /api/cache/clear` | The Data cache card (§11): entries in memory and on disk, how often answers were reused since the app started, the price history store's symbols, bar count, date range and size (read-only, writes nothing); and empty the cache, memory and file (30-second cooldown; the price history store is not touched) |
 | `GET /api/market/session` | The US market right now: its state (open, pre-market, after hours, closed, holiday), the next open and close (1:00 pm early closes included), and the holiday's name. The Dashboard badge and the Execute button read it. |
 | `POST /api/risk/calculate` | Position-size calculator (only reachable from the API docs) |
 
@@ -720,6 +914,11 @@ Every route except login, auth status and health needs you logged in (or an API 
 | **R** | The amount one trade risks (entry to stop). +2R means it made twice what it risked. |
 | **R:R** | Reward-to-risk ratio of a plan |
 | **Avg R** | The average result per closed trade, in R (also called expectancy) |
+| **MFE / MAE** | Maximum favourable / adverse excursion: the best and worst price a trade reached while it was open, as % of entry and in R (§7). Win rate can't show whether stops were too tight; these can. |
+| **Calibration** | Checking whether the confidence score means what it appears to: do higher-scoring plans really win more or earn more per unit of risk? The Portfolio card does it from closed trades (§5). |
+| **IC (information coefficient)** | A number from -1 to +1 saying whether higher scores tend to come with better results (the Spearman rank correlation between a score and the trade's R). 0 means no link. Always read it with its trade count and interval (§5). |
+| **Wilson interval** | A 95% range for a win rate that stays honest for small samples: 3 wins in 5 trades could really be anything from about 23% to 88% |
+| **p-value** | How often pure luck would produce a result at least this strong. Small (under 0.05) means luck is an unlikely explanation. |
 | **Slippage / bps** | The small cost of filling at a worse price. 1 bps = 0.01%. |
 | **Time limit** | The maximum number of trading days a position may stay open. After it, the position closes at that day's close (§7). |
 | **VIX** | The market's "fear gauge" |
@@ -728,6 +927,7 @@ Every route except login, auth status and health needs you logged in (or an API 
 | **Implied move** | The size of move the options market expects |
 | **Form 4** | The SEC filing an insider must submit within 2 business days of trading their company's stock |
 | **Drawdown** | The biggest fall from a peak |
+| **Strategy version** | A number (v1, v2, ...) naming one exact combination of the decision-relevant settings and the rules in the code. Every plan records the one it was made under, so results before and after a change can be told apart (§4). |
 | **Known at** | The moment a piece of information became public. A backtest may only use facts known before its simulated moment (§11). |
 | **Archive** | The app's own dated record of the news and fundamentals it has loaded. It is the only source of past news a backtest can use (§11). |
 | **Look-ahead** | A backtest mistake: using information that wasn't public yet at the simulated moment, which makes results look better than they could have been |
