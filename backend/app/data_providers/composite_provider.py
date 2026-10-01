@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import time
 from datetime import date
 
 import pandas as pd
 
+from app.data_providers import health
 from app.data_providers.base import (
     AllProvidersFailedError,
     CompanyOverview,
@@ -40,13 +42,21 @@ class CompositeDataProvider:
         errors: list[str] = []
         for provider in self._providers:
             method = getattr(provider, method_name)
+            provider_name = getattr(provider, "name", type(provider).__name__)
+            health.begin_call()
+            started = time.perf_counter()
             try:
-                return method(*args, **kwargs), provider.name
+                result = method(*args, **kwargs)
             except NotImplementedError:
-                continue
+                continue  # this provider doesn't offer the method: not a call
             except DataProviderError as exc:
+                health.record_call(provider_name, method_name, False, (time.perf_counter() - started) * 1000.0, exc, read_cache_outcome=True)
                 errors.append(f"{provider.name}: {exc}")
                 continue
+            health.record_call(
+                provider_name, method_name, True, (time.perf_counter() - started) * 1000.0, read_cache_outcome=True
+            )
+            return result, provider.name
         raise AllProvidersFailedError(
             f"All providers failed for {method_name}({args}, {kwargs}): {'; '.join(errors) or 'no provider implements this'}"
         )

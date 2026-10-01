@@ -13,6 +13,8 @@ from app.api.routers import news as news_router
 from app.api.routers import strategy as strategy_router
 from app.api.routers import calibration as calibration_router
 from app.api.routers import data_cache as data_cache_router
+from app.api.routers import data_sources as data_sources_router
+from app.api.routers import macro_series as macro_series_router
 from app.api.routers import backtest_validations as backtest_validations_router
 from app.api.routers import backtests as backtests_router
 from app.api.routers import missed_trades as missed_trades_router
@@ -102,6 +104,8 @@ app.include_router(dashboard.router)
 app.include_router(market.router)
 app.include_router(archive.router)
 app.include_router(data_cache_router.router)
+app.include_router(data_sources_router.router)
+app.include_router(macro_series_router.router)
 app.include_router(watchlist_router.router)
 app.include_router(watchers_router.router)
 app.include_router(strategy_router.router)

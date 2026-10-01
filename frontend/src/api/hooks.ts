@@ -30,6 +30,7 @@ import type { CalibrationReport } from './types';
 import type { MissedTradeRefresh, MissedTradeReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
+import type { DataSourceProbeResult, DataSourcesResponse, MacroSeriesData, MacroSeriesInfo } from './types';
 import type {
   SmartMoneyInsiderClusters,
   SmartMoneyInsiderSummary,
@@ -72,6 +73,9 @@ export const qk = {
   authStatus: ['auth-status'] as const,
   marketSession: ['market-session'] as const,
   cacheStatus: ['cache-status'] as const,
+  dataSources: ['data-sources'] as const,
+  macroSeriesList: ['macro-series-list'] as const,
+  macroSeries: (id: string, start?: string) => ['macro-series', id, start ?? ''] as const,
   watchlist: ['watchlist'] as const,
 };
 
@@ -385,6 +389,39 @@ export function useClearCache() {
   });
 }
 
+/** Every data source with live health (read-only; polled so the numbers move). */
+export function useDataSources() {
+  return useQuery({
+    queryKey: qk.dataSources,
+    queryFn: () => api.get<DataSourcesResponse>('/api/data-sources'),
+    refetchInterval: 30_000,
+  });
+}
+
+/** One real request to a source; refreshes the health table afterwards. */
+export function useProbeDataSource() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.post<DataSourceProbeResult>(`/api/data-sources/${encodeURIComponent(name)}/probe`),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.dataSources }),
+  });
+}
+
+/** The macro series on offer (FRED and ECB). */
+export function useMacroSeriesList() {
+  return useQuery({ queryKey: qk.macroSeriesList, queryFn: () => api.get<MacroSeriesInfo[]>('/api/macro/series'), staleTime: Infinity });
+}
+
+/** One macro series; `start` is YYYY-MM-DD. */
+export function useMacroSeries(seriesId: string | null, start?: string) {
+  return useQuery({
+    queryKey: qk.macroSeries(seriesId ?? '', start),
+    queryFn: () =>
+      api.get<MacroSeriesData>(`/api/macro/series/${encodeURIComponent(seriesId ?? '')}${start ? `?start=${start}` : ''}`),
+    enabled: !!seriesId,
+    staleTime: 10 * 60_000,
+  });
+}
 /** The watchlist the Settings card edits: which layer is active, the saved list, the limits. */
 export function useWatchlist() {
   return useQuery({ queryKey: qk.watchlist, queryFn: () => api.get<WatchlistResponse>('/api/watchlist') });

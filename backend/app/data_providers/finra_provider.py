@@ -36,6 +36,7 @@ from pathlib import Path
 
 import httpx
 
+from app.data_providers import health
 from app.data_providers.base import DataProviderError
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,8 @@ DOWNLOAD_PACING_SECONDS = 0.5
 # A missing file for a day older than this is permanent (weekend/holiday), so
 # the miss is remembered on disk. Younger misses may just be "not posted yet".
 PERMANENT_MISS_AFTER_DAYS = 10
+# The name FINRA downloads are listed under in the Data sources health.
+HEALTH_NAME = "finra"
 USER_AGENT = "Strategeia/1.0 (personal paper-trading research; contact via repository)"
 
 # (status_code, text) for a URL. Injectable so tests never touch the network.
@@ -176,7 +179,12 @@ class FinraProvider:
         if self._downloaded_once and self._pacing > 0:
             self._sleep(self._pacing)
         self._downloaded_once = True
-        status, text = self._http_get(self.url_for(day))
+        with health.track(HEALTH_NAME, "download"):
+            status, text = self._http_get(self.url_for(day))
+            # A day with no file (weekend, holiday) is a normal answer; only a
+            # server-side failure counts against the source.
+            if status >= 500 or status in (408, 429):
+                raise DataProviderError(f"FINRA returned HTTP {status} for {day.isoformat()}")
         today = today or date.today()
         if status in (403, 404):
             if (today - day).days > PERMANENT_MISS_AFTER_DAYS:

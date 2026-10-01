@@ -44,6 +44,7 @@ from pathlib import Path
 import httpx
 
 from app.config import get_infra_settings
+from app.data_providers import health
 from app.data_providers.base import DataProviderError
 from app.data_providers.sec_edgar_provider import _headers
 
@@ -70,6 +71,8 @@ RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 # ten thousand of them: about a decade of one large company's filings.
 DOC_CACHE_MAX_BYTES = 300 * 1024 * 1024
 DOC_CACHE_DIRNAME = "sec_archive"
+# The name this client's calls are listed under in the Data sources health.
+SEC_HEALTH_NAME = "sec_filings"
 
 # `_http_get(url, headers, timeout) -> (status, headers, body)`
 HttpGet = Callable[[str, dict[str, str], float], tuple[int, dict[str, str], bytes]]
@@ -225,7 +228,12 @@ class SecClient:
         return delay
 
     def get_bytes(self, url: str) -> bytes:
-        """GET `url` once it is allowed, retrying transient failures."""
+        """GET `url` once it is allowed, retrying transient failures. Each
+        call (retries included) is one entry in the Data sources health."""
+        with health.track(SEC_HEALTH_NAME, "get"):
+            return self._get_bytes_with_retries(url)
+
+    def _get_bytes_with_retries(self, url: str) -> bytes:
         last_problem = "no attempt made"
         for attempt in range(1, self._max_attempts + 1):
             self.limiter.acquire()

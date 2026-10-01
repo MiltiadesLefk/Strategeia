@@ -768,6 +768,71 @@ export interface CacheClearResponse {
   message: string;
 }
 
+/** One data source with live health; mirrors schemas/data_sources_schemas.py. */
+export interface DataSourceHealth {
+  name: string;
+  label: string;
+  purpose: string;
+  in_chain: boolean;
+  /** 1 = tried first; null for sources outside the chain. */
+  position: number | null;
+  status: 'healthy' | 'degraded' | 'failing' | 'unused';
+  calls: number;
+  successes: number;
+  failures: number;
+  window_calls: number;
+  success_rate: number | null;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  consecutive_failures: number;
+  last_used_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
+  cache_hit_ratio: number | null;
+  stale_served: number;
+  can_probe: boolean;
+}
+
+export interface DataSourcesResponse {
+  chain: DataSourceHealth[];
+  others: DataSourceHealth[];
+  window_size: number;
+  generated_at: string;
+}
+
+export interface DataSourceProbeResult {
+  name: string;
+  ok: boolean;
+  latency_ms: number;
+  detail: string | null;
+  error: string | null;
+}
+
+export interface MacroSeriesInfo {
+  series_id: string;
+  name: string;
+  unit: string;
+  source: 'fred' | 'ecb';
+  frequency: string;
+  description: string;
+}
+
+export interface MacroSeriesPoint {
+  date: string;
+  value: number;
+}
+
+export interface MacroSeriesData {
+  series_id: string;
+  name: string;
+  unit: string;
+  source: 'fred' | 'ecb';
+  frequency: string;
+  points: MacroSeriesPoint[];
+  last_updated: string | null;
+  last_observation_date: string | null;
+}
 export type WatchlistLayer = 'dev_filter' | 'custom' | 'bundled';
 
 export interface WatchlistEntry {

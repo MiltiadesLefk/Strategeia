@@ -9,6 +9,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from threading import Lock
 
+from app.data_providers import health
 from app.data_providers.cache_store import PersistentCacheStats, PersistentCacheStore
 
 logger = logging.getLogger(__name__)
@@ -257,6 +258,7 @@ def cached(ttl_seconds: float, *, stale_on_error: bool = True):
             cached_value, source = _lookup(key)
             if cached_value is not None:
                 _count("memory_hits" if source == "memory" else "disk_hits")
+                health.note_cache(prefix, "hit")
                 return cached_value
 
             with _lock_for(key):
@@ -264,6 +266,7 @@ def cached(ttl_seconds: float, *, stale_on_error: bool = True):
                 cached_value, _source = _lookup(key)
                 if cached_value is not None:
                     _count("coalesced_hits")
+                    health.note_cache(prefix, "hit")
                     return cached_value
                 _count("misses")
                 try:
@@ -273,10 +276,13 @@ def cached(ttl_seconds: float, *, stale_on_error: bool = True):
                         fallback, fallback_source = _stale_lookup(key)
                         if fallback is not None:
                             _count("stale_served" if fallback_source == "memory" else "stale_served_from_disk")
+                            health.note_cache(prefix, "stale")
                             return fallback
                     _count("fetch_failures")
+                    health.note_cache(prefix, "miss")
                     raise
                 cache_set(prefix, args, kwargs, value, ttl_seconds)
+                health.note_cache(prefix, "miss")
                 return value
 
         return wrapper

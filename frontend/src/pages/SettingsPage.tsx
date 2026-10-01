@@ -5,6 +5,7 @@ import { SecretField } from '../components/SecretField';
 import { DecisionModelField } from '../components/DecisionModelField';
 import { decisionModelInvalid } from '../lib/decisionModel';
 import { DataCacheCard } from '../components/DataCacheCard';
+import { DataSourcesCard } from '../components/DataSourcesCard';
 import { WatchersCard } from '../components/WatchersCard';
 import { NewsCardsSettingsCard } from '../components/NewsCardsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
@@ -1018,6 +1019,7 @@ export function SettingsPage() {
       <NewsCardsSettingsCard />
       <WatchlistCard />
 
+      <DataSourcesCard />
       <DataCacheCard />
     </div>
   );
