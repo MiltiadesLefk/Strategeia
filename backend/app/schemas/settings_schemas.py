@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.config import AiOverlayObjectionAction, normalize_claude_cli_model
+from app.config import AiOverlayObjectionAction, normalize_api_model, normalize_claude_cli_model
+from app.llm_providers.base import LLMTier
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -18,6 +19,13 @@ class SettingsUpdateRequest(BaseModel):
     # Model the Claude Code CLI is pinned to. "" is accepted on purpose and
     # means "don't pin"; None means "leave unchanged" like every other field.
     claude_cli_model: str | None = None
+    # Decision-tier models: what answers the AI overlay's verdict. "" means
+    # "use the routine model"; None means "leave unchanged".
+    claude_cli_decision_model: str | None = None
+    openrouter_decision_model: str | None = None
+    orcarouter_decision_model: str | None = None
+    openai_decision_model: str | None = None
+    gemini_decision_model: str | None = None
     finnhub_enabled: bool | None = None
     finnhub_api_key: str | None = None
     ai_trading_overlay_enabled: bool | None = None
@@ -46,9 +54,36 @@ class SettingsUpdateRequest(BaseModel):
     def _validate_claude_cli_model(cls, value: str | None) -> str | None:
         return None if value is None else normalize_claude_cli_model(value)
 
+    @field_validator("claude_cli_decision_model")
+    @classmethod
+    def _validate_claude_cli_decision_model(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_claude_cli_model(value)
+
+    # Model ids reach a JSON body, or (Gemini) a URL path, so every one is
+    # checked here, routine and decision alike, before it is saved.
+    @field_validator(
+        "openrouter_model",
+        "orcarouter_model",
+        "openai_model",
+        "openrouter_decision_model",
+        "orcarouter_decision_model",
+        "openai_decision_model",
+    )
+    @classmethod
+    def _validate_api_model(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_api_model(value)
+
+    @field_validator("gemini_model", "gemini_decision_model")
+    @classmethod
+    def _validate_gemini_model(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_api_model(value, allow_slash=False)
+
 
 class TestConnectionRequest(BaseModel):
     target: str  # "llm" | "finnhub" | "telegram"
+    # Which model tier to test when target is "llm": the routine model (the
+    # narratives) or the decision model (the AI overlay's verdict).
+    tier: LLMTier = "routine"
 
 
 class TestConnectionResponse(BaseModel):
@@ -71,6 +106,11 @@ class StatusResponse(BaseModel):
     # ("claude_code_cli (sonnet)"). "" when the provider has no pin setting or
     # the pin is blank (the CLI's own default).
     ai_model: str = ""
+    # The model that answers the AI overlay's verdict (its decision tier), but
+    # only when it is a different model from the routine one. "" when no
+    # decision model is set (both tiers use the routine model) or there is no
+    # AI provider.
+    ai_decision_model: str = ""
     ai_overlay_online: bool
     finnhub_online: bool
     telegram_online: bool

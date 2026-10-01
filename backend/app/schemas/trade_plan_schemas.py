@@ -63,6 +63,9 @@ class TradePlanResponse(BaseModel):
     # "take" | "pass" — would the AI take this trade? Distinct from
     # ai_opinion_stance (its directional read) and the field acted on.
     ai_trade_verdict: str | None = None
+    # The model that gave that verdict (the overlay's decision tier). None when
+    # the overlay did not run.
+    ai_decision_model: str | None = None
     # Plain-English outcome of the auto-execute step (executed / skipped-with-
     # reason / held for manual review on overlay disagreement / deferred
     # because the market was closed). Null on a no_trade record — auto-execute

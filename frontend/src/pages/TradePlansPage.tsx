@@ -33,6 +33,11 @@ function AiOpinionBlock({ plan }: { plan: TradePlan }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
         <IconBadge variant="info" size={26} />
         <span style={{ fontWeight: 700, fontSize: 13 }}>AI Second Opinion</span>
+        {plan.ai_decision_model && (
+          <span className="text-muted" style={{ fontSize: 12 }} title="The model that gave this verdict (Settings → AI Narrative Provider → Decision model).">
+            AI overlay · {plan.ai_decision_model}
+          </span>
+        )}
         {plan.ai_opinion_stance && <span className={`badge ${stanceBadgeClass}`}>{plan.ai_opinion_stance}</span>}
         {plan.ai_trade_verdict && (
           <span

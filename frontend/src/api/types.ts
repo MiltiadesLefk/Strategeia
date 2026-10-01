@@ -225,6 +225,8 @@ export interface TradePlan {
    *  from ai_opinion_stance (where it thinks the stock goes), and the one
    *  actually acted on. Null when the model gave no usable verdict. */
   ai_trade_verdict?: 'take' | 'pass' | null;
+  /** Model that gave that verdict (the overlay's decision tier); null when the overlay did not run. */
+  ai_decision_model?: string | null;
   ai_opinion_score?: number | null;
   ai_opinion_text?: string | null;
   ai_news_assessment?: string | null;
@@ -352,6 +354,12 @@ export interface AppSettings {
   gemini_model: string;
   /** Model the Claude Code CLI is pinned to ("sonnet", "opus", a full id...). "" = don't pin (whatever the CLI is set to). */
   claude_cli_model: string;
+  /** Decision-tier models (the AI overlay's verdict). "" = use the provider's routine model above. */
+  claude_cli_decision_model: string;
+  openrouter_decision_model: string;
+  orcarouter_decision_model: string;
+  openai_decision_model: string;
+  gemini_decision_model: string;
   finnhub_enabled: boolean;
   finnhub_api_key: string;
   telegram_bot_token: string;
@@ -382,6 +390,11 @@ export interface SettingsUpdateRequest {
   gemini_api_key?: string;
   gemini_model?: string;
   claude_cli_model?: string;
+  claude_cli_decision_model?: string;
+  openrouter_decision_model?: string;
+  orcarouter_decision_model?: string;
+  openai_decision_model?: string;
+  gemini_decision_model?: string;
   finnhub_enabled?: boolean;
   finnhub_api_key?: string;
   telegram_bot_token?: string;
@@ -415,6 +428,8 @@ export interface SettingsStatus {
   ai_provider: string;
   /** Model the provider is pinned to ("" when it has no pin or the pin is blank). */
   ai_model: string;
+  /** Model that answers the AI overlay's verdict, only when it differs from ai_model ("" otherwise). */
+  ai_decision_model: string;
   ai_overlay_online: boolean;
   finnhub_online: boolean;
   telegram_online: boolean;

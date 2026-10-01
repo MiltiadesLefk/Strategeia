@@ -7,7 +7,8 @@ out of the same market data, in three groups:
   bar, risk per trade, execution costs, the portfolio caps, auto-execute).
 - `overlay`: present ONLY while the AI Trading Overlay is on. The overlay's
   verdict can stop a trade, so its switches, the model that gives the verdict
-  and the constants that turn a verdict into a score all belong to the
+  (the decision model if one is set, else the routine model: see
+  `AppSettings.effective_decision_model`) and the constants that turn a verdict into a score all belong to the
   strategy while it is on, and none of them do while it is off (with it off
   they cannot change anything), so toggling them then must not mint a version.
 - `rules`: the named constants in the code that define the rules (score caps,
@@ -17,8 +18,11 @@ out of the same market data, in three groups:
 
 Deliberately OUT, so changing them never creates a version:
 - Secrets and keys (API keys, the Telegram token and chat id).
-- Which model writes the narrative text: it changes the prose, not a decision.
-  (The overlay's model is IN, while the overlay is on.)
+- Which model writes the narrative text (the routine model): it changes the
+  prose, not a decision. (The overlay's decision model is IN, while the overlay
+  is on. With no decision model set it is the routine model, so then the
+  routine model counts too; once a decision model is set, the routine one
+  stops mattering.)
 - `scan_universe_size`, `auto_scan_enabled` and `finnhub_enabled`: they change
   WHICH symbols are evaluated, when, or where the data comes from, not what the
   rules decide for a given symbol and given data. Measuring "the rules" across a
@@ -67,17 +71,6 @@ DECISION_SETTINGS: dict[str, str] = {
 OVERLAY_SETTINGS: dict[str, str] = {
     "ai_overlay_scores_confidence": "overlay scores confidence",
     "ai_overlay_objection_action": "overlay objection action",
-}
-
-# Which AppSettings field names the model of each LLM provider. Mirrors
-# llm_providers/factory.get_llm_provider; a provider missing here records no
-# model (the "none" provider has none).
-LLM_MODEL_SETTING: dict[str, str] = {
-    "claude_code_cli": "claude_cli_model",
-    "openrouter": "openrouter_model",
-    "orcarouter": "orcarouter_model",
-    "openai": "openai_model",
-    "gemini": "gemini_model",
 }
 
 # The code-side rules: module -> named constants to record. Resolved with
@@ -171,11 +164,14 @@ def build_snapshot(settings: AppSettings) -> dict[str, Any]:
         "rules": {"rules_revision": RULES_REVISION, **_collect_constants(RULE_CONSTANTS)},
     }
     if settings.ai_trading_overlay_enabled:
-        model_field = LLM_MODEL_SETTING.get(settings.llm_provider)
+        # The model that answers the verdict, not the one that writes narratives.
+        # No provider records none; an unpinned Claude CLI records "" (so an
+        # install that never sets a decision model keeps its fingerprint).
+        decision_model = settings.effective_decision_model()
         snapshot["overlay"] = {
             **{name: normalize(values[name]) for name in OVERLAY_SETTINGS},
             "llm_provider": settings.llm_provider,
-            "llm_model": normalize(values[model_field]) if model_field else None,
+            "llm_model": None if settings.llm_provider == "none" else normalize(decision_model),
             **_collect_constants(OVERLAY_RULE_CONSTANTS),
         }
     return snapshot

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useSettings, useTestConnection, useUpdateSettings } from '../api/hooks';
 import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
+import { DecisionModelField } from '../components/DecisionModelField';
+import { decisionModelInvalid } from '../lib/decisionModel';
 import { DataCacheCard } from '../components/DataCacheCard';
 import type { AiOverlayObjectionAction } from '../api/types';
 
@@ -113,6 +115,14 @@ export function SettingsPage() {
   const [orcarouterKey, setOrcarouterKey] = useState('');
   const [orcarouterModel, setOrcarouterModel] = useState('');
   const [claudeCliModel, setClaudeCliModel] = useState('');
+  const [openaiModel, setOpenaiModel] = useState('');
+  const [geminiModel, setGeminiModel] = useState('');
+  // Decision model per provider (the AI overlay's verdict); blank = the provider's routine model.
+  const [claudeDecisionModel, setClaudeDecisionModel] = useState('');
+  const [openrouterDecisionModel, setOpenrouterDecisionModel] = useState('');
+  const [orcarouterDecisionModel, setOrcarouterDecisionModel] = useState('');
+  const [openaiDecisionModel, setOpenaiDecisionModel] = useState('');
+  const [geminiDecisionModel, setGeminiDecisionModel] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [finnhubEnabled, setFinnhubEnabled] = useState(false);
@@ -161,6 +171,12 @@ export function SettingsPage() {
     claudeCliModel.trim() !== '' &&
     !(CLAUDE_MODEL_PATTERN.test(claudeCliModel.trim()) && claudeCliModel.trim().length <= 64);
   const llmMissingKey = llmNeedsKey && !llmDraftKey && !llmExistingKey;
+  const decisionModelBad =
+    (llmProvider === 'claude_code_cli' && decisionModelInvalid('claude', claudeDecisionModel)) ||
+    (llmProvider === 'openrouter' && decisionModelInvalid('api', openrouterDecisionModel)) ||
+    (llmProvider === 'orcarouter' && decisionModelInvalid('api', orcarouterDecisionModel)) ||
+    (llmProvider === 'openai' && (decisionModelInvalid('api', openaiDecisionModel) || decisionModelInvalid('api', openaiModel))) ||
+    (llmProvider === 'gemini' && (decisionModelInvalid('gemini', geminiDecisionModel) || decisionModelInvalid('gemini', geminiModel)));
 
   const finnhubMissingKey = finnhubEnabled && !finnhubKey && !settings?.finnhub_api_key;
 
@@ -174,6 +190,13 @@ export function SettingsPage() {
     setOpenrouterModel(settings.openrouter_model);
     setOrcarouterModel(settings.orcarouter_model);
     setClaudeCliModel(settings.claude_cli_model);
+    setOpenaiModel(settings.openai_model);
+    setGeminiModel(settings.gemini_model);
+    setClaudeDecisionModel(settings.claude_cli_decision_model);
+    setOpenrouterDecisionModel(settings.openrouter_decision_model);
+    setOrcarouterDecisionModel(settings.orcarouter_decision_model);
+    setOpenaiDecisionModel(settings.openai_decision_model);
+    setGeminiDecisionModel(settings.gemini_decision_model);
     setFinnhubEnabled(settings.finnhub_enabled);
     setTelegramChatId(settings.telegram_chat_id);
     setStartingCash(settings.paper_starting_cash);
@@ -191,11 +214,18 @@ export function SettingsPage() {
   }, [settings]);
 
   function saveLlm() {
-    if (llmMissingKey || claudeModelInvalid) return;
+    if (llmMissingKey || claudeModelInvalid || decisionModelBad) return;
     update(
       {
         llm_provider: llmProvider,
         claude_cli_model: claudeCliModel.trim(),
+        claude_cli_decision_model: claudeDecisionModel.trim(),
+        openrouter_decision_model: openrouterDecisionModel.trim(),
+        orcarouter_decision_model: orcarouterDecisionModel.trim(),
+        openai_model: openaiModel.trim(),
+        openai_decision_model: openaiDecisionModel.trim(),
+        gemini_model: geminiModel.trim(),
+        gemini_decision_model: geminiDecisionModel.trim(),
         ...(openrouterKey ? { openrouter_api_key: openrouterKey } : {}),
         openrouter_model: openrouterModel,
         ...(orcarouterKey ? { orcarouter_api_key: orcarouterKey } : {}),
@@ -298,6 +328,13 @@ export function SettingsPage() {
     setOpenrouterModel(settings.openrouter_model);
     setOrcarouterModel(settings.orcarouter_model);
     setClaudeCliModel(settings.claude_cli_model);
+    setOpenaiModel(settings.openai_model);
+    setGeminiModel(settings.gemini_model);
+    setClaudeDecisionModel(settings.claude_cli_decision_model);
+    setOpenrouterDecisionModel(settings.openrouter_decision_model);
+    setOrcarouterDecisionModel(settings.orcarouter_decision_model);
+    setOpenaiDecisionModel(settings.openai_decision_model);
+    setGeminiDecisionModel(settings.gemini_decision_model);
     setOpenrouterKey('');
     setOrcarouterKey('');
     setOpenaiKey('');
@@ -402,6 +439,7 @@ export function SettingsPage() {
                 and frequent, so a small fast model is usually the right trade-off over a frontier one.
               </div>
             </div>
+            <DecisionModelField kind="api" value={openrouterDecisionModel} onChange={setOpenrouterDecisionModel} routineModel={openrouterModel} />
           </>
         )}
         {llmProvider === 'orcarouter' && (
@@ -422,26 +460,41 @@ export function SettingsPage() {
                 <code>openai/gpt-4o-mini</code>, <code>anthropic/claude-opus-4.7</code>.
               </div>
             </div>
+            <DecisionModelField kind="api" value={orcarouterDecisionModel} onChange={setOrcarouterDecisionModel} routineModel={orcarouterModel} />
           </>
         )}
         {llmProvider === 'openai' && (
-          <SecretField
-            key={`${settings?.openai_api_key ?? ''}-${resetNonce}`}
-            label="OpenAI API Key"
-            masked={settings?.openai_api_key ?? ''}
-            value={openaiKey}
-            onChange={setOpenaiKey}
-            placeholder="sk-..."
-          />
+          <>
+            <SecretField
+              key={`${settings?.openai_api_key ?? ''}-${resetNonce}`}
+              label="OpenAI API Key"
+              masked={settings?.openai_api_key ?? ''}
+              value={openaiKey}
+              onChange={setOpenaiKey}
+              placeholder="sk-..."
+            />
+            <div>
+              <label>Model</label>
+              <input type="text" value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)} placeholder="gpt-4o-mini" maxLength={96} spellCheck={false} autoComplete="off" />
+            </div>
+            <DecisionModelField kind="api" value={openaiDecisionModel} onChange={setOpenaiDecisionModel} routineModel={openaiModel} />
+          </>
         )}
         {llmProvider === 'gemini' && (
-          <SecretField
-            key={`${settings?.gemini_api_key ?? ''}-${resetNonce}`}
-            label="Gemini API Key"
-            masked={settings?.gemini_api_key ?? ''}
-            value={geminiKey}
-            onChange={setGeminiKey}
-          />
+          <>
+            <SecretField
+              key={`${settings?.gemini_api_key ?? ''}-${resetNonce}`}
+              label="Gemini API Key"
+              masked={settings?.gemini_api_key ?? ''}
+              value={geminiKey}
+              onChange={setGeminiKey}
+            />
+            <div>
+              <label>Model</label>
+              <input type="text" value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} placeholder="gemini-1.5-flash" maxLength={96} spellCheck={false} autoComplete="off" />
+            </div>
+            <DecisionModelField kind="gemini" value={geminiDecisionModel} onChange={setGeminiDecisionModel} routineModel={geminiModel} />
+          </>
         )}
         {llmProvider === 'claude_code_cli' && (
           <div>
@@ -470,6 +523,9 @@ export function SettingsPage() {
           </div>
         )}
         {llmProvider === 'claude_code_cli' && (
+          <DecisionModelField kind="claude" value={claudeDecisionModel} onChange={setClaudeDecisionModel} routineModel={claudeCliModel} />
+        )}
+        {llmProvider === 'claude_code_cli' && (
           <div className="text-muted" style={{ fontSize: 13 }}>
             Best-effort option: shells out to your local Claude Code CLI. No key needed, but no SLA either — higher
             latency than a direct API and depends on the CLI being installed and logged in on this machine.
@@ -484,11 +540,21 @@ export function SettingsPage() {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid} />
+          <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
           <ResetButton onClick={resetLlm} />
           <button className="btn btn-secondary" onClick={() => testLlm('llm')} disabled={testingLlm}>
             {testingLlm ? 'Testing…' : 'Test Connection'}
           </button>
+          {llmProvider !== 'none' && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => testLlm({ target: 'llm', tier: 'decision' })}
+              disabled={testingLlm}
+              title="Tests the saved decision model (or the routine one when none is set)"
+            >
+              Test decision model
+            </button>
+          )}
         </div>
         {llmTestResult && (
           <div className={llmTestResult.ok ? 'text-green' : 'text-red'} style={{ fontSize: 13 }}>
@@ -512,6 +578,10 @@ export function SettingsPage() {
           Costs one extra AI call per symbol evaluated — including ones the rule-based engine rejects as "no trade,"
           which normally skip the AI entirely to save tokens. Requires a real provider selected above (has no effect
           while Provider is "None").
+        </div>
+        <div className="text-muted" style={{ fontSize: 12 }}>
+          This call uses the provider's <strong>Decision model</strong> (set in the card above; blank = the same model as
+          the narration), so you can spend a stronger model on the one answer that can stop a trade.
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ToggleSwitch checked={aiOverlayEnabled} onChange={setAiOverlayEnabled} label="Enable AI second opinion on every evaluation" />

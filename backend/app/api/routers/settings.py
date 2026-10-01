@@ -8,7 +8,7 @@ from app.api.deps import require_auth
 from app.config import load_app_settings, update_app_settings
 from app.data_providers.finnhub_provider import FinnhubProvider
 from app.data_providers.base import DataProviderError
-from app.llm_providers.factory import get_llm_provider
+from app.llm_providers.factory import generate_with_tier, get_llm_provider
 from app.schemas.settings_schemas import (
     SettingsUpdateRequest,
     StatusResponse,
@@ -23,6 +23,17 @@ router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depe
 @router.get("")
 def get_settings() -> dict:
     return load_app_settings().redacted()
+
+
+def _distinct_decision_model(provider) -> str:
+    """The provider's decision-tier model when it differs from its routine
+    one, else "" (a blank decision model means both tiers share one model, so
+    there is nothing extra to show)."""
+    model_for = getattr(provider, "model_for", None)
+    if model_for is None:
+        return ""
+    decision = model_for("decision")
+    return decision if decision != model_for("routine") else ""
 
 
 @router.get("/status", response_model=StatusResponse)
@@ -51,6 +62,7 @@ def get_status() -> StatusResponse:
         ai_provider=provider.name,
         # Only providers with a public `model` pin (the Claude CLI) report one.
         ai_model=getattr(provider, "model", "") or "" if ai_online else "",
+        ai_decision_model=_distinct_decision_model(provider) if ai_online else "",
         ai_overlay_online=ai_overlay_online,
         finnhub_online=finnhub_online,
         telegram_online=telegram_online,
@@ -80,12 +92,19 @@ TEST_CONNECTION_COOLDOWN_SECONDS = 10
 _last_test_connection_monotonic: dict[str, float] = {}
 
 
-def _llm_ok_message(provider, result) -> str:
+def _llm_ok_message(provider, result, tier: str = "routine") -> str:
     """"claude_code_cli responded in 1300ms (model: claude-sonnet-5-5, pinned to
     'sonnet')". The model the call actually used is what you want to see after
-    changing the pin, so say it when the provider reports one."""
+    changing the pin, so say it when the provider reports one. A decision-tier
+    test says so up front, and says when no decision model is set (the call
+    then went to the routine model)."""
     message = f"{provider.name} responded in {result.latency_ms}ms"
-    pinned = getattr(provider, "model", "")
+    model_for = getattr(provider, "model_for", None)
+    if tier == "decision":
+        message = f"{provider.name} decision model responded in {result.latency_ms}ms"
+        if model_for is not None and model_for("decision") == model_for("routine"):
+            message += " (no decision model set, so this used the routine model)"
+    pinned = model_for(tier) if model_for is not None else getattr(provider, "model", "")
     if result.model and pinned and result.model != pinned:
         return f"{message} (model: {result.model}, pinned to '{pinned}')"
     if result.model:
@@ -98,7 +117,10 @@ def _llm_ok_message(provider, result) -> str:
 @router.post("/test-connection", response_model=TestConnectionResponse)
 def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
     now = time.monotonic()
-    last = _last_test_connection_monotonic.get(req.target)
+    # The two LLM tiers hit different models (and costs), so each has its own
+    # cooldown; every other target is keyed by its name as before.
+    cooldown_key = f"{req.target}:{req.tier}" if req.target == "llm" and req.tier != "routine" else req.target
+    last = _last_test_connection_monotonic.get(cooldown_key)
     if last is not None:
         elapsed = now - last
         if elapsed < TEST_CONNECTION_COOLDOWN_SECONDS:
@@ -107,7 +129,7 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
                 detail=f"'{req.target}' was just tested {elapsed:.0f}s ago — wait "
                 f"{TEST_CONNECTION_COOLDOWN_SECONDS - elapsed:.0f}s before testing it again.",
             )
-    _last_test_connection_monotonic[req.target] = now
+    _last_test_connection_monotonic[cooldown_key] = now
 
     settings = load_app_settings()
 
@@ -115,10 +137,10 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
         provider = get_llm_provider(settings)
         if not provider.is_configured():
             return TestConnectionResponse(ok=False, message=f"{provider.name} is not configured")
-        result = provider.generate("Reply with exactly: OK", max_tokens=10)
+        result = generate_with_tier(provider, "Reply with exactly: OK", req.tier, max_tokens=10)
         if result.error:
             return TestConnectionResponse(ok=False, message=result.error)
-        return TestConnectionResponse(ok=True, message=_llm_ok_message(provider, result))
+        return TestConnectionResponse(ok=True, message=_llm_ok_message(provider, result, req.tier))
 
     if req.target == "finnhub":
         if not settings.finnhub_api_key:

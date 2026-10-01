@@ -88,6 +88,10 @@ class TradePlanRecord(SQLModel, table=True):
     # model gave no usable verdict (older rows, or a provider that ignored
     # the field), in which case the stance is used as the fallback signal.
     ai_trade_verdict: Optional[str] = None
+    # The model that gave the overlay's verdict above (the decision tier's
+    # model, which can differ from the one that wrote ai_take_text). None when
+    # the overlay did not run, and on rows from before this was recorded.
+    ai_decision_model: Optional[str] = None
     signal_reasons: Optional[str] = None  # "; "-joined, human-readable — not JSON, kept simple
     # What happened at the auto-execute step, in plain English — executed,
     # skipped (insufficient cash / duplicate / at position cap / sector cap /

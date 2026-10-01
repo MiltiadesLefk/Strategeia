@@ -304,7 +304,9 @@ export function useLogout() {
 
 export function useTestConnection() {
   return useMutation({
-    mutationFn: (target: 'llm' | 'finnhub' | 'telegram') => api.post<TestConnectionResponse>('/api/settings/test-connection', { target }),
+    // `tier` only matters for 'llm': the routine model (narratives, the default) or the decision model (AI overlay).
+    mutationFn: (arg: 'llm' | 'finnhub' | 'telegram' | { target: 'llm'; tier: 'routine' | 'decision' }) =>
+      api.post<TestConnectionResponse>('/api/settings/test-connection', typeof arg === 'string' ? { target: arg } : arg),
   });
 }
 

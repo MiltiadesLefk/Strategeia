@@ -28,12 +28,16 @@ class FakeConfiguredLLMProvider:
     def __init__(self, response_text: str = '{"stance": "bullish", "confidence": 80, "reasoning": "Strong setup."}'):
         self.response_text = response_text
         self.prompts: list[str] = []
+        self.tiers: list[str] = []  # the tier each call asked for, in order
 
     def is_configured(self) -> bool:
         return True
 
-    def generate(self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4) -> LLMResult:
+    def generate(
+        self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4, tier: str = "routine"
+    ) -> LLMResult:
         self.prompts.append(prompt)
+        self.tiers.append(tier)
         return LLMResult(text=self.response_text, provider=self.name, latency_ms=1)
 
 

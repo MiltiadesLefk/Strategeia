@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.llm_providers.base import LLMResult
+from app.llm_providers.base import ROUTINE_TIER, LLMResult, LLMTier
 
 
 class NullLLMProvider:
@@ -13,5 +13,7 @@ class NullLLMProvider:
     def is_configured(self) -> bool:
         return True
 
-    def generate(self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4) -> LLMResult:
+    def generate(
+        self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4, tier: LLMTier = ROUTINE_TIER
+    ) -> LLMResult:
         return LLMResult(text=prompt, provider=self.name, latency_ms=0)

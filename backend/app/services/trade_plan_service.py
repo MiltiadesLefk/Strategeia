@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 from sqlmodel import Session, select
@@ -38,7 +38,8 @@ from app.analysis.trend import ChartAnalysis, analyze_chart
 from app.config import AppSettings, load_app_settings
 from app.data_providers.base import AllProvidersFailedError, CompanyOverview, DataProvider, FinancialYear, NewsItem, OptionsSummary
 from app.llm_providers.base import LLMProvider
-from app.llm_providers.factory import generate_with_fallback
+from app.llm_providers.base import DECISION_TIER
+from app.llm_providers.factory import generate_with_fallback, generate_with_tier
 from app.llm_providers.prompts import build_ai_opinion_prompt, build_trade_plan_take_prompt
 from app.markets import format_market_time, us_closure_reason
 from app.portfolio.engine import (
@@ -235,6 +236,9 @@ class AiOpinion:
     score: int | None = None
     text: str | None = None
     news_assessment: str | None = None
+    # The model that gave this opinion (the decision tier's model), so a plan
+    # can say who stopped or waved through the trade. None when no call was made.
+    decision_model: str | None = None
 
 
 def _parse_ai_opinion(raw_text: str) -> AiOpinion:
@@ -295,11 +299,14 @@ def _maybe_get_ai_opinion(
         symbol, chart, volume_ratio, overview, financial_years, news, earnings_date, rule_based_direction,
         confidence_score, rule_based_news_reasons,
     )
-    result = llm_provider.generate(prompt)
+    # The decision tier: this verdict can stop a trade, so it gets the stronger
+    # model when one is set. Which model answers is the only thing the tier
+    # changes; the overlay is still only ever able to stop a trade.
+    result = generate_with_tier(llm_provider, prompt, DECISION_TIER)
     if result.error or not result.text:
         logger.warning("AI opinion call failed for %s: %s", symbol, result.error)
         return AiOpinion()
-    return _parse_ai_opinion(result.text)
+    return replace(_parse_ai_opinion(result.text), decision_model=result.model)
 
 
 def _defer_to_market_open(
@@ -491,6 +498,7 @@ def generate_trade_plan(
     ai_opinion_text = opinion.text
     ai_news_assessment = opinion.news_assessment
     ai_trade_verdict = opinion.trade_verdict
+    ai_decision_model = opinion.decision_model
 
     # Rung 1 of the ladder: a disagreeing overlay costs conviction, scored
     # like any other dimension. Never a bonus, so it can only ever talk the
@@ -568,6 +576,7 @@ def generate_trade_plan(
             macro_event_score=macro_event_score,
             ai_overlay_score=ai_overlay_score,
             ai_trade_verdict=ai_trade_verdict,
+            ai_decision_model=ai_decision_model,
             confidence_points=clamp_points(combined_score),
             confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
             signal_reasons=signal_reasons,
@@ -600,6 +609,7 @@ def generate_trade_plan(
             macro_event_score=macro_event_score,
             ai_overlay_score=ai_overlay_score,
             ai_trade_verdict=ai_trade_verdict,
+            ai_decision_model=ai_decision_model,
             confidence_points=clamp_points(combined_score),
             confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
             ai_opinion_stance=ai_opinion_stance,
@@ -690,6 +700,7 @@ def generate_trade_plan(
         macro_event_score=macro_event_score,
         ai_overlay_score=ai_overlay_score,
         ai_trade_verdict=ai_trade_verdict,
+        ai_decision_model=ai_decision_model,
         confidence_points=clamp_points(combined_score),
         confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         signal_reasons=signal_reasons,
@@ -825,6 +836,7 @@ def generate_trade_plan(
         macro_event_score=macro_event_score,
         ai_overlay_score=ai_overlay_score,
         ai_trade_verdict=ai_trade_verdict,
+        ai_decision_model=ai_decision_model,
         confidence_points=clamp_points(combined_score),
         confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         signal_reasons=signal_reasons,

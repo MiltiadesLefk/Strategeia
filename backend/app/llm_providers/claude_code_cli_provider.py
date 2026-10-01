@@ -6,7 +6,7 @@ import subprocess
 import time
 
 from app.config import normalize_claude_cli_model
-from app.llm_providers.base import LLMResult
+from app.llm_providers.base import ROUTINE_TIER, LLMResult, LLMTier, model_for_tier
 
 
 def _served_model(parsed: object) -> str | None:
@@ -51,32 +51,60 @@ class ClaudeCodeCLIProvider:
     model was last chosen in an interactive session (or the account default),
     which would change the narratives and the AI overlay's objections without
     any change on our side. Blank means "don't pass --model".
+
+    `decision_model` is the model for the decision tier (the AI overlay's
+    verdict, see base.LLMTier); blank means the decision tier uses `model`.
     """
 
     name = "claude_code_cli"
 
-    def __init__(self, cli_path: str | None = None, timeout_sec: int = 45, model: str | None = None):
+    def __init__(
+        self,
+        cli_path: str | None = None,
+        timeout_sec: int = 45,
+        model: str | None = None,
+        decision_model: str | None = None,
+    ):
         self.cli_path = cli_path or shutil.which("claude")
         self.timeout_sec = timeout_sec
         # A bad value (e.g. a hand-edited setting) must never reach argv. The
         # provider is still built so one bad field can't take narrative
         # generation down with an exception; generate() reports the problem and
-        # generate_with_fallback falls back to the rule-based text.
+        # generate_with_fallback falls back to the rule-based text. A bad
+        # decision model only breaks decision-tier calls, a bad routine model
+        # only breaks the calls that would use it.
         self._model_error: str | None = None
+        self._decision_model_error: str | None = None
         try:
             self.model = normalize_claude_cli_model(model or "")
         except ValueError as exc:
             self.model = ""
             self._model_error = str(exc)
+        try:
+            self.decision_model = normalize_claude_cli_model(decision_model or "")
+        except ValueError as exc:
+            self.decision_model = ""
+            self._decision_model_error = str(exc)
+
+    def model_for(self, tier: LLMTier = ROUTINE_TIER) -> str:
+        return model_for_tier(self.model, self.decision_model, tier)
 
     def is_configured(self) -> bool:
         return self.cli_path is not None
 
-    def generate(self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4) -> LLMResult:
+    def generate(
+        self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4, tier: LLMTier = ROUTINE_TIER
+    ) -> LLMResult:
         if not self.cli_path:
             return LLMResult("", self.name, 0, error="Claude Code CLI not found on PATH")
-        if self._model_error:
+        # Only the setting that tier would actually use can break the call.
+        if tier == "decision" and self._decision_model_error:
+            return LLMResult(
+                "", self.name, 0, error=f"Invalid Claude CLI decision model setting: {self._decision_model_error}"
+            )
+        if self._model_error and not (tier == "decision" and self.decision_model):
             return LLMResult("", self.name, 0, error=f"Invalid Claude CLI model setting: {self._model_error}")
+        model = self.model_for(tier)
 
         argv = [
             self.cli_path,
@@ -88,8 +116,8 @@ class ClaudeCodeCLIProvider:
             "--max-turns",
             "1",
         ]
-        if self.model:
-            argv += ["--model", self.model]
+        if model:
+            argv += ["--model", model]
         start = time.monotonic()
         try:
             proc = subprocess.run(
@@ -119,4 +147,4 @@ class ClaudeCodeCLIProvider:
 
         if not text:
             return LLMResult("", self.name, latency_ms, error="Claude Code CLI returned empty output")
-        return LLMResult(text=text, provider=self.name, latency_ms=latency_ms, model=served or self.model or None)
+        return LLMResult(text=text, provider=self.name, latency_ms=latency_ms, model=served or model or None)

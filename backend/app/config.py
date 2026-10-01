@@ -351,6 +351,35 @@ def normalize_claude_cli_model(value: str) -> str:
         )
     return cleaned
 
+
+# Model ids for the HTTP providers (OpenRouter, OrcaRouter, OpenAI, Gemini), used
+# for every decision_model field and the request-time check of the routine
+# ones. A model id goes into a JSON body (OpenAI-style APIs) or a URL path
+# (Gemini), so the same strict start-with-a-letter-or-digit rule applies;
+# gateways also use "vendor/model" ids ("anthropic/claude-3.5-haiku",
+# "orcarouter/auto"), so "/" is allowed except for Gemini, whose id is
+# interpolated into a URL path and so can never contain one.
+API_MODEL_MAX_LENGTH = 96
+API_MODEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@\[\]/-]*$")
+API_MODEL_NO_SLASH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@\[\]-]*$")
+
+def normalize_api_model(value: str, *, allow_slash: bool = True) -> str:
+    """Trim and validate an HTTP provider's model id; "" is a valid value for a
+    decision_model field (it means "use the routine model"). Raises
+    ValueError for anything that is not a plain model id."""
+    cleaned = value.strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) > API_MODEL_MAX_LENGTH:
+        raise ValueError(f"Model name must be at most {API_MODEL_MAX_LENGTH} characters")
+    pattern = API_MODEL_PATTERN if allow_slash else API_MODEL_NO_SLASH_PATTERN
+    if not pattern.fullmatch(cleaned):
+        slash = "/ " if allow_slash else ""
+        raise ValueError(
+            f"Model name may only use letters, digits and . _ - : @ [ ] {slash}"
+            "and must start with a letter or digit (e.g. gpt-4o-mini, anthropic/claude-3.5-haiku)"
+        )
+    return cleaned
 # What happens when the AI Trading Overlay says it would not take the trade.
 # One choice, not a set of flags: "cancel" and "hold" fire on the identical
 # trigger and cancel always wins (a cancelled evaluation never reaches the
@@ -409,6 +438,50 @@ class AppSettings(BaseModel):
     def _validate_claude_cli_model(cls, value):
         return normalize_claude_cli_model(value) if isinstance(value, str) else value
 
+    # Two model tiers per provider. The routine model (the *_model fields above)
+    # writes the narratives: chart insight, research summary, the trade-plan
+    # take. The decision model answers the one call whose output can stop a
+    # trade, the AI Trading Overlay's verdict, so a stronger model can be spent
+    # there without paying for it on every paragraph of prose. BLANK means "use
+    # the routine model", and blank is the default for every provider, so an
+    # existing install behaves exactly as before until the user opts in (a
+    # non-blank default would also change the overlay's verdicts, and with them
+    # the strategy version, on upgrade). Which model answers is the only thing
+    # this changes: the overlay still can only stop a trade, never start one.
+    claude_cli_decision_model: str = ""
+    openrouter_decision_model: str = ""
+    orcarouter_decision_model: str = ""
+    openai_decision_model: str = ""
+    gemini_decision_model: str = ""
+
+    @field_validator("claude_cli_decision_model", mode="before")
+    @classmethod
+    def _validate_claude_cli_decision_model(cls, value):
+        return normalize_claude_cli_model(value) if isinstance(value, str) else value
+
+    @field_validator("openrouter_decision_model", "orcarouter_decision_model", "openai_decision_model", mode="before")
+    @classmethod
+    def _validate_api_decision_model(cls, value):
+        return normalize_api_model(value) if isinstance(value, str) else value
+
+    @field_validator("gemini_decision_model", mode="before")
+    @classmethod
+    def _validate_gemini_decision_model(cls, value):
+        return normalize_api_model(value, allow_slash=False) if isinstance(value, str) else value
+
+    def effective_decision_model(self) -> str:
+        """The model that answers the AI overlay's verdict for the selected
+        provider: its decision_model if one is set, else its routine model.
+        "" for the 'none' provider, and for the Claude CLI when neither is set
+        (the CLI then uses its own default)."""
+        routine, decision = {
+            "claude_code_cli": (self.claude_cli_model, self.claude_cli_decision_model),
+            "openrouter": (self.openrouter_model, self.openrouter_decision_model),
+            "orcarouter": (self.orcarouter_model, self.orcarouter_decision_model),
+            "openai": (self.openai_model, self.openai_decision_model),
+            "gemini": (self.gemini_model, self.gemini_decision_model),
+        }.get(self.llm_provider, ("", ""))
+        return decision or routine
     finnhub_enabled: bool = False
     finnhub_api_key: str = ""
 
