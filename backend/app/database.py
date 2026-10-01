@@ -87,6 +87,7 @@ def create_db_and_tables() -> None:
     from app.portfolio import missed_trade_models  # noqa: F401 - MissedTradeOutcome
     from app.portfolio import models  # noqa: F401 - registers tables on SQLModel.metadata
     from app.strategy import models as strategy_models  # noqa: F401 - StrategyVersion
+    from app.watchers import models as watcher_models  # noqa: F401 - WatcherState
 
     SQLModel.metadata.create_all(engine)
     _add_missing_columns()

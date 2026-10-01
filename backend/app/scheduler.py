@@ -27,6 +27,7 @@ from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_auto_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
+from app.watchers.runner import run_due_watchers
 
 logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
@@ -138,6 +139,7 @@ def _market_open_redo_job() -> None:
 # configured it returns before doing any work.
 LESSON_CATCHUP_INTERVAL_MINUTES = 5
 
+
 def _lesson_catchup_job() -> None:
     try:
         settings = load_app_settings()
@@ -150,10 +152,12 @@ def _lesson_catchup_job() -> None:
     except Exception:
         logger.exception("Scheduled lesson catch-up tick failed")
 
+
 # The missed-trades ledger is recomputed once a day, after the close, when the day's
 # bars are final (see portfolio/missed_trades.py). Analysis only: it places nothing and
 # decides nothing, and it is skipped inside a simulated (backtest) moment.
 MISSED_TRADES_REFRESH_TIME_ET = (16, 45)
+
 
 def _missed_trades_refresh_job() -> None:
     try:
@@ -164,6 +168,27 @@ def _missed_trades_refresh_job() -> None:
             refresh_missed_trades(session, settings)
     except Exception:
         logger.exception("Scheduled missed-trades refresh failed")
+
+
+# Watchers: one tick wakes every watchers_poll_minutes and runs whichever watchers
+# are due (each has its own slower interval). The tick is jittered so it doesn't land
+# on the same second as the other jobs, and each watcher's poll is spread by up to
+# WATCHER_POLL_JITTER_SECONDS. A no-op while the master switch is off.
+WATCHER_TICK_JITTER_SECONDS = 20
+WATCHER_POLL_JITTER_SECONDS = 5.0
+
+
+def _watchers_job() -> None:
+    try:
+        settings = load_app_settings()
+        if not settings.watchers_enabled:
+            return  # cheap exit before opening the database
+        with Session(engine) as session:
+            run_due_watchers(session, settings, jitter_seconds=WATCHER_POLL_JITTER_SECONDS)
+    except Exception:
+        logger.exception("Scheduled watchers tick failed")
+
+
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -211,6 +236,15 @@ def start_scheduler() -> BackgroundScheduler:
         "interval",
         minutes=LESSON_CATCHUP_INTERVAL_MINUTES,
         id="lesson_catchup",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _watchers_job,
+        "interval",
+        minutes=settings.watchers_poll_minutes,
+        jitter=WATCHER_TICK_JITTER_SECONDS,
+        id="watchers",
         max_instances=1,
         coalesce=True,
     )

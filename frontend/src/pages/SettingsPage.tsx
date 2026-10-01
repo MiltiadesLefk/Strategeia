@@ -5,6 +5,7 @@ import { SecretField } from '../components/SecretField';
 import { DecisionModelField } from '../components/DecisionModelField';
 import { decisionModelInvalid } from '../lib/decisionModel';
 import { DataCacheCard } from '../components/DataCacheCard';
+import { WatchersCard } from '../components/WatchersCard';
 import { WatchlistCard } from '../components/WatchlistCard';
 import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
 
@@ -33,6 +34,7 @@ const RESEARCH_MODES: { value: ResearchMode; label: string; help: string }[] = [
     help: 'Research answers may search the web and must cite the pages they used. Web pages are untrusted text, and the AI is told never to follow instructions found in them. Uses more of your AI quota or credit.',
   },
 ];
+
 /** Mirrors backend config.CLAUDE_CLI_MODEL_PATTERN (a plain model name: starts with a letter or digit). */
 const CLAUDE_MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@[\]-]*$/;
 
@@ -265,6 +267,7 @@ export function SettingsPage() {
     ...(telegramToken ? { telegram_bot_token: telegramToken } : {}),
     telegram_chat_id: telegramChatId,
   });
+
   function saveLlm() {
     if (llmMissingKey || claudeModelInvalid || decisionModelBad) return;
     update(
@@ -1008,6 +1011,8 @@ export function SettingsPage() {
           <ResetButton onClick={resetAutomation} />
         </div>
       </div>
+
+      <WatchersCard />
 
       <WatchlistCard />
 

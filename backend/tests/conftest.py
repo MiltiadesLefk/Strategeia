@@ -110,6 +110,8 @@ def _isolated_watchlist_store(monkeypatch, tmp_path):
     universe.reset_universe_caches()
     yield
     universe.reset_universe_caches()
+
+
 @pytest.fixture(autouse=True)
 def _reset_in_process_cooldowns(monkeypatch):
     """Every in-process, not-persisted cooldown in the API (matching the
@@ -134,6 +136,7 @@ def _reset_in_process_cooldowns(monkeypatch):
     monkeypatch.setattr("app.api.routers.missed_trades._last_missed_trades_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.signals._last_finra_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.portfolio._last_lesson_request_monotonic", {})
+    monkeypatch.setattr("app.api.routers.watchers._last_watcher_run_monotonic", {})
     # The backtest start cooldown and the process-wide job manager (one run at a time).
     monkeypatch.setattr("app.api.routers.backtests._last_backtest_start_monotonic", None)
     from app.backtest.service import reset_backtest_manager

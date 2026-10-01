@@ -396,6 +396,9 @@ export interface AppSettings {
   mark_to_market_interval_minutes: number;
   auto_execute_trade_plans: boolean;
   auto_scan_enabled: boolean;
+  watchers_enabled: boolean;
+  watchers_action: WatchersAction;
+  watchers_poll_minutes: number;
   max_concurrent_positions: number;
   /** Trading days before a stalled position is closed at the close; 0 = no limit. */
   max_holding_days: number;
@@ -432,6 +435,9 @@ export interface SettingsUpdateRequest {
   mark_to_market_interval_minutes?: number;
   auto_execute_trade_plans?: boolean;
   auto_scan_enabled?: boolean;
+  watchers_enabled?: boolean;
+  watchers_action?: WatchersAction;
+  watchers_poll_minutes?: number;
   max_concurrent_positions?: number;
   max_holding_days?: number;
   ai_trading_overlay_enabled?: boolean;
@@ -474,6 +480,7 @@ export type TestConnectionArg =
   | 'finnhub'
   | 'telegram'
   | { target: 'llm' | 'finnhub' | 'telegram'; tier?: 'routine' | 'decision'; overrides?: TestConnectionOverrides };
+
 /** What the AI Trading Overlay's objection actually does. One choice, not a
  *  set of flags: "cancel" and "hold" fire on the same trigger and cancel
  *  always wins, so they can never both be in effect. */
@@ -481,6 +488,7 @@ export type AiOverlayObjectionAction = 'cancel' | 'hold' | 'none';
 
 /** Whether AI calls made for research (never the overlay or the narration) may search the web. */
 export type ResearchMode = 'our_data_only' | 'allow_web_search';
+
 export interface SettingsStatus {
   ai_online: boolean;
   ai_provider: string;
@@ -686,6 +694,7 @@ export interface MissedTradeRefresh {
   busy: boolean;
   failed_symbols: string[];
 }
+
 /** GET /api/strategy/versions — which rules and settings produced the plans. */
 export interface StrategyVersion {
   id: number;
@@ -1035,4 +1044,56 @@ export interface BacktestSymbolCoverage {
   first_date: string | null;
   last_date: string | null;
   bars: number;
+}
+
+// ---- Watchers ----------------------------------------------------------------
+
+export type WatchersAction = 'record' | 'alert' | 'alert_and_reevaluate';
+
+export interface WatcherEvent {
+  id: number;
+  watcher: string;
+  symbol: string | null;
+  kind: string;
+  headline: string;
+  severity: string;
+  known_at: string;
+  source_ref: string | null;
+  details: Record<string, unknown>;
+  /** Why the event did nothing beyond being recorded (cooldown, daily cap); null if it fired. */
+  suppressed_reason: string | null;
+}
+
+export interface WatcherStatus {
+  name: string;
+  description: string;
+  enabled: boolean;
+  poll_interval_seconds: number;
+  cooldown_seconds: number;
+  daily_fire_cap: number;
+  last_run_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  fires_today: number;
+  recent_events: WatcherEvent[];
+}
+
+export interface WatchersResponse {
+  master_enabled: boolean;
+  action: string;
+  poll_minutes: number;
+  watchers: WatcherStatus[];
+}
+
+export interface WatcherRunResponse {
+  watcher: string;
+  ran: boolean;
+  skipped_reason: string | null;
+  error: string | null;
+  new_events: number;
+  duplicates: number;
+  fired: number;
+  suppressed: number;
+  actions: string[];
 }

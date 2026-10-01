@@ -42,6 +42,7 @@ class FactKind:
     POST = "post"  # SG-4: a social post, market-wide unless it names a company
     CONGRESS_TRADE = "congress_trade"  # SG-2: known at the REPORT date, trade date is effective_at
     FUND_HOLDING = "fund_holding"  # SG-3 / SM-3: a 13F line, known at filing acceptance
+    WATCHER_EVENT = "watcher_event"  # an event a watcher reported (watchers/runner.py); symbol None = market-wide
 
 
 class KnownFact(SQLModel, table=True):

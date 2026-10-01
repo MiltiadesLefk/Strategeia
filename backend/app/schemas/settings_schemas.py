@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.config import AiOverlayObjectionAction, ResearchMode, normalize_api_model, normalize_claude_cli_model
+from app.config import AiOverlayObjectionAction, ResearchMode, WatchersAction, normalize_api_model, normalize_claude_cli_model
 from app.llm_providers.base import LLMTier
 
 
@@ -44,6 +44,9 @@ class SettingsUpdateRequest(BaseModel):
     mark_to_market_interval_minutes: int | None = Field(default=None, gt=0)
     auto_execute_trade_plans: bool | None = None
     auto_scan_enabled: bool | None = None
+    watchers_enabled: bool | None = None
+    watchers_action: WatchersAction | None = None
+    watchers_poll_minutes: int | None = Field(default=None, ge=1, le=60)
     max_concurrent_positions: int | None = Field(default=None, gt=0)
     # Trading days before a stalled position is closed at the close; 0 = no limit.
     # Capped at 60 (about three months): the exit scan reads 3 months of bars

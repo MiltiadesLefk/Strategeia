@@ -28,6 +28,7 @@ import type { CalibrationReport } from './types';
 import type { MissedTradeRefresh, MissedTradeReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
+import type { WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
 import type {
   BacktestBaseline,
   BacktestBenchmarks,
@@ -50,6 +51,8 @@ export const qk = {
   stats: ['stats'] as const,
   calibration: ['calibration'] as const,
   missedTrades: ['missed-trades'] as const,
+  watchers: ['watchers'] as const,
+  watcherEvents: ['watcher-events'] as const,
   strategyVersions: ['strategy-versions'] as const,
   equityCurve: ['equity-curve'] as const,
   dashboard: ['dashboard'] as const,
@@ -214,6 +217,7 @@ export function useWriteLesson() {
     },
   });
 }
+
 export function usePortfolioStats() {
   return useQuery({ queryKey: qk.stats, queryFn: () => api.get<PortfolioStats>('/api/portfolio/stats') });
 }
@@ -356,6 +360,7 @@ export function useRefreshMissedTrades() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.missedTrades }),
   });
 }
+
 /** Read-only numbers for the Settings page's data-cache card. */
 export function useCacheStatus() {
   return useQuery({ queryKey: qk.cacheStatus, queryFn: () => api.get<CacheStatus>('/api/cache/status') });
@@ -520,5 +525,45 @@ export function useCancelBacktest() {
   return useMutation({
     mutationFn: (id: number) => api.post<{ id: number; status: string }>(`/api/backtests/${id}/cancel`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: backtestKeys.list }),
+  });
+}
+
+/** Installed watchers with their saved state. Read-only on the server. */
+export function useWatchers() {
+  return useQuery({ queryKey: qk.watchers, queryFn: () => api.get<WatchersResponse>('/api/watchers') });
+}
+
+/** The newest recorded watcher events, suppressed ones included. */
+export function useWatcherEvents(limit = 20) {
+  return useQuery({
+    queryKey: [...qk.watcherEvents, limit],
+    queryFn: () => api.get<WatcherEvent[]>(`/api/watchers/events?limit=${limit}`),
+  });
+}
+
+function useInvalidateWatchers() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: qk.watchers });
+    queryClient.invalidateQueries({ queryKey: qk.watcherEvents });
+  };
+}
+
+/** Poll one watcher now. */
+export function useRunWatcher() {
+  const invalidate = useInvalidateWatchers();
+  return useMutation({
+    mutationFn: (name: string) => api.post<WatcherRunResponse>(`/api/watchers/${encodeURIComponent(name)}/run`),
+    onSuccess: invalidate,
+  });
+}
+
+/** Turn one watcher on or off (on top of the master switch). */
+export function useSetWatcherEnabled() {
+  const invalidate = useInvalidateWatchers();
+  return useMutation({
+    mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) =>
+      api.put<WatcherStatus>(`/api/watchers/${encodeURIComponent(name)}`, { enabled }),
+    onSuccess: invalidate,
   });
 }

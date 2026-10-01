@@ -208,6 +208,7 @@ class InfraSettings(BaseSettings):
         """The watchlist saved from Settings: beside settings.json, in the same
         volume, so it survives a Docker rebuild (data_providers/universe_store.py)."""
         return self.settings_file.parent / "universe.json"
+
     @property
     def generated_secret_file(self) -> Path:
         return self.settings_file.parent / "api_key.txt"
@@ -368,6 +369,7 @@ API_MODEL_MAX_LENGTH = 96
 API_MODEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@\[\]/-]*$")
 API_MODEL_NO_SLASH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@\[\]-]*$")
 
+
 def normalize_api_model(value: str, *, allow_slash: bool = True) -> str:
     """Trim and validate an HTTP provider's model id; "" is a valid value for a
     decision_model field (it means "use the routine model"). Raises
@@ -385,6 +387,7 @@ def normalize_api_model(value: str, *, allow_slash: bool = True) -> str:
             "and must start with a letter or digit (e.g. gpt-4o-mini, anthropic/claude-3.5-haiku)"
         )
     return cleaned
+
 # What happens when the AI Trading Overlay says it would not take the trade.
 # One choice, not a set of flags: "cancel" and "hold" fire on the identical
 # trigger and cancel always wins (a cancelled evaluation never reaches the
@@ -395,6 +398,12 @@ AiOverlayObjectionAction = Literal["cancel", "hold", "none"]
 
 # Whether research-purpose AI calls may search the web (research_mode setting).
 ResearchMode = Literal["our_data_only", "allow_web_search"]
+
+# What a watcher event does once it is recorded: nothing more ("record"), send a
+# Telegram alert ("alert"), or alert and also run a full evaluation of the symbol
+# ("alert_and_reevaluate").
+WatchersAction = Literal["record", "alert", "alert_and_reevaluate"]
+
 
 MASK_BULLET_COUNT = 16
 
@@ -489,6 +498,7 @@ class AppSettings(BaseModel):
             "gemini": (self.gemini_model, self.gemini_decision_model),
         }.get(self.llm_provider, ("", ""))
         return decision or routine
+
     finnhub_enabled: bool = False
     finnhub_api_key: str = ""
 
@@ -558,6 +568,7 @@ class AppSettings(BaseModel):
     # use the web in either mode, and this setting is not part of the strategy
     # version: research never decides a trade.
     research_mode: ResearchMode = "our_data_only"
+
     @model_validator(mode="before")
     @classmethod
     def _migrate_overlay_objection_action(cls, data):
@@ -606,6 +617,18 @@ class AppSettings(BaseModel):
     # interval — no `_interval_minutes` setting to configure here.
     auto_scan_enabled: bool = False
     max_concurrent_positions: int = 5
+
+    # Watchers: small background pollers (a new filing, a headline) that report
+    # events. Master switch off by default: no real watcher ships yet, and a
+    # watcher that alerts or re-evaluates on its own is something to opt into.
+    # An event is always recorded first; watchers_action says what happens next.
+    # The default also runs a full evaluation of the symbol, which goes through the
+    # same gates as any other (and is queued for the next open when the market is
+    # closed). watchers_poll_minutes is how often the scheduler wakes to see which
+    # watchers are due; each watcher has its own, slower, interval too.
+    watchers_enabled: bool = False
+    watchers_action: WatchersAction = "alert_and_reevaluate"
+    watchers_poll_minutes: int = 5
 
     # Portfolio-level risk, as opposed to the per-trade risk default_risk_pct
     # already covers. Five 1%-risk positions is only "5% at risk" if the five
