@@ -294,6 +294,29 @@ export interface PortfolioStats {
   current_cash: number;
   /** How closed trades ended: close_reason -> count, from the closed rows. */
   exit_reasons: Record<string, number>;
+  /** Best/worst price during closed trades (MFE/MAE), averaged in R. */
+  excursions: ExcursionStats;
+}
+
+export interface ExcursionGroup {
+  n: number;
+  avg_mfe_r: number | null;
+  avg_mae_r: number | null;
+}
+
+export interface ExcursionStats {
+  closed_trades: number;
+  /** Closed trades that have the figures: the sample for everything below. */
+  measured: number;
+  winners: ExcursionGroup;
+  losers: ExcursionGroup;
+  /** Mean realized R / MFE R over winners (0-1): how much of the best price reached was banked. */
+  exit_efficiency: number | null;
+  exit_efficiency_n: number;
+  /** Losers that had been at least 1R in profit first. */
+  losers_reached_1r: number;
+  /** Winners that came within 0.2R of the stop (MAE of 0.8R or more). */
+  winners_near_stop: number;
 }
 
 export interface EquityPoint {

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from sqlmodel import Session, select
 
 from app.data_providers.base import AllProvidersFailedError, DataProvider
+from app.portfolio.excursion_stats import compute_excursion_stats
 from app.portfolio.models import AccountState, PaperPosition
 
 
@@ -24,6 +25,8 @@ class PortfolioStats:
     # exits means setups mostly stall instead of resolving, which is information
     # about the strategy that win rate alone hides.
     exit_reasons: dict[str, int] = field(default_factory=dict)
+    # Best/worst price during closed trades (MFE/MAE), see portfolio/excursion_stats.py.
+    excursions: dict = field(default_factory=dict)
 
 
 def compute_portfolio_stats(session: Session, data_provider: DataProvider, default_starting_cash: float) -> PortfolioStats:
@@ -65,4 +68,5 @@ def compute_portfolio_stats(session: Session, data_provider: DataProvider, defau
         starting_cash=starting_cash,
         current_cash=current_cash,
         exit_reasons=dict(Counter(p.close_reason or "unknown" for p in closed)),
+        excursions=asdict(compute_excursion_stats(closed)),
     )

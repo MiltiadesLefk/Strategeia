@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from collections.abc import Callable
 from datetime import datetime
@@ -17,8 +18,11 @@ from app.markets import (
     next_us_open,
     us_closure_reason,
 )
+from app.portfolio.excursion import LastBar, compute_excursion
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
 from app.timeutil import utcnow_naive
+
+logger = logging.getLogger(__name__)
 
 # Returns "now" as a naive-UTC datetime, the convention for every stored
 # timestamp (timeutil.utcnow_naive).
@@ -346,8 +350,21 @@ class PaperTradingEngine:
         return self._available_cash(self.get_account_state())
 
     def close_position(
-        self, position: PaperPosition, close_price: float, reason: str, *, snapshot: bool = True
+        self,
+        position: PaperPosition,
+        close_price: float,
+        reason: str,
+        *,
+        snapshot: bool = True,
+        held_bars: pd.DataFrame | None = None,
+        last_bar: LastBar = "complete",
     ) -> PaperPosition:
+        """`held_bars` / `last_bar` are the bars the position was open for (after the
+        entry bar, up to the exit bar) and how the last one relates to the exit, for
+        the best/worst-price figures (MFE / MAE) stored on the row. The exit scan
+        passes the bars it already walked; without them (a manual close) the bars are
+        fetched here, best effort. Recording the excursion can never fail the close."""
+        self._record_excursion(position, close_price, reason, held_bars, last_bar)
         account = self.get_account_state()
         risk_per_share = abs(position.entry_price - position.stop_loss)
         sign = 1 if position.direction == "long" else -1
@@ -379,6 +396,42 @@ class PaperTradingEngine:
             self._record_equity_snapshot()
             self._session.refresh(position)  # _record_equity_snapshot()'s commit expires attributes
         return position
+
+    def _record_excursion(
+        self,
+        position: PaperPosition,
+        close_price: float,
+        reason: str,
+        held_bars: pd.DataFrame | None,
+        last_bar: LastBar,
+    ) -> None:
+        """Sets mfe_pct/mae_pct/mfe_r/mae_r on `position` (not yet committed).
+        Any failure leaves them None: the close itself must go through regardless."""
+        try:
+            if held_bars is None:
+                if reason in ("stop_hit", "tp1_hit"):
+                    return  # which bar the level was hit on is only known to the exit scan
+                # A manual (or time) close made right now: the bars to date were all
+                # inside the holding period. fresh_data_only: a stale bar set would
+                # silently understate the range.
+                with fresh_data_only():
+                    bars = self._data_provider.get_ohlcv(position.symbol, period=EXIT_SCAN_PERIOD, interval="1d")
+                if bars.empty or not self._entry_bar_in_window(bars, position.opened_at):
+                    return  # the entry bar isn't in the window: the early bars are unknowable
+                held_bars, last_bar = self._bars_after_entry(bars, position.opened_at), "complete"
+            result = compute_excursion(
+                position.direction,
+                position.entry_price,
+                position.stop_loss,
+                held_bars,
+                exit_price=close_price,
+                last_bar=last_bar,
+            )
+            if result is not None:
+                position.mfe_pct, position.mae_pct = result.mfe_pct, result.mae_pct
+                position.mfe_r, position.mae_r = result.mfe_r, result.mae_r
+        except Exception:  # noqa: BLE001 - best effort by design, see docstring
+            logger.warning("Could not record MFE/MAE for %s", position.symbol, exc_info=True)
 
     # -------------------------------------------------------------- marking
 
@@ -423,7 +476,17 @@ class PaperTradingEngine:
     def _first_exit(
         self, position: PaperPosition, bars: pd.DataFrame, *, holding_limit: int | None = None
     ) -> tuple[float, str] | None:
-        """Walks bars in chronological order and returns the FIRST stop/TP1
+        """(fill price, reason) of the first exit, or None. See _scan_exit."""
+        found = self._scan_exit(position, bars, holding_limit=holding_limit)
+        return None if found is None else (found[0], found[1])
+
+    def _scan_exit(
+        self, position: PaperPosition, bars: pd.DataFrame, *, holding_limit: int | None = None
+    ) -> tuple[float, str, int] | None:
+        """(fill price, reason, number of bars walked up to and including the exit
+        bar) of the first exit, or None.
+
+        Walks bars in chronological order and returns the FIRST stop/TP1
         touch, not merely whatever the latest bar happens to show.
 
         Checking only the most recent bar (the previous behaviour) silently
@@ -453,17 +516,17 @@ class PaperTradingEngine:
             if position.direction == "long":
                 if low <= position.stop_loss:
                     fill = self._exit_fill_price("long", bar_open, position.stop_loss, is_stop=True)
-                    return self._slip(fill, buying=False), "stop_hit"
+                    return self._slip(fill, buying=False), "stop_hit", number
                 if high >= position.tp1:
-                    return self._exit_fill_price("long", bar_open, position.tp1, is_stop=False), "tp1_hit"
+                    return self._exit_fill_price("long", bar_open, position.tp1, is_stop=False), "tp1_hit", number
             else:
                 if high >= position.stop_loss:
                     fill = self._exit_fill_price("short", bar_open, position.stop_loss, is_stop=True)
-                    return self._slip(fill, buying=True), "stop_hit"
+                    return self._slip(fill, buying=True), "stop_hit", number
                 if low <= position.tp1:
-                    return self._exit_fill_price("short", bar_open, position.tp1, is_stop=False), "tp1_hit"
+                    return self._exit_fill_price("short", bar_open, position.tp1, is_stop=False), "tp1_hit", number
             if holding_limit is not None and number >= holding_limit and self._bar_is_final(position.symbol, bar):
-                return self._slip(float(bar["close"]), buying=position.direction == "short"), "time_exit"
+                return self._slip(float(bar["close"]), buying=position.direction == "short"), "time_exit", number
         return None
 
     def _bar_is_final(self, symbol: str, bar: pd.Series) -> bool:
@@ -511,16 +574,29 @@ class PaperTradingEngine:
                 continue
             # The time limit counts bars from the entry bar, so it only applies
             # when that bar is in the window (see _entry_bar_in_window).
-            holding_limit = (
-                self._max_holding_days if self._entry_bar_in_window(bars, position.opened_at) else None
-            )
-            exit_ = self._first_exit(position, scope, holding_limit=holding_limit)
+            entry_in_window = self._entry_bar_in_window(bars, position.opened_at)
+            holding_limit = self._max_holding_days if entry_in_window else None
+            exit_ = self._scan_exit(position, scope, holding_limit=holding_limit)
             if exit_ is None:
                 continue
-            fill_price, reason = exit_
+            fill_price, reason, bars_walked = exit_
             # snapshot=False: one equity snapshot for the whole sweep below,
             # rather than re-quoting every open position once per close.
-            closed.append(self.close_position(position, fill_price, reason, snapshot=False))
+            # The bars up to the exit bar are what the position lived through (for the
+            # best/worst-price record); a stop or TP1 hit happened part-way through its
+            # bar, a time exit is the finished bar's close.
+            closed.append(
+                self.close_position(
+                    position,
+                    fill_price,
+                    reason,
+                    snapshot=False,
+                    # Only when the entry bar is in the window: otherwise the early bars
+                    # of the trade are missing and the range would be understated.
+                    held_bars=scope.iloc[:bars_walked] if entry_in_window else None,
+                    last_bar="complete" if reason == "time_exit" else "exit",
+                )
+            )
 
         if snapshot:
             self._record_equity_snapshot()

@@ -128,6 +128,16 @@ class PaperPosition(SQLModel, table=True):
     # Round-trip commission, charged at open and again at close. realized_pnl
     # is already net of it; kept separately so the UI can show gross vs net.
     fees_paid: Optional[float] = None
+    # Best and worst price during the trade (MFE / MAE, see portfolio/excursion.py),
+    # as non-negative magnitudes: how far the price went in the trade's favour /
+    # against it, as % of entry and in R (multiples of |entry - stop|). Set when
+    # the position closes; None for rows closed before this existed and whenever
+    # the bars were not available (never a guess). Open positions get theirs
+    # computed on the fly, not stored.
+    mfe_pct: Optional[float] = None
+    mae_pct: Optional[float] = None
+    mfe_r: Optional[float] = None
+    mae_r: Optional[float] = None
 
 
 DeferredEvaluationStatus = Literal["pending", "done", "skipped", "failed"]

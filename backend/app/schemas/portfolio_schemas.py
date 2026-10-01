@@ -47,6 +47,25 @@ class ClosePositionRequest(BaseModel):
     reason: str = "manual"
 
 
+class ExcursionGroupSchema(BaseModel):
+    n: int = 0
+    avg_mfe_r: float | None = None
+    avg_mae_r: float | None = None
+
+
+class ExcursionStatsSchema(BaseModel):
+    """MFE/MAE averages in R over closed trades that have the figures (`measured`)."""
+
+    closed_trades: int = 0
+    measured: int = 0
+    winners: ExcursionGroupSchema = ExcursionGroupSchema()
+    losers: ExcursionGroupSchema = ExcursionGroupSchema()
+    exit_efficiency: float | None = None
+    exit_efficiency_n: int = 0
+    losers_reached_1r: int = 0
+    winners_near_stop: int = 0
+
+
 class PortfolioStatsSchema(BaseModel):
     total_trades: int
     win_rate: float
@@ -57,6 +76,7 @@ class PortfolioStatsSchema(BaseModel):
     starting_cash: float
     current_cash: float
     exit_reasons: dict[str, int] = {}
+    excursions: ExcursionStatsSchema = ExcursionStatsSchema()
 
 
 class EquityPointSchema(BaseModel):

@@ -16,6 +16,7 @@ from app.portfolio.engine import (
     SectorConcentrationError,
     StalePlanError,
 )
+from app.portfolio.excursion_service import live_excursion
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
 from app.portfolio.stats import compute_portfolio_stats
 from app.schemas.portfolio_schemas import (
@@ -67,7 +68,15 @@ def list_positions(
     build_engine(session, data_provider, settings).mark_to_market(snapshot=False)
     positions = session.exec(select(PaperPosition).order_by(PaperPosition.opened_at.desc())).all()
     strategy_versions = plan_strategy_versions(session, [p.trade_plan_id for p in positions])
-    return [position_to_schema(p, strategy_versions) for p in positions]
+    schemas = [position_to_schema(p, strategy_versions) for p in positions]
+    # An open position's best/worst price so far (MFE/MAE) is computed here, read-only, and
+    # never stored; a closed one already carries what was recorded when it closed.
+    for position, schema in zip(positions, schemas):
+        if position.status == "open":
+            live = live_excursion(position, data_provider)
+            if live is not None:
+                schema.mfe_pct, schema.mae_pct, schema.mfe_r, schema.mae_r = live.mfe_pct, live.mae_pct, live.mfe_r, live.mae_r
+    return schemas
 
 
 @router.post("/positions", response_model=PositionSchema)

@@ -2,6 +2,7 @@ import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePo
 import { StatCard } from '../components/StatCard';
 import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
+import { TradeExcursionsCard } from '../components/TradeExcursionsCard';
 import { EquityCurveChart } from '../components/chart/EquityCurveChart';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR, formatRelativeTime, sampleSizeNote } from '../components/common';
@@ -232,6 +233,7 @@ export function PortfolioPage() {
         ))}
       </div>
 
+      {stats && <TradeExcursionsCard excursions={stats.excursions} />}
       <div className="card">
         <h3 style={{ marginBottom: 12 }}>Closed Positions</h3>
         {closedPositions.length === 0 ? (
@@ -260,6 +262,8 @@ export function PortfolioPage() {
                 <th>Reason</th>
                 <th>P&L</th>
                 <th>R</th>
+                <th title="Best price reached during the trade, in R (MFE)">MFE</th>
+                <th title="Worst price reached during the trade, in R (MAE)">MAE</th>
               </tr>
             </thead>
             <tbody>
