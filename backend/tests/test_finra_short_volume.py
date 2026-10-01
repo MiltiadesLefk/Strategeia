@@ -391,7 +391,8 @@ def _seed_high_short_volume(session, symbol="AAPL"):
 
 def test_a_tradeable_plan_records_shadow_signals(session, monkeypatch):
     response = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    assert [s.name for s in response.shadow_signals] == [SIGNAL_NAME]
+    # The FINRA signal, plus the 8-K signal (unavailable here: no stored 8-Ks for the symbol).
+    assert [s.name for s in response.shadow_signals] == [SIGNAL_NAME, "sec_8k_negative_items"]
     assert response.shadow_signals[0].available is False  # nothing ingested: not a guess
     record = session.get(TradePlanRecord, response.id)
     assert json.loads(record.shadow_signals)[0]["name"] == SIGNAL_NAME

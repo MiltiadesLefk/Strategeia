@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title>Latest Filings - Thu, 01 Oct 2026 13:24:07 EDT</title>
+<link rel="alternate" href="/cgi-bin/browse-edgar?action=getcurrent"/>
+<id>https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent</id>
+<author><name>Webmaster</name><email>webmaster@sec.gov</email></author>
+<updated>2026-10-01T13:24:07-04:00</updated>
+<entry>
+<title>8-K - Apple Inc. (0000320193) (Filer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/320193/000032019326000100/0000320193-26-000100-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; 2026-10-01 &lt;b&gt;AccNo:&lt;/b&gt; 0000320193-26-000100 &lt;b&gt;Size:&lt;/b&gt; 5 KB&lt;br&gt;Item 2.02: Results of Operations and Financial Condition
+</summary>
+<updated>2026-10-01T12:30:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="8-K"/>
+<id>urn:tag:sec.gov,2008:accession-number=0000320193-26-000100</id>
+</entry>
+<entry>
+<title>8-K - Some Other Company (0000888001) (Filer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/888001/000088800126000005/0000888001-26-000005-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; 2026-10-01 &lt;b&gt;AccNo:&lt;/b&gt; 0000888001-26-000005 &lt;b&gt;Size:&lt;/b&gt; 5 KB&lt;br&gt;Item 8.01: Other Events
+</summary>
+<updated>2026-10-01T12:00:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="8-K"/>
+<id>urn:tag:sec.gov,2008:accession-number=0000888001-26-000005</id>
+</entry>
+</feed>

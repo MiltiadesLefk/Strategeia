@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title>Latest Filings - Thu, 01 Oct 2026 13:24:07 EDT</title>
+<link rel="alternate" href="/cgi-bin/browse-edgar?action=getcurrent"/>
+<id>https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent</id>
+<author><name>Webmaster</name><email>webmaster@sec.gov</email></author>
+<updated>2026-10-01T13:24:07-04:00</updated>
+<entry>
+<title>4 - SMITH JANE (0001111111) (Reporting)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/1111111/000100000026000001/0001000000-26-000001-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; 2026-10-01 &lt;b&gt;AccNo:&lt;/b&gt; 0001000000-26-000001 &lt;b&gt;Size:&lt;/b&gt; 5 KB
+</summary>
+<updated>2026-10-01T13:23:07-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0001000000-26-000001</id>
+</entry>
+<entry>
+<title>4 - UnitedHealth Group Inc (0000731766) (Issuer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/731766/000100000026000001/0001000000-26-000001-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; 2026-10-01 &lt;b&gt;AccNo:&lt;/b&gt; 0001000000-26-000001 &lt;b&gt;Size:&lt;/b&gt; 5 KB
+</summary>
+<updated>2026-10-01T13:23:07-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0001000000-26-000001</id>
+</entry>
+<entry>
+<title>424B2 - Morgan Stanley Finance LLC (0001666268) (Filer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/1666268/000183988226048701/0001839882-26-048701-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; 2026-10-01 &lt;b&gt;AccNo:&lt;/b&gt; 0001839882-26-048701 &lt;b&gt;Size:&lt;/b&gt; 5 KB
+</summary>
+<updated>2026-10-01T13:22:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="424B2"/>
+<id>urn:tag:sec.gov,2008:accession-number=0001839882-26-048701</id>
+</entry>
+<entry>
+<title>4 - Apple Inc. (0000320193) (Issuer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/320193/000100000026000002/0001000000-26-000002-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; 2026-10-01 &lt;b&gt;AccNo:&lt;/b&gt; 0001000000-26-000002 &lt;b&gt;Size:&lt;/b&gt; 5 KB
+</summary>
+<updated>2026-10-01T13:20:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0001000000-26-000002</id>
+</entry>
+<entry>
+<title>4 - Other Co (0000999001) (Issuer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/999001/000100000026000003/0001000000-26-000003-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; 2026-10-01 &lt;b&gt;AccNo:&lt;/b&gt; 0001000000-26-000003 &lt;b&gt;Size:&lt;/b&gt; 5 KB
+</summary>
+<updated>2026-10-01T13:10:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0001000000-26-000003</id>
+</entry>
+</feed>

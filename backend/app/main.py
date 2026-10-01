@@ -21,6 +21,7 @@ from app.data_providers.base import AllProvidersFailedError
 from app.backtest.service import recover_on_startup as recover_interrupted_backtests
 from app.database import create_db_and_tables
 from app.scheduler import start_scheduler, stop_scheduler
+from app.watchers.sec_watcher import register_sec_watcher
 
 
 @asynccontextmanager
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()
     # A backtest left running by a previous process can never finish: mark it failed.
     recover_interrupted_backtests()
+    register_sec_watcher()  # sec_watcher: the SEC filings watcher (idle until the Watchers switch is on)
     start_scheduler()
     yield
     stop_scheduler()
