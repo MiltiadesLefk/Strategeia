@@ -83,3 +83,6 @@ class TradePlanResponse(BaseModel):
     ai_opinion_score: int | None = None
     ai_opinion_text: str | None = None
     ai_news_assessment: str | None = None
+    # Number of the strategy version (rules + decision-relevant settings) this
+    # plan was made under; None for plans from before versioning existed.
+    strategy_version: int | None = None

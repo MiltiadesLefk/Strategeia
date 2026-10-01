@@ -26,6 +26,7 @@ from app.schemas.portfolio_schemas import (
     PositionSchema,
 )
 from app.services.deferred_evaluation_service import pending_redo_for_plan
+from app.strategy.service import plan_strategy_versions
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[Depends(require_auth)])
 
@@ -44,8 +45,11 @@ def build_engine(session: Session, data_provider: DataProvider, settings: AppSet
     )
 
 
-def position_to_schema(position: PaperPosition) -> PositionSchema:
-    return PositionSchema(**position.model_dump())
+def position_to_schema(position: PaperPosition, strategy_versions: dict[int, int | None] | None = None) -> PositionSchema:
+    """`strategy_versions` maps plan id -> the plan's strategy version (see
+    app/strategy); a position inherits its plan's rather than storing its own."""
+    version = (strategy_versions or {}).get(position.trade_plan_id)
+    return PositionSchema(**position.model_dump(), strategy_version=version)
 
 
 @router.get("/positions", response_model=list[PositionSchema])
@@ -62,7 +66,8 @@ def list_positions(
     # scheduler ticks shows up immediately; only the curve write is dropped.
     build_engine(session, data_provider, settings).mark_to_market(snapshot=False)
     positions = session.exec(select(PaperPosition).order_by(PaperPosition.opened_at.desc())).all()
-    return [position_to_schema(p) for p in positions]
+    strategy_versions = plan_strategy_versions(session, [p.trade_plan_id for p in positions])
+    return [position_to_schema(p, strategy_versions) for p in positions]
 
 
 @router.post("/positions", response_model=PositionSchema)
@@ -105,7 +110,7 @@ def open_position(
         StalePlanError,
     ) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return position_to_schema(position)
+    return position_to_schema(position, plan_strategy_versions(session, [position.trade_plan_id]))
 
 
 @router.post("/positions/{position_id}/close", response_model=PositionSchema)
@@ -123,7 +128,7 @@ def close_position(
         raise HTTPException(status_code=400, detail="Position is already closed")
     price = data_provider.get_quote(position.symbol).price
     closed = build_engine(session, data_provider, settings).close_position(position, price, req.reason)
-    return position_to_schema(closed)
+    return position_to_schema(closed, plan_strategy_versions(session, [closed.trade_plan_id]))
 
 
 @router.get("/stats", response_model=PortfolioStatsSchema)

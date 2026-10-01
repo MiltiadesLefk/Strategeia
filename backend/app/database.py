@@ -84,6 +84,7 @@ def _relax_not_null_constraints() -> None:
 def create_db_and_tables() -> None:
     from app.knowledge import models as knowledge_models  # noqa: F401 - KnownFact (plan.md F-4)
     from app.portfolio import models  # noqa: F401 - registers tables on SQLModel.metadata
+    from app.strategy import models as strategy_models  # noqa: F401 - StrategyVersion
 
     SQLModel.metadata.create_all(engine)
     _add_missing_columns()

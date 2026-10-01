@@ -107,4 +107,5 @@ def trade_plan_to_response(record: TradePlanRecord, *, redo_at: datetime | None 
         ai_opinion_score=record.ai_opinion_score,
         ai_opinion_text=record.ai_opinion_text,
         ai_news_assessment=record.ai_news_assessment,
+        strategy_version=record.strategy_version,
     )

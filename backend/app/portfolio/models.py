@@ -98,6 +98,10 @@ class TradePlanRecord(SQLModel, table=True):
     # on a no_trade record (auto-execute is never attempted there) and on any
     # plan generated before this field existed.
     auto_execute_note: Optional[str] = None
+    # The strategy version (app/strategy) this plan was made under: the number
+    # of the StrategyVersion row whose settings + rule constants were in force
+    # when it was generated. Null on plans from before versioning existed.
+    strategy_version: Optional[int] = None
 
 
 class PaperPosition(SQLModel, table=True):

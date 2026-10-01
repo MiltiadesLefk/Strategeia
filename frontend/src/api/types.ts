@@ -228,6 +228,9 @@ export interface TradePlan {
   ai_opinion_score?: number | null;
   ai_opinion_text?: string | null;
   ai_news_assessment?: string | null;
+  /** Number of the strategy version (rules + decision-relevant settings) this
+   *  plan was made under; null/absent for plans from before versioning. */
+  strategy_version?: number | null;
 }
 
 /** GET /api/market/session — the US session from the backend's one calendar
@@ -268,6 +271,16 @@ export interface Position {
   realized_r: number | null;
   /** Round-trip commission; realized_pnl is already net of it. */
   fees_paid?: number | null;
+  /** The strategy version of the plan this position came from (read through
+   *  the plan); null for a manual position or a pre-versioning plan. */
+  strategy_version?: number | null;
+  /** Best/worst price during the trade (MFE/MAE), non-negative: how far it went in the
+   *  trade's favour / against it, as % of entry and in R (multiples of |entry - stop|).
+   *  Recorded when a trade closes (null if never recorded); live for an open position. */
+  mfe_pct?: number | null;
+  mae_pct?: number | null;
+  mfe_r?: number | null;
+  mae_r?: number | null;
 }
 
 export interface PortfolioStats {
@@ -393,6 +406,32 @@ export interface LoginResponse {
   message: string;
 }
 
+
+/** GET /api/strategy/versions — which rules and settings produced the plans. */
+export interface StrategyVersion {
+  id: number;
+  number: number;
+  fingerprint: string;
+  created_at: string;
+  label: string | null;
+  /** {settings, rules} plus overlay while the AI Trading Overlay is on. */
+  settings_snapshot: Record<string, Record<string, unknown>>;
+  /** What changed from the previous version, one plain line each. */
+  changes: string[];
+  plans: number;
+  no_trades: number;
+  positions_opened: number;
+  closed_trades: number;
+}
+
+export interface StrategyHistory {
+  /** Newest first. */
+  versions: StrategyVersion[];
+  /** Plans made before versioning existed. */
+  unversioned_plans: number;
+  /** The version the current settings map to; null until they produce a plan. */
+  current_number: number | null;
+}
 /** The on-disk half of the provider cache; mirrors schemas/cache_schemas.py. */
 export interface PersistentCacheStatus {
   file_name: string;

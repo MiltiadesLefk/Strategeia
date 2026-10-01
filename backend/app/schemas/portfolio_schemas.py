@@ -26,6 +26,17 @@ class PositionSchema(BaseModel):
     realized_pnl: float | None
     realized_r: float | None
     fees_paid: float | None = None
+    # The strategy version of the plan this position came from (read through
+    # the plan, never stored on the position); None for a manual position with
+    # no plan and for plans from before versioning existed.
+    strategy_version: int | None = None
+    # Best/worst price during the trade (MFE/MAE), non-negative: how far it went in the
+    # trade's favour / against it, as % of entry and in R (multiples of |entry - stop|).
+    # Stored for a closed position (None if never recorded); computed live for an open one.
+    mfe_pct: float | None = None
+    mae_pct: float | None = None
+    mfe_r: float | None = None
+    mae_r: float | None = None
 
 
 class OpenPositionRequest(BaseModel):

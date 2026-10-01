@@ -57,6 +57,7 @@ from app.schemas.trade_plan_schemas import TradePlanResponse
 from app.services.archive_service import archive_fetched_data
 from app.services.deferred_evaluation_service import queue_market_open_redo
 from app.services.telegram_service import notify_trade_plan
+from app.strategy.service import current_strategy_version
 
 logger = logging.getLogger(__name__)
 
@@ -517,6 +518,10 @@ def generate_trade_plan(
         provisional_direction, opinion
     )
 
+    # Which rules made this decision, recorded on the plan (and on a no-trade
+    # record: a rejection is a decision too). Looked up here, after every data
+    # fetch has succeeded, so a failed evaluation leaves no version behind.
+    strategy_version = current_strategy_version(session, settings).number
     if chart.trend == "Neutral" or overlay_vetoes_trade or confidence_score < settings.min_confidence_for_trade:
         if chart.trend == "Neutral":
             reason = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
@@ -569,6 +574,7 @@ def generate_trade_plan(
             ai_opinion_score=ai_opinion_score,
             ai_opinion_text=ai_opinion_text,
             ai_news_assessment=ai_news_assessment,
+            strategy_version=strategy_version,
         )
         session.add(record)
         session.commit()
@@ -600,6 +606,7 @@ def generate_trade_plan(
             ai_opinion_text=ai_opinion_text,
             ai_news_assessment=ai_news_assessment,
             signal_reasons=signal_reasons,
+            strategy_version=strategy_version,
         )
 
     direction = "long" if chart.trend == "Bullish" else "short"
@@ -689,6 +696,7 @@ def generate_trade_plan(
         ai_opinion_score=ai_opinion_score,
         ai_opinion_text=ai_opinion_text,
         ai_news_assessment=ai_news_assessment,
+        strategy_version=strategy_version,
     )
     session.add(record)
     session.commit()
@@ -823,4 +831,5 @@ def generate_trade_plan(
         ai_opinion_score=ai_opinion_score,
         ai_opinion_text=ai_opinion_text,
         ai_news_assessment=ai_news_assessment,
+        strategy_version=strategy_version,
     )

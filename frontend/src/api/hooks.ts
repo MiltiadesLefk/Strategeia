@@ -21,6 +21,7 @@ import type {
   TradePlan,
   UniverseEntry,
 } from './types';
+import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
 
 export const qk = {
@@ -31,6 +32,7 @@ export const qk = {
   tradePlans: ['trade-plans'] as const,
   positions: ['positions'] as const,
   stats: ['stats'] as const,
+  strategyVersions: ['strategy-versions'] as const,
   equityCurve: ['equity-curve'] as const,
   dashboard: ['dashboard'] as const,
   settings: ['settings'] as const,
@@ -140,10 +142,17 @@ export function useGenerateTradePlan() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (symbol: string) => api.post<TradePlan>('/api/trade-plans/generate', { symbol }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.tradePlans }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
+      // A plan generated under changed settings creates a new strategy version.
+      queryClient.invalidateQueries({ queryKey: qk.strategyVersions });
+    },
   });
 }
 
+export function useStrategyVersions() {
+  return useQuery({ queryKey: qk.strategyVersions, queryFn: () => api.get<StrategyHistory>('/api/strategy/versions') });
+}
 export function usePositions() {
   return useQuery({ queryKey: qk.positions, queryFn: () => api.get<Position[]>('/api/portfolio/positions') });
 }
