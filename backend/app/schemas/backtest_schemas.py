@@ -3,15 +3,21 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.backtest.baseline import DEFAULT_BASELINE_RUNS, MAX_BASELINE_RUNS
 from app.backtest.params import BacktestParams
 from app.schemas.common import UtcDatetime
 
 # The request body is the validated run definition itself (symbols, start, end,
 # decision_every_n_days, overrides), so the API and the runner can never disagree
 # about what a valid run is.
-BacktestRequest = BacktestParams
+class BacktestRequest(BacktestParams):
+    """The run definition plus whether to follow it with the random-entry baseline
+    (baseline_runs seeded random runs, 0 to skip) and how many."""
+
+    run_baseline: bool = True
+    baseline_runs: int = Field(default=DEFAULT_BASELINE_RUNS, ge=0, le=MAX_BASELINE_RUNS)
 
 
 class BacktestCreatedResponse(BaseModel):
@@ -23,6 +29,11 @@ class BacktestProgress(BaseModel):
     days_done: int
     days_total: int
     current_date: date | None = None
+    # "main" while the real run is going, "baseline" while the random runs are
+    # (days_done/days_total then count the random run in progress), None when idle.
+    phase: str | None = None
+    baseline_seeds_done: int | None = None
+    baseline_seeds_total: int | None = None
 
 
 class BacktestRunSchema(BaseModel):

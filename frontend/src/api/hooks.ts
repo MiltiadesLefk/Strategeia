@@ -28,6 +28,17 @@ import type { CalibrationReport } from './types';
 import type { MissedTradeRefresh, MissedTradeReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
+import type {
+  BacktestBaseline,
+  BacktestBenchmarks,
+  BacktestEquityPoint,
+  BacktestHistoryCoverage,
+  BacktestMetrics,
+  BacktestRun,
+  BacktestScorecard,
+  BacktestStartRequest,
+  BacktestTrade,
+} from './types';
 
 export const qk = {
   scan: (symbols?: string) => ['scan', symbols] as const,
@@ -395,5 +406,119 @@ export function useResetWatchlist() {
 export function useValidateWatchlistSymbol() {
   return useMutation({
     mutationFn: (symbol: string) => api.post<WatchlistSymbolCheck>('/api/watchlist/validate', { symbol }),
+  });
+}
+
+// ---- Backtest Lab ----
+
+export const backtestKeys = {
+  list: ['backtests'] as const,
+  run: (id: number) => ['backtests', id] as const,
+  trades: (id: number) => ['backtests', id, 'trades'] as const,
+  equity: (id: number) => ['backtests', id, 'equity'] as const,
+  metrics: (id: number) => ['backtests', id, 'metrics'] as const,
+  benchmarks: (id: number) => ['backtests', id, 'benchmarks'] as const,
+  baseline: (id: number) => ['backtests', id, 'baseline'] as const,
+  scorecard: (id: number, query: string) => ['backtests', id, 'scorecard', query] as const,
+  coverage: (symbols: string) => ['backtests', 'history-coverage', symbols] as const,
+};
+
+const BACKTEST_POLL_MS = 2_000;
+const backtestActive = (status: string | undefined) => status === 'queued' || status === 'running';
+
+/** Past runs, newest first; polls while any of them is still going. */
+export function useBacktests() {
+  return useQuery({
+    queryKey: backtestKeys.list,
+    queryFn: () => api.get<BacktestRun[]>('/api/backtests?limit=100'),
+    refetchInterval: (query) => (query.state.data?.some((r) => backtestActive(r.status)) ? BACKTEST_POLL_MS : false),
+  });
+}
+
+/** One run with its progress; polls until it reaches a final state. */
+export function useBacktest(id: number | null) {
+  return useQuery({
+    queryKey: backtestKeys.run(id ?? 0),
+    queryFn: () => api.get<BacktestRun>(`/api/backtests/${id}`),
+    enabled: id !== null,
+    refetchInterval: (query) => (backtestActive(query.state.data?.status) ? BACKTEST_POLL_MS : false),
+  });
+}
+
+/** The statistics of a run. `ready` is true once the main run has saved results (also while the baseline is still going). */
+export function useBacktestMetrics(id: number | null, ready: boolean, refresh: boolean) {
+  return useQuery({
+    queryKey: backtestKeys.metrics(id ?? 0),
+    queryFn: () => api.get<BacktestMetrics>(`/api/backtests/${id}/metrics`),
+    enabled: id !== null && ready,
+    refetchInterval: refresh ? 5_000 : false,
+  });
+}
+
+export function useBacktestTrades(id: number | null, ready: boolean) {
+  return useQuery({
+    queryKey: backtestKeys.trades(id ?? 0),
+    queryFn: () => api.get<BacktestTrade[]>(`/api/backtests/${id}/trades`),
+    enabled: id !== null && ready,
+  });
+}
+
+export function useBacktestEquity(id: number | null, ready: boolean) {
+  return useQuery({
+    queryKey: backtestKeys.equity(id ?? 0),
+    queryFn: () => api.get<BacktestEquityPoint[]>(`/api/backtests/${id}/equity`),
+    enabled: id !== null && ready,
+  });
+}
+
+export function useBacktestBenchmarks(id: number | null, ready: boolean) {
+  return useQuery({
+    queryKey: backtestKeys.benchmarks(id ?? 0),
+    queryFn: () => api.get<BacktestBenchmarks>(`/api/backtests/${id}/benchmarks`),
+    enabled: id !== null && ready,
+  });
+}
+
+/** `refresh`: poll while the random runs are still finishing. */
+export function useBacktestBaseline(id: number | null, ready: boolean, refresh: boolean) {
+  return useQuery({
+    queryKey: backtestKeys.baseline(id ?? 0),
+    queryFn: () => api.get<BacktestBaseline>(`/api/backtests/${id}/baseline`),
+    enabled: id !== null && ready,
+    refetchInterval: refresh ? 4_000 : false,
+  });
+}
+
+export function useBacktestScorecard(id: number | null, ready: boolean, refresh: boolean, query = '') {
+  return useQuery({
+    queryKey: backtestKeys.scorecard(id ?? 0, query),
+    queryFn: () => api.get<BacktestScorecard>(`/api/backtests/${id}/scorecard${query}`),
+    enabled: id !== null && ready,
+    refetchInterval: refresh ? 5_000 : false,
+  });
+}
+
+/** What price history is stored for these symbols (and SPY, ^VIX). Read-only: nothing is downloaded. */
+export function useBacktestHistoryCoverage(symbols: string[]) {
+  const joined = symbols.join(',');
+  return useQuery({
+    queryKey: backtestKeys.coverage(joined),
+    queryFn: () => api.get<BacktestHistoryCoverage>(`/api/backtests/history-coverage?symbols=${encodeURIComponent(joined)}`),
+  });
+}
+
+export function useStartBacktest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BacktestStartRequest) => api.post<{ id: number; status: string }>('/api/backtests', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: backtestKeys.list }),
+  });
+}
+
+export function useCancelBacktest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.post<{ id: number; status: string }>(`/api/backtests/${id}/cancel`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: backtestKeys.list }),
   });
 }

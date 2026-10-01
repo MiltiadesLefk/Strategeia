@@ -48,6 +48,15 @@ class BacktestRun(SQLModel, table=True):
     progress_days_total: int = 0
     progress_date: Optional[date] = None
     cancel_requested: bool = False
+    # The random-entry baseline that follows the main run (see baseline.py): which
+    # part of the job is running ("main" | "baseline" | None once finished), how
+    # many random runs are done of how many, and the finished random runs' headline
+    # numbers as JSON. The statistics of the run itself are not stored: they are
+    # recomputed from the rows below on every read (see metrics.py).
+    progress_phase: Optional[str] = None
+    baseline_seeds_done: Optional[int] = None
+    baseline_seeds_total: Optional[int] = None
+    baseline_json: Optional[str] = None
 
 
 class BacktestTrade(SQLModel, table=True):

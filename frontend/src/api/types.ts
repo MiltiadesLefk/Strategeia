@@ -792,3 +792,247 @@ export interface WatchlistSymbolCheck {
   in_catalogue: boolean;
   message: string | null;
 }
+
+// ---- Backtest Lab (GET /api/backtests...) ----
+
+export interface BacktestProgress {
+  days_done: number;
+  days_total: number;
+  current_date: string | null;
+  /** "main" while the real run is going, "baseline" during the random runs, null when idle. */
+  phase: 'main' | 'baseline' | null;
+  baseline_seeds_done: number | null;
+  baseline_seeds_total: number | null;
+}
+
+export interface BacktestRun {
+  id: number;
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+  cancel_requested: boolean;
+  progress: BacktestProgress;
+  strategy_fingerprint: string | null;
+  params: {
+    symbols?: string[];
+    start?: string;
+    end?: string;
+    decision_every_n_days?: number;
+    run_baseline?: boolean;
+    baseline_runs?: number;
+    overrides?: Record<string, number>;
+    effective_settings?: Record<string, number | string | boolean>;
+    [key: string]: unknown;
+  };
+  coverage: BacktestCoverage | null;
+  summary: Record<string, number | string | boolean | null | Record<string, unknown>> | null;
+}
+
+export interface BacktestCoverage {
+  summary: string;
+  live_points_max: number;
+  achievable_points: number;
+  achievable_max_confidence_pct: number;
+  active_parts: { part: string; label: string; points_max: number; note: string | null }[];
+  inactive_parts: { part: string; label: string; live_points_max: number; reason: string }[];
+  min_confidence_for_trade: number;
+  bar_points_needed: number | null;
+  bar_reachable: boolean;
+}
+
+export interface BacktestTrade {
+  id: number;
+  symbol: string;
+  direction: string;
+  status: string;
+  entry_date: string;
+  entry_price: number;
+  stop_loss: number;
+  tp1: number;
+  shares: number;
+  exit_date: string | null;
+  exit_price: number | null;
+  close_reason: string | null;
+  realized_pnl: number | null;
+  realized_r: number | null;
+  holding_days: number | null;
+  confidence_points: number | null;
+  confidence_points_max: number | null;
+}
+
+export interface BacktestEquityPoint {
+  day: string;
+  equity: number;
+  cash: number;
+  open_positions: number;
+}
+
+export interface BacktestStartRequest {
+  symbols: string[];
+  start: string;
+  end: string;
+  decision_every_n_days: number;
+  overrides: Record<string, number>;
+  run_baseline: boolean;
+  baseline_runs: number;
+}
+
+export interface BacktestPeriodReturn {
+  year: number;
+  month?: number;
+  return_pct: number;
+  days: number;
+  partial: boolean;
+}
+
+export interface BacktestMetrics {
+  conventions: Record<string, string>;
+  period: { first_day: string | null; last_day: string | null; calendar_days: number; trading_days: number; years: number | null; annualised: boolean };
+  returns: {
+    starting_equity: number;
+    final_equity: number;
+    total_return_pct: number | null;
+    cagr_pct: number | null;
+    volatility_pct: number | null;
+    sharpe: number | null;
+    sortino: number | null;
+    calmar: number | null;
+    best_day_pct: number | null;
+    worst_day_pct: number | null;
+  };
+  drawdown: {
+    max_drawdown_pct: number;
+    peak_date: string | null;
+    trough_date: string | null;
+    recovery_date: string | null;
+    max_drawdown_days: number;
+    longest_underwater_days: number;
+    underwater_now: boolean;
+  };
+  trades: {
+    closed_trades: number;
+    open_at_end: number;
+    wins: number;
+    losses: number;
+    win_rate_pct: number | null;
+    win_rate_low_pct: number | null;
+    win_rate_high_pct: number | null;
+    average_r: number | null;
+    average_r_low: number | null;
+    average_r_high: number | null;
+    expectancy_usd: number | null;
+    total_pnl: number;
+    profit_factor: number | null;
+    average_win: number | null;
+    average_loss: number | null;
+    payoff_ratio: number | null;
+    trades_per_year: number | null;
+    average_holding_days: number | null;
+    longest_losing_streak: number;
+    total_fees: number;
+  };
+  exposure: { days_with_a_position: number; exposure_pct: number | null; average_open_positions: number | null };
+  yearly_returns: BacktestPeriodReturn[];
+  monthly_returns: BacktestPeriodReturn[];
+  exit_reasons: { reason: string; count: number; share_pct: number; average_r: number | null; total_pnl: number }[];
+  by_direction: { direction: string; trades: number; share_pct: number; win_rate_pct: number | null; average_r: number | null; total_pnl: number }[];
+  drawdown_series: { day: string; drawdown_pct: number }[];
+  run_status: string;
+  partial: boolean;
+}
+
+export interface BacktestReferenceLine {
+  available: boolean;
+  reason?: string;
+  label?: string;
+  symbol?: string;
+  basis?: string;
+  survivor_biased?: boolean;
+  symbols_used?: string[];
+  symbols_excluded?: { symbol: string; reason: string }[];
+  equity?: { day: string; equity: number }[];
+  total_return_pct?: number | null;
+  sharpe?: number | null;
+  max_drawdown_pct?: number | null;
+}
+
+export interface BacktestBenchmarks {
+  available: boolean;
+  reason?: string;
+  costs?: string;
+  spy: BacktestReferenceLine;
+  comparison: {
+    strategy_return_pct: number;
+    spy_return_pct: number | null;
+    excess_return_pct: number | null;
+    strategy_sharpe: number | null;
+    spy_sharpe: number | null;
+    outperform_days_pct: number | null;
+    days_compared: number;
+    beta: number | null;
+    alpha_annual_pct: number | null;
+    correlation: number | null;
+    n: number;
+    beta_t?: number | null;
+    alpha_t?: number | null;
+    r_squared?: number | null;
+    [key: string]: unknown;
+  } | null;
+  equal_weight: BacktestReferenceLine;
+}
+
+export interface BacktestPlacement {
+  real: number;
+  n: number;
+  percentile: number;
+  chance_random_matches: number;
+  random_mean: number;
+  random_median: number;
+  random_p5: number;
+  random_p95: number;
+  random_min: number;
+  random_max: number;
+}
+
+export interface BacktestBaseline {
+  available: boolean;
+  reason?: string;
+  status?: string;
+  note?: string | null;
+  requested_runs?: number;
+  entry_probability?: number | null;
+  seeds?: { seed: number; total_return_pct: number | null; sharpe: number | null; average_r: number | null; win_rate_pct: number | null; trade_count: number; max_drawdown_pct: number }[];
+  real?: { total_return_pct: number | null; sharpe: number | null; average_r: number | null } | null;
+  placement?: Record<string, BacktestPlacement | null>;
+  enough_seeds?: boolean;
+  caveat?: string;
+  notes?: string[];
+}
+
+export interface BacktestScorecard {
+  note: string;
+  criteria: { min_trades: number; max_drawdown_pct: number; year_share: number; baseline_percentile: number };
+  checks: { key: string; label: string; criterion: string; status: 'pass' | 'fail' | 'insufficient_data'; actual: string; detail?: string | null }[];
+  counts: { pass: number; fail: number; insufficient_data: number; total: number };
+  banners: { key: string; level: 'warning' | 'info'; text: string }[];
+}
+
+export interface BacktestHistoryCoverage {
+  benchmarks: BacktestSymbolCoverage[];
+  symbols: BacktestSymbolCoverage[];
+  missing: string[];
+  benchmarks_missing: string[];
+  latest_end_date: string | null;
+  preload_command: string | null;
+  warmup_note: string;
+}
+
+export interface BacktestSymbolCoverage {
+  symbol: string;
+  stored: boolean;
+  first_date: string | null;
+  last_date: string | null;
+  bars: number;
+}

@@ -66,6 +66,13 @@ SOURCE_NAME = "backtest"
 MAX_ERROR_SAMPLES = 5
 
 
+# A replacement for the live decision on one (symbol, day): called as
+# policy(symbol, day, provider, session, settings, allow_auto_execute=...) inside the
+# simulated 09:45 moment, it returns what generate_trade_plan returns (a no-trade
+# response, or a plan that has been through the engine's open checks).
+EntryPolicy = Callable[..., Any]
+
+
 @dataclass
 class BacktestResult:
     status: str  # "done" or "cancelled"
@@ -155,11 +162,15 @@ def run_backtest(
     progress: Callable[[int, int, date], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
     provider: BacktestDataProvider | None = None,
+    entry_policy: EntryPolicy | None = None,
 ) -> BacktestResult:
     """Replay `params` and return the trades, the daily equity and a summary.
 
     `settings` are the effective settings (see effective_settings). `provider`
-    may be passed in by tests that need to watch every request."""
+    may be passed in by tests that need to watch every request. `entry_policy`
+    replaces the decision on each (symbol, day): None is the live scoring; the
+    random-entry baseline (baseline.py) passes its own. Exits, fills, sizing
+    caps and the equity curve are the same whichever policy decides."""
     validate_run(params, book)
     provider = provider or BacktestDataProvider(book)
     llm = NullLLMProvider()
@@ -188,7 +199,7 @@ def run_backtest(
                     break
                 if index % params.decision_every_n_days == 0:
                     decision_days += 1
-                    _decide(day, symbols, book, provider, llm, session, settings, stats, errors, points_histogram, first_evaluated, plan_info)
+                    _decide(day, symbols, book, provider, llm, session, settings, stats, errors, points_histogram, first_evaluated, plan_info, entry_policy)
                 with as_of(close_moment(day)):
                     exit_engine.mark_to_market(snapshot=True)
                     point = _equity_point(session, day)
@@ -224,6 +235,7 @@ def _decide(
     points_histogram: Counter[int],
     first_evaluated: dict[str, date],
     plan_info: dict[int, dict[str, Any]],
+    entry_policy: EntryPolicy | None = None,
 ) -> None:
     """One decision pass: the live auto-scan's loop (automation_service.run_auto_scan)
     on the simulated 09:45 moment. Same slot rule: once max_concurrent_positions
@@ -246,18 +258,21 @@ def _decide(
                 stats["skipped_warmup"] += 1
                 continue
             try:
-                response = generate_trade_plan(
-                    symbol,
-                    settings.paper_starting_cash,
-                    settings.default_risk_pct,
-                    provider,
-                    llm,
-                    session,
-                    allow_auto_execute=slots_remaining > 0,
-                    source=SOURCE_NAME,
-                    clock=clock,
-                    settings=settings,
-                )
+                if entry_policy is not None:
+                    response = entry_policy(symbol, day, provider, session, settings, allow_auto_execute=slots_remaining > 0)
+                else:
+                    response = generate_trade_plan(
+                        symbol,
+                        settings.paper_starting_cash,
+                        settings.default_risk_pct,
+                        provider,
+                        llm,
+                        session,
+                        allow_auto_execute=slots_remaining > 0,
+                        source=SOURCE_NAME,
+                        clock=clock,
+                        settings=settings,
+                    )
             except Exception as exc:  # noqa: BLE001 - one bad symbol must not end the run; it is counted and shown
                 session.rollback()
                 stats["evaluation_errors"] += 1
@@ -451,6 +466,8 @@ def params_to_json(params: BacktestParams, settings: AppSettings, book: PriceBoo
         "start": params.start.isoformat(),
         "end": params.end.isoformat(),
         "decision_every_n_days": params.decision_every_n_days,
+        "run_baseline": getattr(params, "run_baseline", False),
+        "baseline_runs": getattr(params, "baseline_runs", 0),
         "overrides": params.overrides.model_dump(exclude_none=True),
         "effective_settings": settings_snapshot(settings),
         "decision_convention": "09:45 ET: bars through t-1, quote = t's open; exits at the close of t",

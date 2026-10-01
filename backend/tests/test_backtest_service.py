@@ -26,7 +26,8 @@ from tests.backtest_helpers import standard_book, trading_days_from, wiggly_uptr
 
 DAYS = trading_days_from(date(2024, 1, 2), 330)
 START, END = DAYS[250].isoformat(), DAYS[270].isoformat()
-BODY = {"symbols": ["AAA"], "start": START, "end": END}
+# These tests are about the run itself; the random-entry baseline has its own tests (test_backtest_baseline.py).
+BODY = {"symbols": ["AAA"], "start": START, "end": END, "run_baseline": False}
 
 
 @pytest.fixture()

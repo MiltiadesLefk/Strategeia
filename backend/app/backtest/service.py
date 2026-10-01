@@ -43,6 +43,7 @@ from app.backtest.params import (
     effective_settings,
     strategy_fingerprint,
 )
+from app.backtest.baseline import run_baseline
 from app.backtest.runner import params_to_json, run_backtest
 from app.config import AppSettings
 from app.data_providers.history_store import HistoryStore
@@ -181,7 +182,7 @@ class BacktestManager:
 
     def _work(self, run_id: int, params: BacktestParams, settings: AppSettings, live_min_confidence: int) -> None:
         try:
-            self._update(run_id, status=RUN_RUNNING, started_at=utcnow_naive())
+            self._update(run_id, status=RUN_RUNNING, started_at=utcnow_naive(), progress_phase="main")
             store = self._store_getter()
             book = PriceBook.load(store, [*params.symbols, *BENCHMARK_SYMBOLS], params.start, params.end)
             self._update(run_id, params_json=params_to_json(params, settings, book))
@@ -197,7 +198,13 @@ class BacktestManager:
                 params, settings, book, progress=progress, should_cancel=self._cancel.is_set
             )
             coverage = describe_coverage(settings.min_confidence_for_trade, live_min_confidence)
-            self._save_result(run_id, result, coverage)
+            # The random-entry baseline follows a main run that finished (a request that
+            # does not carry the baseline fields, e.g. a direct call, gets none).
+            baseline_runs = getattr(params, "baseline_runs", 0) if getattr(params, "run_baseline", False) else 0
+            with_baseline = baseline_runs > 0 and result.status == "done"
+            self._save_result(run_id, result, coverage, finish=not with_baseline)
+            if with_baseline:
+                self._run_baseline(run_id, params, settings, book, result.summary, baseline_runs)
         except BacktestInputError as exc:
             self._update(run_id, status=RUN_FAILED, error=str(exc), finished_at=utcnow_naive())
         except Exception as exc:  # noqa: BLE001 - a run must always end in a final state
@@ -206,7 +213,46 @@ class BacktestManager:
         finally:
             self._active_id = None
 
-    def _save_result(self, run_id: int, result, coverage: dict[str, Any]) -> None:
+    def _run_baseline(
+        self, run_id: int, params: BacktestParams, settings: AppSettings, book: PriceBook, summary: dict[str, Any], runs: int
+    ) -> None:
+        """The random-entry baseline, K seeded random runs after the main one. The main
+        result is already saved, so a failure here (or a cancel) keeps it: the run ends
+        "done" with the baseline marked failed or cancelled and the seeds finished so far."""
+        self._update(
+            run_id, progress_phase="baseline", baseline_seeds_done=0, baseline_seeds_total=runs,
+            progress_days_done=0,
+        )
+        step = {"seed": 0, "next": 0}
+
+        def progress(seed: int, total_seeds: int, done: int, total: int) -> None:
+            if step["seed"] != seed:
+                step.update(seed=seed, next=0)
+            if done >= step["next"] or done == total:
+                step["next"] = done + max(1, total // PROGRESS_UPDATES_PER_RUN)
+                self._update(run_id, progress_days_done=done, progress_days_total=total, baseline_seeds_done=seed - 1)
+
+        def seed_done(record: dict[str, Any]) -> None:
+            self._update(run_id, baseline_json=json.dumps(record), baseline_seeds_done=len(record["seeds"]))
+
+        try:
+            record = run_baseline(
+                params, settings, book, summary, runs=runs, progress=progress, on_seed_done=seed_done,
+                should_cancel=self._cancel.is_set,
+            )
+        except Exception as exc:  # noqa: BLE001 - the real run's result stands; say what went wrong with the baseline
+            logger.exception("Backtest #%s baseline failed", run_id)
+            with self._session_factory() as session:
+                previous = session.get(BacktestRun, run_id).baseline_json
+            record = json.loads(previous) if previous else {"requested_runs": runs, "seeds": []}
+            record.update(status="failed", note=f"The baseline stopped early: {type(exc).__name__}: {exc}")
+        self._update(
+            run_id, baseline_json=json.dumps(record), baseline_seeds_done=len(record.get("seeds", [])),
+            status=RUN_DONE, finished_at=utcnow_naive(), progress_phase=None,
+            progress_days_done=summary["days_simulated"], progress_days_total=summary["days_requested"],
+        )
+
+    def _save_result(self, run_id: int, result, coverage: dict[str, Any], finish: bool = True) -> None:
         with self._session_factory() as session:
             for trade in result.trades:
                 session.add(
@@ -235,10 +281,14 @@ class BacktestManager:
                     )
                 )
             run = session.get(BacktestRun, run_id)
-            run.status = RUN_CANCELLED if result.status == "cancelled" else RUN_DONE
+            # finish=False: the random-entry baseline still has to run, so the run stays
+            # "running" (its results are readable already: summary_json is set).
+            if finish:
+                run.status = RUN_CANCELLED if result.status == "cancelled" else RUN_DONE
+                run.finished_at = utcnow_naive()
+                run.progress_phase = None
             run.summary_json = json.dumps(result.summary)
             run.coverage_json = json.dumps(coverage)
-            run.finished_at = utcnow_naive()
             run.progress_days_done = result.summary["days_simulated"]
             run.progress_days_total = result.summary["days_requested"]
             session.add(run)

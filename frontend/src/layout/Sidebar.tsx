@@ -20,6 +20,7 @@ const ICONS = {
   analysis: 'M3 3v18h18M7 15l4-5 3 3 5-7',
   plans: 'M9 2h6l3 3v17H6V5l3-3Zm0 0v4h6V2M9 12h6M9 16h6',
   portfolio: 'M3 8h18v12H3V8Zm4 0V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M3 12h18',
+  backtest: 'M3 3v18h18M7 14l3-3 3 2 5-6M7 18h2m3 0h2m3 0h2',
   settings:
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.14-1.44l2.02-1.57-2-3.46-2.38.96a7.5 7.5 0 0 0-2.5-1.44L14 2h-4l-.4 2.55a7.5 7.5 0 0 0-2.5 1.44l-2.38-.96-2 3.46 2.02 1.57A7.4 7.4 0 0 0 4.6 12c0 .49.05.97.14 1.44l-2.02 1.57 2 3.46 2.38-.96c.73.62 1.58 1.11 2.5 1.44L10 22h4l.4-2.55a7.5 7.5 0 0 0 2.5-1.44l2.38.96 2-3.46-2.02-1.57c.09-.47.14-.95.14-1.44Z',
 };
@@ -30,6 +31,7 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof 
   { to: '/analysis', label: 'Analysis', icon: 'analysis' },
   { to: '/trade-plans', label: 'Trade Plans', icon: 'plans' },
   { to: '/portfolio', label: 'Portfolio', icon: 'portfolio' },
+  { to: '/backtests', label: 'Backtest Lab', icon: 'backtest' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ];
 

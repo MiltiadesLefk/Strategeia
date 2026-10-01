@@ -3,6 +3,7 @@ import { AuthGate } from './components/AuthGate';
 import { DashboardLayout } from './layout/DashboardLayout';
 import {
   AnalysisPage,
+  BacktestsPage,
   DashboardPage,
   MarketScanPage,
   PortfolioPage,
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="research" element={<ResearchRedirect />} />
           <Route path="trade-plans" element={<TradePlansPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
+          <Route path="backtests" element={<BacktestsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
