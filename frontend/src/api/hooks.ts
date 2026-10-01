@@ -719,3 +719,33 @@ export function useTerminalRecap(ai: boolean, limit: number) {
     staleTime: TERMINAL_REFETCH_MS,
   });
 }
+
+import type { NewsCardsResponse, NewsCollectResponse, NewsLabelResponse } from './types';
+
+/** Saved headlines for one symbol (press releases included) with their AI label when one exists. Read-only. */
+export function useNewsCards(symbol: string | null) {
+  return useQuery({
+    queryKey: ['news-cards', symbol ?? ''] as const,
+    queryFn: () => api.get<NewsCardsResponse>(`/api/news/${symbol}`),
+    enabled: !!symbol,
+    staleTime: 60_000,
+  });
+}
+
+/** Has the configured AI label this symbol's unlabelled headlines. Costs AI calls, so only ever on a click. */
+export function useLabelNews(symbol: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<NewsLabelResponse>(`/api/news/label/${symbol}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['news-cards', symbol] }),
+  });
+}
+
+/** Reads PR Newswire's public feeds once and saves the releases that match the watchlist. */
+export function useCollectPressReleases() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<NewsCollectResponse>('/api/news/collect'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['news-cards'] }),
+  });
+}

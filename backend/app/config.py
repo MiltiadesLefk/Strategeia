@@ -592,6 +592,14 @@ class AppSettings(BaseModel):
 
     scan_universe_size: int = 50
 
+    # News cards: an AI (the configured provider's routine model) labels each
+    # archived headline once with an event type, sentiment and materiality. Off
+    # by default because it spends AI calls. The labels are shown on the News tab
+    # and recorded as a silent signal on plans; they never change a score today.
+    # news_card_batch_limit is the most headlines labelled per run (a run is one
+    # button press); AI calls per run are separately capped at three.
+    news_cards_enabled: bool = False
+    news_card_batch_limit: int = 20
     paper_starting_cash: float = 100_000.0
     default_risk_pct: float = 1.0
     mark_to_market_interval_minutes: int = 15

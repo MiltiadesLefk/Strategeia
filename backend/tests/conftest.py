@@ -135,6 +135,10 @@ def _reset_in_process_cooldowns(monkeypatch):
     monkeypatch.setattr("app.api.routers.data_cache._last_cache_clear_monotonic", None)
     monkeypatch.setattr("app.api.routers.missed_trades._last_missed_trades_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.signals._last_finra_refresh_monotonic", None)
+    monkeypatch.setattr("app.api.routers.news._last_news_collect_monotonic", None)
+    monkeypatch.setattr("app.api.routers.news._last_news_label_monotonic", {})
+    # PR Newswire feed cache and request pacing (data_providers/pr_newswire.py).
+    from app.data_providers.pr_newswire import clear_feed_cache
     monkeypatch.setattr("app.api.routers.smart_money._last_insider_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.portfolio._last_lesson_request_monotonic", {})
     monkeypatch.setattr("app.api.routers.watchers._last_watcher_run_monotonic", {})

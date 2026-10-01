@@ -391,6 +391,8 @@ export interface AppSettings {
   telegram_bot_token: string;
   telegram_chat_id: string;
   scan_universe_size: number;
+  news_cards_enabled: boolean;
+  news_card_batch_limit: number;
   paper_starting_cash: number;
   default_risk_pct: number;
   mark_to_market_interval_minutes: number;
@@ -430,6 +432,8 @@ export interface SettingsUpdateRequest {
   telegram_bot_token?: string;
   telegram_chat_id?: string;
   scan_universe_size?: number;
+  news_cards_enabled?: boolean;
+  news_card_batch_limit?: number;
   paper_starting_cash?: number;
   default_risk_pct?: number;
   mark_to_market_interval_minutes?: number;
@@ -1509,4 +1513,56 @@ export interface RecapResponse {
   ai_paragraph: string | null;
   ai_provider: string | null;
   missing: string[];
+}
+
+export interface NewsCardOut {
+  event_type: string;
+  sentiment: 'positive' | 'negative' | 'neutral' | 'mixed' | string;
+  materiality: 'high' | 'medium' | 'low' | string;
+  companies_mentioned: string[];
+  one_line_summary: string;
+  is_about_this_company: boolean;
+  label_model: string;
+  labelled_at: string;
+}
+
+export interface NewsItemWithCard {
+  headline: string;
+  publisher: string;
+  url: string;
+  published_at: string;
+  known_at: string;
+  is_press_release: boolean;
+  card: NewsCardOut | null;
+}
+
+export interface NewsCardsResponse {
+  symbol: string;
+  news_cards_enabled: boolean;
+  llm_configured: boolean;
+  labelled_count: number;
+  unlabelled_count: number;
+  items: NewsItemWithCard[];
+}
+
+export interface NewsLabelResponse {
+  symbol: string;
+  labelled: number;
+  llm_calls: number;
+  skipped_batches: number;
+  remaining_unlabelled: number;
+  reason: string | null;
+  errors: string[];
+}
+
+export interface NewsCollectResponse {
+  symbols: number;
+  feeds_read: number;
+  feeds_failed: number;
+  releases_seen: number;
+  releases_matched: number;
+  new: number;
+  already_saved: number;
+  skipped_reason: string | null;
+  failures: string[];
 }

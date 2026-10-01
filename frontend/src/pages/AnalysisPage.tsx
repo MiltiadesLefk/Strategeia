@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { qk, useAnalysis, useArchive, useResearch, useUniverse } from '../api/hooks';
+import { qk, useAnalysis, useArchive, useNewsCards, useResearch, useUniverse } from '../api/hooks';
+import { NewsCardChips, NewsCardsPanel } from '../components/NewsCardChips';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { RangeTabs } from '../components/RangeTabs';
 import { Tabs } from '../components/Tabs';
@@ -17,7 +18,7 @@ import { InsiderPanel } from '../components/smartmoney/InsiderPanel';
 import { isAlwaysOpenSymbol } from '../lib/marketHours';
 import { INTRADAY_FALLBACK_RANGE, INTRADAY_UNAVAILABLE_MESSAGE, isIntradayRange } from '../lib/intraday';
 import type { ApiError } from '../api/client';
-import type { ResearchResponse } from '../api/types';
+import type { NewsCardOut, ResearchResponse } from '../api/types';
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
@@ -81,7 +82,12 @@ function CatalystsList({ catalysts }: { catalysts: string[] }) {
 }
 
 function NewsList({ symbol, news }: { symbol: string; news: ResearchResponse['news'] }) {
+  const { data: newsCards } = useNewsCards(symbol);
   if (news.length === 0) return <EmptyState>No recent news found.</EmptyState>;
+  // AI labels (news cards) by article link; a headline with no label simply shows no chips.
+  const cardByUrl = new Map<string, NewsCardOut>(
+    newsCards?.items.filter((i) => i.card && i.url).map((i): [string, NewsCardOut] => [i.url, i.card!]) ?? [],
+  );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {news.map((n) => {
@@ -93,6 +99,11 @@ function NewsList({ symbol, news }: { symbol: string; news: ResearchResponse['ne
               <div className="text-muted" style={{ fontSize: 12 }}>
                 {n.source} · {formatRelativeTime(n.published_at)}
               </div>
+              {cardByUrl.get(n.url) && (
+                <div style={{ marginTop: 4 }}>
+                  <NewsCardChips card={cardByUrl.get(n.url)!} />
+                </div>
+              )}
             </div>
           </div>
         );
@@ -532,6 +543,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
             </div>
           )}
 
+          {tab === 'news' && <NewsCardsPanel symbol={data.symbol} />}
           {tab === 'news' && <ArchivePanel symbol={data.symbol} />}
 
           {tab === 'catalysts' && (

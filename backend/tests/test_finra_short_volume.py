@@ -393,7 +393,7 @@ def test_a_tradeable_plan_records_shadow_signals(session, monkeypatch):
     response = _generate(session, monkeypatch, FakeUptrendDataProvider())
     # Looked up by name: other silent signals register alongside these (news_cards: no labelled news stored here).
     by_name = {s.name: s for s in response.shadow_signals}
-    assert {SIGNAL_NAME, "sec_8k_negative_items"} <= set(by_name)
+    assert {SIGNAL_NAME, "news_cards", "sec_8k_negative_items"} <= set(by_name)
     assert by_name[SIGNAL_NAME].available is False  # nothing ingested: not a guess
     record = session.get(TradePlanRecord, response.id)
     assert SIGNAL_NAME in {s["name"] for s in json.loads(record.shadow_signals)}
