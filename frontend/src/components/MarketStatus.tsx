@@ -2,7 +2,6 @@ import { useMarketSession } from '../api/hooks';
 import type { MarketSessionState } from '../api/types';
 import { marketStateLabel, timeUntilNextTransition } from '../lib/marketHours';
 import { useNow } from '../lib/useNow';
-import { formatRelativeTime } from './common';
 
 const TONE: Record<MarketSessionState, { color: string; bg: string }> = {
   open: { color: 'var(--green)', bg: 'var(--green-bg)' },
@@ -23,26 +22,17 @@ const TONE: Record<MarketSessionState, { color: string; bg: string }> = {
  * fills, so the badge can't say "open" on a day the engine won't trade. The
  * countdown ticks locally every 30 s between fetches.
  *
- * `asOf` is when the client last actually received this data (react-query's
- * dataUpdatedAt). With provider TTLs between 15 minutes and a day, "when is
- * this from?" is the question the dashboard most needed to answer and never
- * did.
+ * How old the data on screen is lives next to this badge, in
+ * DataFreshness, which also flags it amber once it outlives the cache.
  */
-export function MarketStatus({ asOf }: { asOf?: number }) {
+export function MarketStatus() {
   const { data: session, isError } = useMarketSession();
   const now = useNow();
-
-  const dataAge = asOf ? `data ${formatRelativeTime(new Date(asOf).toISOString())}` : '';
 
   if (!session) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span className="badge badge-neutral">{isError ? 'Market status unavailable' : 'Market status…'}</span>
-        {dataAge && (
-          <span className="text-muted" style={{ fontSize: 12 }}>
-            {dataAge}
-          </span>
-        )}
       </div>
     );
   }
@@ -65,7 +55,6 @@ export function MarketStatus({ asOf }: { asOf?: number }) {
       </span>
       <span className="text-muted" style={{ fontSize: 12 }}>
         {timeUntilNextTransition(session, now)}
-        {dataAge ? ` · ${dataAge}` : ''}
       </span>
     </div>
   );

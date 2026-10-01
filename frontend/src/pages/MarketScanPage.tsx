@@ -4,6 +4,8 @@ import { useRunAutoScanNow, useScan, useUniverse } from '../api/hooks';
 import { SignalBadge, TrendBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { Sparkline } from '../components/Sparkline';
+import { DataFreshness } from '../components/DataFreshness';
+import { Flash } from '../components/Flash';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatPct } from '../components/common';
 import type { ApiError } from '../api/client';
 import type { ScanResult } from '../api/types';
@@ -48,7 +50,7 @@ export function MarketScanPage() {
   const [tab, setTab] = useState<Tab>('top');
   const [watchlist, setWatchlist] = useState<string[]>(() => loadWatchlist());
   const { data: universe } = useUniverse();
-  const { data, isLoading, error, refetch, isFetching } = useScan(symbolsFilter);
+  const { data, isLoading, error, refetch, isFetching, dataUpdatedAt } = useScan(symbolsFilter);
   const { mutate: runAutoScanNow, isPending: autoTrading, data: autoTradeResult, error: autoTradeError } = useRunAutoScanNow();
 
   useEffect(() => {
@@ -89,6 +91,8 @@ export function MarketScanPage() {
               }}
             />
             {isFetching ? 'Scanning markets…' : `${data?.results.length ?? 0} symbols scanned`}
+            <span>·</span>
+            <DataFreshness updatedAt={dataUpdatedAt} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -190,7 +194,11 @@ export function MarketScanPage() {
                     <td style={{ fontWeight: 600 }}>
                       <TickerLink symbol={r.symbol} iconSize={26} />
                     </td>
-                    <td className="tabular-nums">{formatMoney(r.price)}</td>
+                    <td className="tabular-nums">
+                      <Flash value={r.price} scope={symbolsFilter ?? 'all'}>
+                        {formatMoney(r.price)}
+                      </Flash>
+                    </td>
                     <td className={`tabular-nums ${r.change_pct_24h >= 0 ? 'text-green' : 'text-red'}`}>{formatPct(r.change_pct_24h)}</td>
                     <td>
                       <TrendBadge trend={r.trend} />

@@ -44,6 +44,8 @@ holder is new.
 | Our file | Source (repo@short-commit) | Source file | License | What we changed |
 |---|---|---|---|---|
 | `backend/app/services/lesson_service.py` | vongchu/TradingAgents_TauricResearch@01477f9 | `tradingagents/graph/reflection.py` | Apache-2.0 | Kept the idea and wording shape of the short review prompt (2-4 plain sentences: was the call right, what held, one lesson), reworded; everything else is new (facts-only prompt built from our trade records, SPY comparison from real bars, untrusted-text handling, failure handling, scheduling). |
+| `frontend/src/components/CommandPalette.tsx` | ErTasselli/OpenTerminal@95618ee | `web/components/CommandPalette.tsx` | MIT | Kept the shape (query and selected-row state, Esc / Up / Down / Enter handling, overlay with click-outside to close). Searches our own symbol universe in the browser with a new fuzzy scorer instead of calling a search endpoint; added page and "generate trade plan" rows, recent symbols, a focus trap, combobox/listbox accessibility roles, a phone layout, react-router navigation and our CSS. |
+| `frontend/src/components/Flash.tsx`, `frontend/src/lib/useFlash.ts` | ErTasselli/OpenTerminal@95618ee | `web/components/Flash.tsx` | MIT | Kept the idea and shape (a hook that compares the value with its previous render and flashes briefly, plus a wrapper span). Flashes green for up and red for down instead of white, never on first mount or when the subject (symbol) changes, honours reduced motion, and replays when changes arrive back to back; the change test is a separate unit-tested function. |
 
 ---
 

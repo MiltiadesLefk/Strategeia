@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useLogout, useSettingsStatus } from '../api/hooks';
 import type { SettingsStatus } from '../api/types';
 import logo from '../assets/logo.png';
+import { paletteShortcutLabel } from '../lib/paletteShortcut';
 import { prefetchRoute } from '../routePages';
 
 function Icon({ path }: { path: string }) {
@@ -126,7 +127,7 @@ function StatusPill({ online, label }: { online: boolean; label: string }) {
   );
 }
 
-export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
+export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobileOpen?: boolean; onClose?: () => void; onOpenPalette?: () => void }) {
   const { data: status } = useSettingsStatus();
   const { mutate: logout, isPending: loggingOut } = useLogout();
   return (
@@ -170,6 +171,22 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
           </button>
         </div>
       </div>
+      {onOpenPalette && (
+        <button
+          type="button"
+          className="sidebar-search"
+          onClick={() => {
+            onClose?.();
+            onOpenPalette();
+          }}
+          aria-label="Search symbols and pages"
+          aria-keyshortcuts="Control+K Meta+K"
+        >
+          <Icon path={ICONS.scan} />
+          Search
+          <kbd>{paletteShortcutLabel()}</kbd>
+        </button>
+      )}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
         {NAV_ITEMS.map((item) => (
           <NavLink

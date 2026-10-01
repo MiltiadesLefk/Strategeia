@@ -13,6 +13,8 @@ import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, for
 import type { ApiError } from '../api/client';
 import type { Position } from '../api/types';
 import { useInView } from '../lib/useInView';
+import { DataFreshness } from '../components/DataFreshness';
+import { Flash } from '../components/Flash';
 
 // How a closed trade ended, in the words the rest of the app uses. The backend
 // stores the machine value (close_reason); an unknown one is shown as-is.
@@ -52,7 +54,7 @@ function entryBarDate(symbol: string, openedAt: string): string {
 function ActivePositionCard({ position }: { position: Position }) {
   // Deferred until the card is near the viewport — see lib/useInView.
   const { ref, inView } = useInView<HTMLDivElement>();
-  const { data: analysis, isLoading } = useAnalysis(position.symbol, '3mo', inView);
+  const { data: analysis, isLoading, dataUpdatedAt: priceUpdatedAt } = useAnalysis(position.symbol, '3mo', inView);
   const { mutate: closePosition, isPending: closing } = useClosePosition();
   const { data: appSettings } = useSettings();
 
@@ -103,13 +105,24 @@ function ActivePositionCard({ position }: { position: Position }) {
           {unrealizedPct !== null && unrealizedDollars !== null && (
             <div style={{ textAlign: 'right' }}>
               <div className={`tabular-nums ${unrealizedPct >= 0 ? 'text-green' : 'text-red'}`} style={{ fontWeight: 700, fontSize: 15 }}>
-                {formatMoney(unrealizedDollars)}
+                <Flash value={unrealizedDollars} scope={String(position.id)}>
+                  {formatMoney(unrealizedDollars)}
+                </Flash>
                 {currentR !== null && <span style={{ marginLeft: 8 }}>{formatR(currentR)}</span>}
               </div>
               <div className="text-muted tabular-nums" style={{ fontSize: 11 }}>
                 {unrealizedPct >= 0 ? '+' : ''}
                 {unrealizedPct.toFixed(2)}% unrealized
               </div>
+              {currentPrice !== undefined && (
+                <div className="text-muted tabular-nums" style={{ fontSize: 11 }}>
+                  last{' '}
+                  <Flash value={currentPrice} scope={String(position.id)}>
+                    {formatMoney(currentPrice)}
+                  </Flash>{' '}
+                  · <DataFreshness updatedAt={priceUpdatedAt} compact />
+                </div>
+              )}
             </div>
           )}
           <button className="btn btn-secondary" disabled={closing} onClick={() => closePosition(position.id)}>
@@ -187,9 +200,9 @@ function ActivePositionCard({ position }: { position: Position }) {
 }
 
 export function PortfolioPage() {
-  const { data: stats, isLoading: statsLoading } = usePortfolioStats();
+  const { data: stats, isLoading: statsLoading, dataUpdatedAt: statsUpdatedAt } = usePortfolioStats();
   const { data: equity } = useEquityCurve();
-  const { data: positions, isLoading: positionsLoading } = usePositions();
+  const { data: positions, isLoading: positionsLoading, dataUpdatedAt: positionsUpdatedAt } = usePositions();
   const { mutate: resetPortfolio, isPending: resetting, error: resetError } = useResetPortfolio();
   // lesson column: which closed trade's lesson is open, and whether an AI provider can write one
   const [openLessonId, setOpenLessonId] = useState<number | null>(null);
@@ -209,7 +222,13 @@ export function PortfolioPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="page-header">
-        <h1 style={{ fontSize: 22 }}>Portfolio</h1>
+        <div>
+          <h1 style={{ fontSize: 22 }}>Portfolio</h1>
+          {/* The older of the two fetches the header cards are built from. */}
+          <div style={{ marginTop: 4 }}>
+            <DataFreshness updatedAt={statsUpdatedAt && positionsUpdatedAt ? Math.min(statsUpdatedAt, positionsUpdatedAt) : statsUpdatedAt || positionsUpdatedAt} />
+          </div>
+        </div>
         <button className="btn btn-secondary" onClick={handleReset} disabled={resetting}>
           {resetting ? 'Resetting…' : 'Reset Paper Account'}
         </button>

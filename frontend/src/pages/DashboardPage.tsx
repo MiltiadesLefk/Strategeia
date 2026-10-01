@@ -8,6 +8,8 @@ import { TickerLink, tickerHref } from '../components/TickerLink';
 import { IconBadge } from '../components/IconBadge';
 import { RangeTabs } from '../components/RangeTabs';
 import { MarketStatus } from '../components/MarketStatus';
+import { DataFreshness } from '../components/DataFreshness';
+import { Flash } from '../components/Flash';
 import { CandlestickChart } from '../components/chart/CandlestickChart';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR, sampleSizeNote } from '../components/common';
 import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
@@ -38,7 +40,9 @@ function TopPickChart({ symbol }: { symbol: string }) {
             </div>
             {data && (
               <div className="tabular-nums text-muted" style={{ fontSize: 12 }}>
-                {formatMoney(data.price)}
+                <Flash value={data.price} scope={symbol}>
+                  {formatMoney(data.price)}
+                </Flash>
               </div>
             )}
           </div>
@@ -55,7 +59,7 @@ function TopPickChart({ symbol }: { symbol: string }) {
 }
 
 export function DashboardPage() {
-  const { data, isLoading, error, dataUpdatedAt } = useDashboardSummary();
+  const { data, isLoading, error, dataUpdatedAt, isFetching } = useDashboardSummary();
   const { data: equity } = useEquityCurve();
 
   if (isLoading) return <LoadingSpinner label="Loading dashboard…" />;
@@ -81,7 +85,10 @@ export function DashboardPage() {
             {potential_setups === 1 ? '' : 's'}
           </div>
         </div>
-        <MarketStatus asOf={dataUpdatedAt} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <MarketStatus />
+          <DataFreshness updatedAt={dataUpdatedAt} isFetching={isFetching} />
+        </div>
       </div>
 
       {/* Two tiers, because these are not peers. Account performance leads;
@@ -145,7 +152,9 @@ export function DashboardPage() {
                     <td style={{ fontWeight: 600 }}>
                       <TickerLink symbol={r.symbol} iconSize={26} />
                     </td>
-                    <td className="tabular-nums">{formatMoney(r.price)}</td>
+                    <td className="tabular-nums">
+                      <Flash value={r.price}>{formatMoney(r.price)}</Flash>
+                    </td>
                     <td className={`tabular-nums ${r.change_pct_24h >= 0 ? 'text-green' : 'text-red'}`}>{formatPct(r.change_pct_24h)}</td>
                     <td>
                       <SignalBadge signal={r.signal} />

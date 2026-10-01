@@ -465,3 +465,245 @@ code {
   border-radius: 4px;
   font-size: 12px;
 }
+
+/* ---- Command palette (components/CommandPalette.tsx) ---- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-inverse-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-search:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-search kbd,
+.palette-footer kbd {
+  margin-left: auto;
+  padding: 1px 6px;
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 12px 12px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(520px, 76dvh);
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* 16px: anything smaller makes iOS zoom the page when the field is focused. */
+input[type='text'].palette-input {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  outline: none;
+}
+
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 0;
+}
+
+.palette-section {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.palette-row[aria-selected='true'] {
+  background: var(--card-alt);
+  box-shadow: inset 3px 0 0 var(--indigo-light);
+}
+
+.palette-ticker {
+  flex-shrink: 0;
+  min-width: 64px;
+  font-weight: 700;
+}
+
+.palette-label {
+  font-weight: 600;
+}
+
+.palette-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.palette-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.palette-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+/* Phones have no Shift key worth advertising, and the rows need the room. */
+@media (max-width: 600px) {
+  .palette-overlay {
+    padding-top: 8vh;
+  }
+
+  .palette-footer-optional {
+    display: none;
+  }
+}
+
+/* ---- Price flash (components/Flash.tsx) and freshness label (components/DataFreshness.tsx) ---- */
+
+.flash {
+  border-radius: 4px;
+}
+
+/* Two identical keyframes under different names: switching between them
+   restarts the animation when a second change lands while the first is fading. */
+@keyframes flash-up-a {
+  from {
+    background-color: rgba(16, 185, 129, 0.35);
+    color: var(--green);
+  }
+}
+
+@keyframes flash-up-b {
+  from {
+    background-color: rgba(16, 185, 129, 0.35);
+    color: var(--green);
+  }
+}
+
+@keyframes flash-down-a {
+  from {
+    background-color: rgba(239, 68, 68, 0.35);
+    color: var(--red);
+  }
+}
+
+@keyframes flash-down-b {
+  from {
+    background-color: rgba(239, 68, 68, 0.35);
+    color: var(--red);
+  }
+}
+
+.flash-up.flash-a {
+  animation: flash-up-a 0.9s ease-out;
+}
+
+.flash-up.flash-b {
+  animation: flash-up-b 0.9s ease-out;
+}
+
+.flash-down.flash-a {
+  animation: flash-down-a 0.9s ease-out;
+}
+
+.flash-down.flash-b {
+  animation: flash-down-b 0.9s ease-out;
+}
+
+/* Reduced motion: no fade. The same colour is shown as a static highlight for
+   the length of the flash (the component removes the class after it), so the
+   change is still marked without anything animating. */
+@media (prefers-reduced-motion: reduce) {
+  .flash-a,
+  .flash-b {
+    animation: none !important;
+  }
+
+  .flash-up {
+    background-color: rgba(16, 185, 129, 0.35);
+    color: var(--green);
+  }
+
+  .flash-down {
+    background-color: rgba(239, 68, 68, 0.35);
+    color: var(--red);
+  }
+}
+
+.freshness {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.freshness-stale {
+  color: var(--amber);
+}

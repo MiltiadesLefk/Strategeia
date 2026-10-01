@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAnalysis, useArchive, useResearch, useUniverse } from '../api/hooks';
+import { qk, useAnalysis, useArchive, useResearch, useUniverse } from '../api/hooks';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { RangeTabs } from '../components/RangeTabs';
 import { Tabs } from '../components/Tabs';
@@ -10,6 +11,10 @@ import { CandlestickChart } from '../components/chart/CandlestickChart';
 import { RevenueChart } from '../components/chart/RevenueChart';
 import { AiNoteCard, ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatRelativeTime, isSafeHttpUrl } from '../components/common';
 import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
+import { DataFreshness } from '../components/DataFreshness';
+import { Flash } from '../components/Flash';
+import { isAlwaysOpenSymbol } from '../lib/marketHours';
+import { INTRADAY_FALLBACK_RANGE, INTRADAY_UNAVAILABLE_MESSAGE, isIntradayRange } from '../lib/intraday';
 import type { ApiError } from '../api/client';
 import type { ResearchResponse } from '../api/types';
 
@@ -196,7 +201,34 @@ function UpcomingEarningsCard({ data }: { data: ResearchResponse }) {
 }
 
 function ChartSection({ symbol, companyName, range, setRange }: { symbol: string; companyName: string | undefined; range: string; setRange: (r: string) => void }) {
-  const { data, isLoading, error, refetch } = useAnalysis(symbol, range);
+  const { data, isLoading, error, refetch, dataUpdatedAt, isFetching } = useAnalysis(symbol, range);
+  const queryClient = useQueryClient();
+  // Intraday bars come from one free source (Yahoo), and when it is rate-limited there is no second
+  // one to ask. Rather than leave the chart blank, an intraday range that fails drops to the daily
+  // 1M view and says so; Retry goes back to the range that failed. Tied to a symbol so the notice
+  // does not follow you to a different ticker.
+  const [intradayFallback, setIntradayFallback] = useState<{ symbol: string; from: string; message: string } | null>(null);
+  useEffect(() => {
+    if (!error || !isIntradayRange(range)) return;
+    const status = (error as ApiError).status;
+    setIntradayFallback({
+      symbol,
+      from: range,
+      message:
+        status === 502
+          ? INTRADAY_UNAVAILABLE_MESSAGE
+          : `Intraday data could not be loaded (${(error as ApiError).message}); showing daily bars.`,
+    });
+    setRange(INTRADAY_FALLBACK_RANGE);
+  }, [error, range, symbol, setRange]);
+  const fallbackNotice = intradayFallback && intradayFallback.symbol === symbol ? intradayFallback : null;
+  function selectRange(next: string) {
+    // Drop a cached failure for the range being chosen so it starts clean: otherwise the stale
+    // error would be read first and bounce straight back to the daily view before the refetch lands.
+    queryClient.removeQueries({ queryKey: qk.analysis(symbol, next), predicate: (q) => q.state.status === 'error' });
+    setIntradayFallback(null); // choosing a range yourself (or retrying) ends the fallback notice
+    setRange(next);
+  }
   const levels = data ? supportResistanceLevels(data) : [];
   const breakout = !!data && isPotentialBreakout(data);
 
@@ -211,7 +243,16 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
               {companyName && <span className="text-muted" style={{ fontWeight: 400, fontSize: 14 }}> · {companyName}</span>}
             </div>
             <div className="tabular-nums" style={{ fontSize: 15 }}>
-              {data ? formatMoney(data.price) : '—'}
+              {data ? (
+                <Flash value={data.price} scope={`${symbol}|${range}`}>
+                  {formatMoney(data.price)}
+                </Flash>
+              ) : (
+                '—'
+              )}
+            </div>
+            <div style={{ marginTop: 2 }}>
+              <DataFreshness updatedAt={dataUpdatedAt} isFetching={isFetching} alwaysOpen={isAlwaysOpenSymbol(symbol)} />
             </div>
           </div>
         </div>
@@ -224,13 +265,25 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
       </div>
 
       {isLoading && <LoadingSpinner label={`Loading ${symbol}…`} />}
-      {error && <ErrorBanner message={(error as ApiError).message} onRetry={() => refetch()} />}
+      {error && !isIntradayRange(range) && <ErrorBanner message={(error as ApiError).message} onRetry={() => refetch()} />}
 
       {data && (
         <>
           <div className="card">
+            {fallbackNotice && !isIntradayRange(range) && (
+              <div
+                className="badge-amber"
+                role="status"
+                style={{ borderRadius: 8, padding: '10px 14px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}
+              >
+                <span>{fallbackNotice.message}</span>
+                <button type="button" className="btn btn-secondary" style={{ flexShrink: 0, padding: '4px 10px', fontSize: 12 }} onClick={() => selectRange(fallbackNotice.from)}>
+                  Retry
+                </button>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-              <RangeTabs value={range} onChange={setRange} />
+              <RangeTabs value={range} onChange={selectRange} />
             </div>
             <CandlestickChart
               candles={data.candles}

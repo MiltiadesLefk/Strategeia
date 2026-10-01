@@ -14,8 +14,9 @@ Steps, in order (each one's output is captured; a failing step prints its tail):
   2. backend lint    ruff, "serious errors only" rule set      (see BACKEND_LINT_RULES)
   3. frontend types  tsc -b --noEmit                           (from frontend/)
   4. frontend lint   oxlint (npm run lint's tool)              (see LINT POLICY)
-  5. frontend build  npm run build                             (--build only)
-  6. UI check        scripts/ui_check.py on isolated ports     (--ui only)
+  5. frontend tests  node --test frontend/tests/*.test.mjs     (pure helpers in src/lib)
+  6. frontend build  npm run build                             (--build only)
+  7. UI check        scripts/ui_check.py on isolated ports     (--ui only)
 
 Every step runs even after an earlier one fails (--fail-fast stops instead), so
 one run shows everything that's wrong. Exit code 0 only if every step passed.
@@ -262,6 +263,23 @@ def step_frontend_lint(args) -> StepResult:
     return r
 
 
+def step_frontend_unit_tests(args) -> StepResult:
+    """`npm test`: node --test over frontend/tests (pure helpers in src/lib; no test framework)."""
+    r = StepResult("frontend unit tests", "FAIL")
+    node = _frontend_ready(r)
+    if node is None:
+        return r
+    # Call node directly, as the other frontend steps do. Node 22.18+ strips TypeScript types on
+    # its own, which is how the tests import the .ts helpers without a build step.
+    code, out = run_cmd([node, "--test", "tests/*.test.mjs"], FRONTEND_DIR, args.verbose)
+    r.output = out
+    r.status = "PASS" if code == 0 else "FAIL"
+    passed = re.search(r"^.\s*pass (\d+)", out, re.MULTILINE)
+    failed = re.search(r"^.\s*fail (\d+)", out, re.MULTILINE)
+    r.detail = f"node --test: {passed.group(1) if passed else '?'} passed, {failed.group(1) if failed else '?'} failed"
+    return r
+
+
 def step_frontend_build(args) -> StepResult:
     r = StepResult("frontend build", "FAIL")
     if _frontend_ready(r) is None:
@@ -328,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.frontend_only:
         steps += [step_backend_tests, step_backend_lint]
     if not args.backend_only:
-        steps += [step_frontend_types, step_frontend_lint]
+        steps += [step_frontend_types, step_frontend_lint, step_frontend_unit_tests]
         if args.build:
             steps.append(step_frontend_build)
     if args.ui:
