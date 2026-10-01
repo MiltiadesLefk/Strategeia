@@ -276,6 +276,7 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
           </span>
         )}
       </div>
+
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14 }}>
           <input type="checkbox" checked={baselineOn} onChange={(e) => setBaselineOn(e.target.checked)} />
@@ -777,6 +778,7 @@ function datedAvailability(summary: BacktestRun['summary']): string | null {
   });
   return parts.length ? parts.join('; ') : null;
 }
+
 function CoveragePanel({ run }: { run: BacktestRun }) {
   const c = run.coverage;
   const s = run.summary;
@@ -1006,6 +1008,7 @@ export function BacktestsPage() {
           {showForm ? 'Hide new run' : 'New run'}
         </button>
       </div>
+      {tabs}
       {showForm && <NewRunForm onStarted={(id) => select(id)} />}
       <RunsList selected={selected} onSelect={select} />
       {selected !== null && Number.isFinite(selected) && <RunDetail key={selected} id={selected} />}

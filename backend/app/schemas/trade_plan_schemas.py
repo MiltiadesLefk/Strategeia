@@ -19,6 +19,8 @@ class ShadowSignalOut(BaseModel):
     would_score: int = 0
     reason: str = ""
     available: bool = True
+
+
 class TradePlanResponse(BaseModel):
     id: int | None = None
     symbol: str

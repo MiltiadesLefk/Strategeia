@@ -600,6 +600,7 @@ class AppSettings(BaseModel):
     # button press); AI calls per run are separately capped at three.
     news_cards_enabled: bool = False
     news_card_batch_limit: int = 20
+
     paper_starting_cash: float = 100_000.0
     default_risk_pct: float = 1.0
     mark_to_market_interval_minutes: int = 15

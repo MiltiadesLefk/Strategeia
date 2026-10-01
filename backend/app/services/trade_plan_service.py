@@ -420,6 +420,8 @@ def _overlay_ground_truth(
         rule_based_points=clamp_points(rule_based_score), rule_based_points_max=MAX_SCORE_FOR_CONFIDENCE,
         score_breakdown=score_breakdown,
     )
+
+
 def generate_trade_plan(
     symbol: str,
     account_size: float,
@@ -617,6 +619,7 @@ def generate_trade_plan(
     shadow_signals_json = shadow_signals_to_json(
         evaluate_shadow_signals(ShadowContext(symbol=symbol, direction=provisional_direction, session=session))
     )
+
     if chart.trend == "Neutral" or overlay_vetoes_trade or confidence_score < settings.min_confidence_for_trade:
         if chart.trend == "Neutral":
             reason = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."

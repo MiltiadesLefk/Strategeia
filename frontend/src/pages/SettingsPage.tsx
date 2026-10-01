@@ -1017,9 +1017,11 @@ export function SettingsPage() {
       <WatchersCard />
 
       <NewsCardsSettingsCard />
+
       <WatchlistCard />
 
       <DataSourcesCard />
+
       <DataCacheCard />
     </div>
   );

@@ -622,6 +622,7 @@ export function TradePlansPage() {
 
       <MissedTradesCard />
       <ReplayCard />
+
       <StrategyHistoryCard />
     </div>
   );
