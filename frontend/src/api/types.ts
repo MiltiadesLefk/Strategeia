@@ -392,3 +392,46 @@ export interface LoginResponse {
   ok: boolean;
   message: string;
 }
+
+/** The on-disk half of the provider cache; mirrors schemas/cache_schemas.py. */
+export interface PersistentCacheStatus {
+  file_name: string;
+  entries: number;
+  /** Rows whose time-to-live hasn't run out; the rest are kept as last-known-good. */
+  fresh_entries: number;
+  payload_bytes: number;
+  file_bytes: number;
+  max_bytes: number;
+  oldest_stored_at: string | null;
+  newest_stored_at: string | null;
+  pending_writes: number;
+  errors: number;
+  skipped_unencodable: number;
+}
+
+export interface HistoryStoreStatus {
+  symbols: number;
+  bars: number;
+  first_date: string | null;
+  last_date: string | null;
+  file_bytes: number;
+  /** Symbols whose newest stored bar is oldest. */
+  stalest: { symbol: string; last_date: string }[];
+}
+
+export interface CacheStatus {
+  memory_entries: number;
+  memory_stale_entries: number;
+  /** Since the process started: memory_hits, disk_hits, coalesced_hits, misses,
+   *  stale_served, stale_served_from_disk, fetch_failures. */
+  counters: Record<string, number>;
+  hit_rate: number | null;
+  /** null when persistence is off (PERSIST_CACHE_DB=false). */
+  persistent: PersistentCacheStatus | null;
+  history: HistoryStoreStatus;
+}
+
+export interface CacheClearResponse {
+  cleared: boolean;
+  message: string;
+}

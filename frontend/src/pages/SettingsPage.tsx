@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSettings, useTestConnection, useUpdateSettings } from '../api/hooks';
 import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
+import { DataCacheCard } from '../components/DataCacheCard';
 import type { AiOverlayObjectionAction } from '../api/types';
 
 const LLM_OPTIONS = [
@@ -827,6 +828,8 @@ export function SettingsPage() {
           <ResetButton onClick={resetAutomation} />
         </div>
       </div>
+
+      <DataCacheCard />
     </div>
   );
 }

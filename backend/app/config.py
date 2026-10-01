@@ -135,6 +135,13 @@ class InfraSettings(BaseSettings):
     # runtime/ can persist the db + settings without hiding sp500.csv.
     db_path: str = "runtime/strategeia.db"
     settings_path: str = "runtime/settings.json"
+    # Keep fetched market data on disk (runtime/cache.db) so a restart or
+    # redeploy doesn't empty the provider cache and refetch everything from
+    # Yahoo (see data_providers/cache_store.py). Env: PERSIST_CACHE_DB. Set it
+    # false for a memory-only cache. The price-history store's file
+    # (runtime/history.db, see data_providers/history_store.py) sits next to
+    # it and is not affected by this switch: it is data you asked to keep.
+    persist_cache_db: bool = True
 
     # The ONE account that logs into this dashboard (api/routers/auth.py) —
     # no signup, no other users, by explicit design: "for now, create ONLY
@@ -187,6 +194,14 @@ class InfraSettings(BaseSettings):
     def settings_file(self) -> Path:
         return BASE_DIR / self.settings_path
 
+    @property
+    def cache_db_file(self) -> Path:
+        """Beside settings.json, so it lives in the same volume as the db."""
+        return self.settings_file.parent / "cache.db"
+
+    @property
+    def history_db_file(self) -> Path:
+        return self.settings_file.parent / "history.db"
     @property
     def generated_secret_file(self) -> Path:
         return self.settings_file.parent / "api_key.txt"

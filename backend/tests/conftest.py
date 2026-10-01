@@ -21,6 +21,11 @@ import os
 # either way — they monkeypatch app.api.deps.get_infra_settings directly
 # with a fake, bypassing the real cached one entirely.
 os.environ.setdefault("ALLOW_UNAUTHENTICATED_API", "true")
+# Tests never read or write runtime/cache.db: the provider cache is memory-only
+# unless a test builds its own store on a tmp path (test_persistent_cache.py).
+# Assigned, not setdefault: a developer's own PERSIST_CACHE_DB=true must not
+# make the suite touch their real cache file.
+os.environ["PERSIST_CACHE_DB"] = "false"
 
 import time
 from datetime import datetime, timedelta
@@ -109,6 +114,7 @@ def _reset_in_process_cooldowns(monkeypatch):
     """
     monkeypatch.setattr("app.api.routers.settings._last_test_connection_monotonic", {})
     monkeypatch.setattr("app.api.routers.scanner._last_auto_trade_run_monotonic", None)
+    monkeypatch.setattr("app.api.routers.data_cache._last_cache_clear_monotonic", None)
     # Same reasoning, different shape: app.auth.login_attempts is one
     # shared LoginAttemptTracker instance for the process (see its
     # docstring), so a lockout one test triggers on purpose would otherwise

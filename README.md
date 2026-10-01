@@ -56,7 +56,9 @@ docker compose up --build -d
 
 This builds and runs both services:
 - `backend` on port 8000, with `runtime/` (the SQLite db + `settings.json`, holding your
-  provider API keys) as a named volume so it survives container restarts/redeploys.
+  provider API keys, plus `cache.db`, the saved market-data cache that lets a redeploy start warm
+  instead of refetching everything, and `history.db` if you load price history with
+  `scripts/preload_history.py`) as a named volume so it survives container restarts/redeploys.
 - `frontend` on port 5173, served by nginx.
 
 **Auth**: the dashboard has its own login screen — one user, one username+password, no

@@ -33,11 +33,15 @@ class CompositeDataProvider:
         self._providers = providers
 
     def _try_each(self, method_name: str, *args, **kwargs):
+        return self._try_each_traced(method_name, *args, **kwargs)[0]
+
+    def _try_each_traced(self, method_name: str, *args, **kwargs):
+        """_try_each, plus the name of the provider that answered."""
         errors: list[str] = []
         for provider in self._providers:
             method = getattr(provider, method_name)
             try:
-                return method(*args, **kwargs)
+                return method(*args, **kwargs), provider.name
             except NotImplementedError:
                 continue
             except DataProviderError as exc:
@@ -49,6 +53,14 @@ class CompositeDataProvider:
 
     def get_ohlcv(self, symbol: str, period: str = "6mo", interval: str = "1d") -> pd.DataFrame:
         return self._try_each("get_ohlcv", symbol, period=period, interval=interval)
+
+    def get_ohlcv_with_source(
+        self, symbol: str, period: str = "6mo", interval: str = "1d"
+    ) -> tuple[pd.DataFrame, str]:
+        """get_ohlcv, plus which provider's bars these are. The price-history
+        store keeps that: bars from two providers can differ (one adjusts for
+        dividends, another doesn't), so they must not be spliced unawares."""
+        return self._try_each_traced("get_ohlcv", symbol, period=period, interval=interval)
 
     def get_quote(self, symbol: str) -> QuoteData:
         return self._try_each("get_quote", symbol)

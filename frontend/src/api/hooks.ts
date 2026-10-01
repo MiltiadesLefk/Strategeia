@@ -21,6 +21,7 @@ import type {
   TradePlan,
   UniverseEntry,
 } from './types';
+import type { CacheClearResponse, CacheStatus } from './types';
 
 export const qk = {
   scan: (symbols?: string) => ['scan', symbols] as const,
@@ -36,6 +37,7 @@ export const qk = {
   settingsStatus: ['settings-status'] as const,
   authStatus: ['auth-status'] as const,
   marketSession: ['market-session'] as const,
+  cacheStatus: ['cache-status'] as const,
 };
 
 // Refetch just after the next bell (open or close), so the badge and the
@@ -291,5 +293,18 @@ export function useLogout() {
 export function useTestConnection() {
   return useMutation({
     mutationFn: (target: 'llm' | 'finnhub' | 'telegram') => api.post<TestConnectionResponse>('/api/settings/test-connection', { target }),
+  });
+}
+
+/** Read-only numbers for the Settings page's data-cache card. */
+export function useCacheStatus() {
+  return useQuery({ queryKey: qk.cacheStatus, queryFn: () => api.get<CacheStatus>('/api/cache/status') });
+}
+
+export function useClearCache() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<CacheClearResponse>('/api/cache/clear'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.cacheStatus }),
   });
 }
