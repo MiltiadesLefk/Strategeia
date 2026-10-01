@@ -522,6 +522,7 @@ def generate_trade_plan(
     # record: a rejection is a decision too). Looked up here, after every data
     # fetch has succeeded, so a failed evaluation leaves no version behind.
     strategy_version = current_strategy_version(session, settings).number
+
     if chart.trend == "Neutral" or overlay_vetoes_trade or confidence_score < settings.min_confidence_for_trade:
         if chart.trend == "Neutral":
             reason = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."

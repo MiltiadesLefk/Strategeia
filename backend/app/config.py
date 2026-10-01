@@ -202,6 +202,7 @@ class InfraSettings(BaseSettings):
     @property
     def history_db_file(self) -> Path:
         return self.settings_file.parent / "history.db"
+
     @property
     def generated_secret_file(self) -> Path:
         return self.settings_file.parent / "api_key.txt"
