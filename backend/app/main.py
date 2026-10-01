@@ -10,9 +10,11 @@ from app.api.routers import analysis, archive, auth, dashboard, market, portfoli
 from app.api.routers import strategy as strategy_router
 from app.api.routers import calibration as calibration_router
 from app.api.routers import data_cache as data_cache_router
+from app.api.routers import backtests as backtests_router
 from app.api.routers import watchlist as watchlist_router
 from app.config import get_infra_settings
 from app.data_providers.base import AllProvidersFailedError
+from app.backtest.service import recover_on_startup as recover_interrupted_backtests
 from app.database import create_db_and_tables
 from app.scheduler import start_scheduler, stop_scheduler
 
@@ -20,6 +22,8 @@ from app.scheduler import start_scheduler, stop_scheduler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    # A backtest left running by a previous process can never finish: mark it failed.
+    recover_interrupted_backtests()
     start_scheduler()
     yield
     stop_scheduler()
@@ -84,6 +88,7 @@ app.include_router(archive.router)
 app.include_router(data_cache_router.router)
 app.include_router(watchlist_router.router)
 app.include_router(strategy_router.router)
+app.include_router(backtests_router.router)
 
 
 @app.get("/api/health")

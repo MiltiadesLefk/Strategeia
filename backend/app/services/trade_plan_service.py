@@ -41,6 +41,7 @@ from app.llm_providers.base import LLMProvider
 from app.llm_providers.base import DECISION_TIER
 from app.llm_providers.factory import generate_with_fallback, generate_with_tier
 from app.llm_providers.prompts import build_ai_opinion_prompt, build_trade_plan_take_prompt
+from app.knowledge.point_in_time import is_simulated
 from app.markets import format_market_time, us_closure_reason
 from app.portfolio.engine import (
     Clock,
@@ -374,6 +375,7 @@ def generate_trade_plan(
     allow_auto_execute: bool = True,
     source: str = "manual",
     clock: Clock | None = None,
+    settings: AppSettings | None = None,
 ) -> TradePlanResponse:
     """Fully evaluates `symbol` (price/volume/technicals + fundamentals +
     news + earnings) and either returns a tradeable plan or an explicit
@@ -386,8 +388,10 @@ def generate_trade_plan(
     stays pending and a redo is queued for the next open (D10 = C, see
     _defer_to_market_open). `source` names the caller on that queued redo;
     `clock` is the paper engine's (tests and, later, the backtester pass a
-    simulated one)."""
-    settings = load_app_settings()
+    simulated one). `settings` is the strategy settings to decide with (default:
+    the saved ones); a backtest passes its own copy so a run never reads or
+    changes the real settings file."""
+    settings = settings if settings is not None else load_app_settings()
 
     # 1y, matching analysis_service.get_analysis's fetch exactly — trend/EMA/
     # RSI/support-resistance must come from the same lookback window
@@ -467,7 +471,10 @@ def generate_trade_plan(
     earnings_surprise_score, earnings_surprise_reasons = score_earnings_surprise_track_record(
         provisional_direction, earnings_history
     )
-    macro_event_score, macro_event_reasons = score_macro_event_proximity()
+    # backtest: this reads today's real date, so inside a simulated moment it
+    # would apply the CURRENT week's macro releases to every past day. The
+    # price-only backtest leaves macro events out entirely (0 points).
+    macro_event_score, macro_event_reasons = (0, []) if is_simulated() else score_macro_event_proximity()
 
     rule_based_score = (
         scan_result.score + fundamental_score + news_score + market_confirmation_score
