@@ -19,6 +19,7 @@ import { isAlwaysOpenSymbol } from '../lib/marketHours';
 import { INTRADAY_FALLBACK_RANGE, INTRADAY_UNAVAILABLE_MESSAGE, isIntradayRange } from '../lib/intraday';
 import type { ApiError } from '../api/client';
 import type { NewsCardOut, ResearchResponse } from '../api/types';
+import { EarningsPreviewPanel } from '../components/EarningsPreviewPanel';
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
@@ -536,6 +537,8 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
             </div>
           )}
 
+          {tab === 'earnings' && !data.symbol.endsWith('-USD') && <EarningsPreviewPanel symbol={data.symbol} />}
+
           {tab === 'news' && (
             <div className="card">
               <h3 style={{ marginBottom: 12 }}>Recent News</h3>
@@ -544,6 +547,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
           )}
 
           {tab === 'news' && <NewsCardsPanel symbol={data.symbol} />}
+
           {tab === 'news' && <ArchivePanel symbol={data.symbol} />}
 
           {tab === 'catalysts' && (

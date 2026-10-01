@@ -144,12 +144,20 @@ def _reset_in_process_cooldowns(monkeypatch):
     monkeypatch.setattr("app.api.routers.news._last_news_label_monotonic", {})
     # PR Newswire feed cache and request pacing (data_providers/pr_newswire.py).
     from app.data_providers.pr_newswire import clear_feed_cache
+
+    clear_feed_cache()
     monkeypatch.setattr("app.api.routers.smart_money._last_insider_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.portfolio._last_lesson_request_monotonic", {})
     monkeypatch.setattr("app.api.routers.watchers._last_watcher_run_monotonic", {})
     from app.services.market_terminal_service import reset_terminal_cache
 
     reset_terminal_cache()
+    # The economic-calendar feed cache and the finished earnings previews (calendar / earnings_preview).
+    from app.data_providers.econ_calendar import reset_econ_calendar_cache
+    from app.services.earnings_preview_service import reset_earnings_preview_cache
+
+    reset_econ_calendar_cache()
+    reset_earnings_preview_cache()
     # The backtest start cooldown and the process-wide job manager (one run at a time).
     monkeypatch.setattr("app.api.routers.backtests._last_backtest_start_monotonic", None)
     from app.backtest.service import reset_backtest_manager

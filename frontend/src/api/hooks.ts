@@ -27,6 +27,7 @@ import type {
   WatchlistSymbolCheck,
 } from './types';
 import type { CalibrationReport } from './types';
+import type { CalendarResponse, EarningsPreview } from './types';
 import type { MissedTradeRefresh, MissedTradeReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
@@ -422,6 +423,7 @@ export function useMacroSeries(seriesId: string | null, start?: string) {
     staleTime: 10 * 60_000,
   });
 }
+
 /** The watchlist the Settings card edits: which layer is active, the saved list, the limits. */
 export function useWatchlist() {
   return useQuery({ queryKey: qk.watchlist, queryFn: () => api.get<WatchlistResponse>('/api/watchlist') });
@@ -616,6 +618,8 @@ export function useSetWatcherEnabled() {
   });
 }
 
+// ---- Smart Money ----
+
 const smartMoneyKeys = {
   all: ['smart-money'] as const,
   status: ['smart-money', 'status'] as const,
@@ -754,6 +758,23 @@ export function useTerminalRecap(ai: boolean, limit: number) {
     queryFn: () => api.get<RecapResponse>(`/api/terminal/recap?ai=${ai}&limit=${limit}`),
     refetchInterval: TERMINAL_REFETCH_MS,
     staleTime: TERMINAL_REFETCH_MS,
+  });
+}
+
+export function useEarningsPreview(symbol: string | null, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['earnings-preview', symbol ?? ''] as const,
+    queryFn: () => api.get<EarningsPreview>(`/api/research/${symbol}/earnings-preview`),
+    enabled: !!symbol && enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCalendar(from: string, to: string) {
+  return useQuery({
+    queryKey: ['calendar', from, to] as const,
+    queryFn: () => api.get<CalendarResponse>(`/api/calendar?from=${from}&to=${to}`),
+    staleTime: 5 * 60_000,
   });
 }
 

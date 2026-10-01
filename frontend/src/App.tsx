@@ -4,6 +4,7 @@ import { DashboardLayout } from './layout/DashboardLayout';
 import {
   AnalysisPage,
   BacktestsPage,
+  CalendarPage,
   DashboardPage,
   MarketScanPage,
   MarketTerminalPage,
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="analysis" element={<AnalysisPage />} />
           <Route path="research" element={<ResearchRedirect />} />
           <Route path="trade-plans" element={<TradePlansPage />} />
+          <Route path="calendar" element={<CalendarPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
           <Route path="terminal" element={<MarketTerminalPage />} />
           <Route path="smart-money" element={<SmartMoneyPage />} />

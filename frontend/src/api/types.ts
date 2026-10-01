@@ -833,6 +833,7 @@ export interface MacroSeriesData {
   last_updated: string | null;
   last_observation_date: string | null;
 }
+
 export type WatchlistLayer = 'dev_filter' | 'custom' | 'bundled';
 
 export interface WatchlistEntry {
@@ -1175,6 +1176,8 @@ export interface WatcherRunResponse {
   actions: string[];
 }
 
+// ---- Smart Money (insider trades from stored Form 4 filings) ----
+
 export type SmartMoneySide = 'buys' | 'sells' | 'all';
 
 export interface SmartMoneyInsiderTrade {
@@ -1266,6 +1269,8 @@ export interface SmartMoneyRefreshResponse {
   unknown_symbols: string[];
   errors: string[];
 }
+
+// ---- Backtest Lab: walk-forward validation (GET /api/backtests/validations...) ----
 
 export interface ValidationKnob {
   name: string;
@@ -1463,6 +1468,8 @@ export interface ReplayResult {
   caveats: string[];
 }
 
+// ---- Market Terminal ----
+
 export type TerminalWindow = '1d' | '5d' | '1m';
 export type VixRegime = 'elevated' | 'calm';
 
@@ -1579,6 +1586,120 @@ export interface RecapResponse {
   ai_provider: string | null;
   missing: string[];
 }
+
+// --- earnings_preview: GET /api/research/{symbol}/earnings-preview ---
+export interface EarningsPreview {
+  symbol: string;
+  name: string | null;
+  earnings_date: string | null;
+  days_until: number | null;
+  estimate: { fiscal_period_label: string | null; eps_estimate: number | null; revenue_estimate: number | null } | null;
+  price_context: {
+    price: number;
+    trend: string;
+    momentum: string;
+    rsi14: number;
+    pct_from_ema20: number;
+    week52_low: number | null;
+    week52_high: number | null;
+  } | null;
+  historical_move_pct: number | null;
+  reactions_sampled: number;
+  implied_move: {
+    expiration: string;
+    implied_move_pct: number;
+    covers_earnings: boolean;
+    historical_median_move_pct: number | null;
+    ratio: number | null;
+    verdict: string | null;
+  } | null;
+  track_record: {
+    quarters: number;
+    beats: number;
+    misses: number;
+    in_line: number;
+    average_surprise_pct: number | null;
+  } | null;
+  surprise_table: {
+    report_date: string;
+    eps_estimate: number | null;
+    eps_actual: number | null;
+    surprise_pct: number | null;
+    reaction_pct: number | null;
+  }[];
+  scenarios: { name: string; percentile: number; move_pct: number; description: string }[];
+  scenarios_note: string | null;
+  what_to_watch: string[];
+  data_gaps: string[];
+  summary: string;
+  summary_provider: string;
+  summary_error: string | null;
+  generated_at: string;
+}
+
+// --- calendar: GET /api/calendar ---
+export type CalendarKind = 'economic' | 'macro' | 'earnings';
+
+export interface CalendarItem {
+  id: string;
+  kind: CalendarKind;
+  title: string;
+  date: string;
+  time_et: string | null;
+  starts_at: string | null;
+  days_until: number;
+  impact: string | null;
+  forecast: string | null;
+  previous: string | null;
+  actual: string | null;
+  symbol: string | null;
+  source: string;
+  source_label: string;
+  position_symbols: string[];
+  my_position: boolean;
+  confirmed_by_feed: boolean | null;
+}
+
+export interface CalendarCatalyst {
+  kind: string;
+  title: string;
+  date: string;
+  days_until: number;
+}
+
+export interface CalendarPositionCatalysts {
+  symbol: string;
+  direction: string;
+  catalysts: CalendarCatalyst[];
+}
+
+export interface CalendarSourceStatus {
+  key: string;
+  label: string;
+  status: 'ok' | 'partial' | 'unavailable';
+  detail: string | null;
+}
+
+export interface CalendarMismatch {
+  series: string;
+  table_date: string | null;
+  feed_date: string | null;
+  message: string;
+}
+
+export interface CalendarResponse {
+  from_date: string;
+  to_date: string;
+  today: string;
+  items: CalendarItem[];
+  position_catalysts: CalendarPositionCatalysts[];
+  sources: CalendarSourceStatus[];
+  mismatches: CalendarMismatch[];
+  earnings_symbols_checked: number;
+  generated_at: string;
+}
+
+// ---- News cards: AI labels on saved headlines, and PR Newswire press releases (/api/news) ----
 
 export interface NewsCardOut {
   event_type: string;
