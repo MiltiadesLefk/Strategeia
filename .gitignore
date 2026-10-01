@@ -13,6 +13,8 @@ backend/**/__pycache__/
 backend/*.pyc
 backend/.env
 backend/runtime/
+# Root .env: docker compose's variable file (holds CLAUDE_CODE_OAUTH_TOKEN)
+/.env
 backend/.pytest_cache/
 backend/.dockerignore.local
 

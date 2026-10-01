@@ -169,7 +169,7 @@ export function DashboardPage() {
       <div className="split-row">
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3>Latest AI Trade Plan</h3>
+            <h3>Latest Trade Plan</h3>
             <Link to="/trade-plans" className="text-muted" style={{ fontSize: 13 }}>
               View All →
             </Link>
@@ -232,7 +232,7 @@ export function DashboardPage() {
 
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h3>AI Insights</h3>
+            <h3>Top Pick</h3>
           </div>
           {!topPick && !top_pick_trade_plan ? (
             <EmptyState>No scan or trade-plan data yet to summarize.</EmptyState>
