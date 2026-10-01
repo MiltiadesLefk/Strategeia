@@ -25,6 +25,7 @@ import type {
   WatchlistSymbolCheck,
 } from './types';
 import type { CalibrationReport } from './types';
+import type { MissedTradeRefresh, MissedTradeReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
 
@@ -37,6 +38,7 @@ export const qk = {
   positions: ['positions'] as const,
   stats: ['stats'] as const,
   calibration: ['calibration'] as const,
+  missedTrades: ['missed-trades'] as const,
   strategyVersions: ['strategy-versions'] as const,
   equityCurve: ['equity-curve'] as const,
   dashboard: ['dashboard'] as const,
@@ -330,6 +332,19 @@ export function useCalibration() {
   return useQuery({ queryKey: qk.calibration, queryFn: () => api.get<CalibrationReport>('/api/portfolio/calibration') });
 }
 
+/** What the trades the app declined would have earned. Read-only on the server. */
+export function useMissedTrades() {
+  return useQuery({ queryKey: qk.missedTrades, queryFn: () => api.get<MissedTradeReport>('/api/missed-trades') });
+}
+
+/** Computes the missed-trade outcomes that are new or still open, then reloads the report. */
+export function useRefreshMissedTrades() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<MissedTradeRefresh>('/api/missed-trades/refresh'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.missedTrades }),
+  });
+}
 /** Read-only numbers for the Settings page's data-cache card. */
 export function useCacheStatus() {
   return useQuery({ queryKey: qk.cacheStatus, queryFn: () => api.get<CacheStatus>('/api/cache/status') });

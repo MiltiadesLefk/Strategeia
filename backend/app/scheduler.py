@@ -20,7 +20,9 @@ from app.markets import (
     to_market_time,
     us_holiday_name,
 )
+from app.knowledge.point_in_time import is_simulated
 from app.portfolio.engine import PaperTradingEngine
+from app.portfolio.missed_trades import refresh_missed_trades
 from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_auto_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
@@ -147,6 +149,21 @@ def _lesson_catchup_job() -> None:
             run_lesson_catchup(session, data_provider, llm_provider)
     except Exception:
         logger.exception("Scheduled lesson catch-up tick failed")
+
+# The missed-trades ledger is recomputed once a day, after the close, when the day's
+# bars are final (see portfolio/missed_trades.py). Analysis only: it places nothing and
+# decides nothing, and it is skipped inside a simulated (backtest) moment.
+MISSED_TRADES_REFRESH_TIME_ET = (16, 45)
+
+def _missed_trades_refresh_job() -> None:
+    try:
+        if is_simulated():
+            return
+        settings = load_app_settings()
+        with Session(engine) as session:
+            refresh_missed_trades(session, settings)
+    except Exception:
+        logger.exception("Scheduled missed-trades refresh failed")
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:

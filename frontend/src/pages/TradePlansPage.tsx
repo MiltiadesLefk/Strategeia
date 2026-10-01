@@ -4,6 +4,7 @@ import { useAnalysis, useGenerateTradePlan, useMarketSession, useOpenPosition, u
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { DirectionBadge, TradePlanStatusBadge } from '../components/Badge';
 import { PipelineSteps } from '../components/PipelineSteps';
+import { MissedTradesCard } from '../components/MissedTradesCard';
 import { StrategyHistoryCard } from '../components/StrategyHistoryCard';
 import { TickerLink } from '../components/TickerLink';
 import { RatioGauge } from '../components/RatioGauge';
@@ -615,6 +616,7 @@ export function TradePlansPage() {
         )}
       </div>
 
+      <MissedTradesCard />
       <StrategyHistoryCard />
     </div>
   );

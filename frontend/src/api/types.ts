@@ -551,6 +551,126 @@ export interface CalibrationReport {
   notes: string[];
 }
 
+// --- Missed trades (GET /api/missed-trades, POST /api/missed-trades/refresh) ---
+
+export type MissedTradeCategoryKey =
+  | 'ai_veto'
+  | 'low_confidence'
+  | 'held_by_ai'
+  | 'not_executed'
+  | 'neutral_trend'
+  | 'unclassified';
+
+/** One kind of missed trade: counts, then the result of the ones that have one. */
+export interface MissedTradeCategory {
+  key: MissedTradeCategoryKey;
+  label: string;
+  /** Plans of this kind. */
+  n: number;
+  /** Hypothetical trades that reached a stop, TP1 or the time limit: the only ones the statistics use. */
+  resolved: number;
+  /** Still open: marked at the latest close, not final. */
+  open: number;
+  /** Need a refresh (or their prices could not be loaded). */
+  awaiting: number;
+  /** Counted but never simulated: no trend, a duplicate of a held position, a plan waiting for its redo. */
+  not_simulated: number;
+  wins: number;
+  /** Percent of resolved, with a Wilson 95% interval. */
+  win_rate: number | null;
+  win_rate_low: number | null;
+  win_rate_high: number | null;
+  avg_r: number | null;
+  /** Bootstrap 95% interval on the average R; null below two resolved trades. */
+  avg_r_low: number | null;
+  avg_r_high: number | null;
+  total_r: number;
+  /** Mean mark of the open ones. Not a result. */
+  open_avg_r: number | null;
+  small_sample: boolean;
+  details: { detail: string; label: string; n: number }[];
+}
+
+export interface MissedTakenStats {
+  n: number;
+  wins: number;
+  win_rate: number | null;
+  win_rate_low: number | null;
+  win_rate_high: number | null;
+  avg_r: number | null;
+  avg_r_low: number | null;
+  avg_r_high: number | null;
+  total_r: number;
+  small_sample: boolean;
+}
+
+export type MissedQuestionVerdict =
+  | 'too_early'
+  | 'no_data'
+  | 'unclear'
+  | 'saved'
+  | 'cost'
+  | 'bar_justified'
+  | 'bar_costs';
+
+export interface MissedQuestion {
+  key: 'ai_veto' | 'confidence_bar';
+  question: string;
+  verdict: MissedQuestionVerdict;
+  answer: string;
+}
+
+export type MissedTradeState = 'resolved' | 'open' | 'awaiting' | 'not_simulated';
+
+export interface MissedTradeItem {
+  plan_id: number;
+  symbol: string;
+  created_at: string;
+  category: MissedTradeCategoryKey;
+  category_label: string;
+  detail: string | null;
+  detail_label: string | null;
+  reason: string | null;
+  state: MissedTradeState;
+  direction: string | null;
+  confidence_score: number;
+  entry: number | null;
+  stop: number | null;
+  tp1: number | null;
+  /** Final when state is "resolved", a mark when "open". */
+  r_multiple: number | null;
+  exit_reason: string | null;
+  exit_date: string | null;
+  /** "plan" (its own stored levels) or "reconstructed" (rebuilt with the live rules). */
+  trade_source: string | null;
+  note: string | null;
+}
+
+export interface MissedTradeReport {
+  plans_considered: number;
+  awaiting_refresh: number;
+  min_trades_for_reading: number;
+  last_computed_at: string | null;
+  categories: MissedTradeCategory[];
+  taken: MissedTakenStats;
+  questions: MissedQuestion[];
+  trades: MissedTradeItem[];
+  trades_listed: number;
+  caveats: string[];
+}
+
+export interface MissedTradeRefresh {
+  considered: number;
+  computed: number;
+  resolved: number;
+  still_open: number;
+  no_data: number;
+  not_simulatable: number;
+  skipped_resolved: number;
+  remaining: number;
+  busy: boolean;
+  failed_symbols: string[];
+}
 /** GET /api/strategy/versions — which rules and settings produced the plans. */
 export interface StrategyVersion {
   id: number;

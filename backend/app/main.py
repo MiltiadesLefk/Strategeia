@@ -11,6 +11,7 @@ from app.api.routers import strategy as strategy_router
 from app.api.routers import calibration as calibration_router
 from app.api.routers import data_cache as data_cache_router
 from app.api.routers import backtests as backtests_router
+from app.api.routers import missed_trades as missed_trades_router
 from app.api.routers import watchlist as watchlist_router
 from app.config import get_infra_settings
 from app.data_providers.base import AllProvidersFailedError
@@ -89,6 +90,7 @@ app.include_router(data_cache_router.router)
 app.include_router(watchlist_router.router)
 app.include_router(strategy_router.router)
 app.include_router(backtests_router.router)
+app.include_router(missed_trades_router.router)
 
 
 @app.get("/api/health")
