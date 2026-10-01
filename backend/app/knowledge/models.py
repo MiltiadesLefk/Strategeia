@@ -43,6 +43,8 @@ class FactKind:
     CONGRESS_TRADE = "congress_trade"  # SG-2: known at the REPORT date, trade date is effective_at
     FUND_HOLDING = "fund_holding"  # SG-3 / SM-3: a 13F line, known at filing acceptance
     WATCHER_EVENT = "watcher_event"  # an event a watcher reported (watchers/runner.py); symbol None = market-wide
+    FUNDAMENTALS_REVENUE = "fundamentals_revenue"  # one annual revenue value from one 10-K, known at its filing date
+    EARNINGS_REPORT = "earnings_report"  # one reported quarter (EPS estimate/actual), known at the end of the report day
 
 
 class KnownFact(SQLModel, table=True):

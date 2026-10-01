@@ -45,6 +45,9 @@ from app.backtest.params import (
 )
 from app.backtest.baseline import run_baseline
 from app.backtest.runner import params_to_json, run_backtest
+from app.backtest.validation import ValidationParams, make_folds, run_validation
+from app.backtest.validation_models import BacktestValidation
+from app.backtest.calendar import trading_days
 from app.config import AppSettings
 from app.data_providers.history_store import HistoryStore
 from app.timeutil import utcnow_naive
@@ -74,8 +77,16 @@ def recover_interrupted_runs(session_factory: Callable[[], Session]) -> int:
             run.error = INTERRUPTED_MESSAGE
             run.finished_at = utcnow_naive()
             session.add(run)
+        stuck_validations = session.exec(
+            select(BacktestValidation).where(BacktestValidation.status.in_(ACTIVE_STATUSES))
+        ).all()
+        for validation in stuck_validations:
+            validation.status = RUN_FAILED
+            validation.error = INTERRUPTED_MESSAGE
+            validation.finished_at = utcnow_naive()
+            session.add(validation)
         session.commit()
-        return len(stuck)
+        return len(stuck) + len(stuck_validations)
 
 
 class BacktestManager:
@@ -88,6 +99,7 @@ class BacktestManager:
         self._thread: threading.Thread | None = None
         self._cancel = threading.Event()
         self._active_id: int | None = None
+        self._active_validation_id: int | None = None
 
     # ---- starting ----------------------------------------------------------
 
@@ -125,7 +137,9 @@ class BacktestManager:
                     params_json=json.dumps({"symbols": params.symbols, "start": params.start.isoformat(),
                                             "end": params.end.isoformat()}),
                     strategy_fingerprint=strategy_fingerprint(settings),
-                    coverage_json=json.dumps(describe_coverage(settings.min_confidence_for_trade, base_settings.min_confidence_for_trade)),
+                    coverage_json=json.dumps(describe_coverage(
+                        settings.min_confidence_for_trade, base_settings.min_confidence_for_trade, **params.dated_switches(),
+                    )),
                 )
                 session.add(run)
                 session.commit()
@@ -168,6 +182,111 @@ class BacktestManager:
         thread = self._thread
         return thread is not None and thread.is_alive()
 
+    # ---- walk-forward validations (a second kind of job on the same worker) -------
+
+    def start_validation(self, params: ValidationParams, base_settings: AppSettings, *, background: bool = True) -> int:
+        """Queue a walk-forward validation (see validation.py). It shares the one worker
+        with ordinary runs, so BacktestBusyError is raised while either kind is active."""
+        self._check_benchmarks(params)
+        # The folds must fit the period: refuse here, before a row exists.
+        make_folds(trading_days(params.start, params.end), params.folds, params.mode, params.train_ratio, params.embargo_days)
+        settings = effective_settings(base_settings, params.overrides)
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                raise BacktestBusyError("a backtest is already running: wait for it or cancel it first")
+            with self._session_factory() as session:
+                active = session.exec(select(BacktestRun).where(BacktestRun.status.in_(ACTIVE_STATUSES))).first()
+                if active is not None:
+                    raise BacktestBusyError(f"backtest #{active.id} is still {active.status}")
+                active_validation = session.exec(
+                    select(BacktestValidation).where(BacktestValidation.status.in_(ACTIVE_STATUSES))
+                ).first()
+                if active_validation is not None:
+                    raise BacktestBusyError(f"validation #{active_validation.id} is still {active_validation.status}")
+                row = BacktestValidation(
+                    status=RUN_QUEUED, params_json=params.model_dump_json(), strategy_fingerprint=strategy_fingerprint(settings)
+                )
+                session.add(row)
+                session.commit()
+                session.refresh(row)
+                validation_id = row.id
+            self._cancel.clear()
+            self._active_validation_id = validation_id
+            self._thread = threading.Thread(
+                target=self._work_validation, args=(validation_id, params, base_settings),
+                name=f"validation-{validation_id}", daemon=True,
+            )
+            if background:
+                self._thread.start()
+        if not background:
+            self._work_validation(validation_id, params, base_settings)
+        return validation_id
+
+    def cancel_validation(self, validation_id: int) -> str:
+        """Ask a validation to stop at its next simulated day (the folds it finished are kept)."""
+        with self._session_factory() as session:
+            row = session.get(BacktestValidation, validation_id)
+            if row is None:
+                raise BacktestNotFoundError(f"no validation #{validation_id}")
+            if row.status not in ACTIVE_STATUSES:
+                return row.status
+            row.cancel_requested = True
+            session.add(row)
+            session.commit()
+        if self._active_validation_id == validation_id:
+            self._cancel.set()
+        return "cancelling"
+
+    def _update_validation(self, validation_id: int, **fields: Any) -> None:
+        with self._session_factory() as session:
+            row = session.get(BacktestValidation, validation_id)
+            if row is None:
+                return
+            for key, value in fields.items():
+                setattr(row, key, value)
+            session.add(row)
+            session.commit()
+
+    def _work_validation(self, validation_id: int, params: ValidationParams, base_settings: AppSettings) -> None:
+        try:
+            self._update_validation(validation_id, status=RUN_RUNNING, started_at=utcnow_naive())
+            book = PriceBook.load(self._store_getter(), [*params.symbols, *BENCHMARK_SYMBOLS], params.start, params.end)
+            step = {"next": 0}
+
+            def progress(done: int, total: int, label: str, days_done: int, days_total: int) -> None:
+                # Day progress is written about PROGRESS_UPDATES_PER_RUN times per window run, like a plain run.
+                if days_total:
+                    if days_done <= 1:
+                        step["next"] = 0  # a new window started
+                    if days_done < step["next"] and days_done < days_total:
+                        return
+                    step["next"] = days_done + max(1, days_total // PROGRESS_UPDATES_PER_RUN)
+                self._update_validation(
+                    validation_id, progress_runs_done=done, progress_runs_total=total, progress_label=label,
+                    progress_days_done=days_done, progress_days_total=days_total,
+                )
+
+            def fold_done(record: dict[str, Any]) -> None:
+                self._update_validation(validation_id, result_json=json.dumps(record))
+
+            record = run_validation(
+                params, base_settings, book, progress=progress, should_cancel=self._cancel.is_set, on_fold_done=fold_done
+            )
+            self._update_validation(
+                validation_id, result_json=json.dumps(record),
+                status=RUN_CANCELLED if record["status"] == "cancelled" else RUN_DONE,
+                finished_at=utcnow_naive(), progress_label=None,
+            )
+        except BacktestInputError as exc:
+            self._update_validation(validation_id, status=RUN_FAILED, error=str(exc), finished_at=utcnow_naive())
+        except Exception as exc:  # noqa: BLE001 - a job must always end in a final state
+            logger.exception("Validation #%s failed", validation_id)
+            self._update_validation(
+                validation_id, status=RUN_FAILED, error=f"{type(exc).__name__}: {exc}", finished_at=utcnow_naive()
+            )
+        finally:
+            self._active_validation_id = None
+
     # ---- the worker --------------------------------------------------------
 
     def _update(self, run_id: int, **fields: Any) -> None:
@@ -195,9 +314,10 @@ class BacktestManager:
                     self._update(run_id, progress_days_done=done, progress_days_total=total, progress_date=day)
 
             result = run_backtest(
-                params, settings, book, progress=progress, should_cancel=self._cancel.is_set
+                params, settings, book, progress=progress, should_cancel=self._cancel.is_set,
+                fact_session_factory=self._session_factory,
             )
-            coverage = describe_coverage(settings.min_confidence_for_trade, live_min_confidence)
+            coverage = describe_coverage(settings.min_confidence_for_trade, live_min_confidence, **params.dated_switches())
             # The random-entry baseline follows a main run that finished (a request that
             # does not carry the baseline fields, e.g. a direct call, gets none).
             baseline_runs = getattr(params, "baseline_runs", 0) if getattr(params, "run_baseline", False) else 0
@@ -319,6 +439,17 @@ def run_equity(session: Session, run_id: int) -> list[BacktestEquityPoint]:
     return list(
         session.exec(select(BacktestEquityPoint).where(BacktestEquityPoint.run_id == run_id).order_by(BacktestEquityPoint.day)).all()
     )
+
+
+def get_validation(session: Session, validation_id: int) -> BacktestValidation:
+    row = session.get(BacktestValidation, validation_id)
+    if row is None:
+        raise BacktestNotFoundError(f"no validation #{validation_id}")
+    return row
+
+
+def list_validations(session: Session, limit: int = 50) -> list[BacktestValidation]:
+    return list(session.exec(select(BacktestValidation).order_by(BacktestValidation.id.desc()).limit(limit)).all())
 
 
 _default_manager: BacktestManager | None = None

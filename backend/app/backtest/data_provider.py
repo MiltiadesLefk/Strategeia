@@ -38,6 +38,16 @@ composite provider does when every source fails (raise AllProvidersFailedError f
 overview/financials/news; None or [] for the rest), so every scorer that depends
 on them contributes 0 points: this is the price-only core.
 
+Two things beyond prices can be rebuilt for a past date, each switched on per run:
+* `overview_from_prices` (the fundamentals switch): the company overview carries the
+  52-week high and low taken from the bars visible at the moment (market cap,
+  P/E, revenue and EPS stay None: nothing dated is stored for them).
+* `dated_sources` (see backtest/dated_sources.py): revenue history by SEC filing
+  date, insider buying by Form 4 acceptance time, the earnings surprise record by
+  report day. Any part left out raises/returns "nothing" as above.
+The date of the NEXT earnings report is never answered (no source says when it was
+announced), so `get_earnings_date` stays None.
+
 Extension seam
 --------------
 `dated_sources` is where later dated data (SEC filings with their filing dates,
@@ -84,6 +94,10 @@ logger = logging.getLogger(__name__)
 HISTORY_LOOKBACK_DAYS = 800
 
 OHLCV_COLUMNS = ["date", "open", "high", "low", "close", "volume"]
+# The 52-week range looks back this many calendar days, and needs at least this
+# many bars inside the window (about 80% of a year) to count as a 52-week range.
+WEEK52_WINDOW_DAYS = 365
+MIN_BARS_FOR_52_WEEK_RANGE = 200
 VOLUME_AVERAGE_BARS = 20
 
 
@@ -218,12 +232,24 @@ class BacktestDataProvider:
 
     name = "backtest"
 
-    def __init__(self, book: PriceBook, *, dated_sources: Any | None = None, record_calls: bool = False):
+    def __init__(
+        self,
+        book: PriceBook,
+        *,
+        dated_sources: Any | None = None,
+        record_calls: bool = False,
+        overview_from_prices: bool = False,
+    ):
         self._book = book
         self._sources = dated_sources
+        self._overview_from_prices = overview_from_prices
         self.record_calls = record_calls
         self.calls: list[ProvidedCall] = []
         self._cutoff_for: tuple[datetime, date] | None = None
+
+    @property
+    def dated_sources(self) -> Any | None:
+        return self._sources
 
     # ---- the as-of rule ----------------------------------------------------
 
@@ -363,7 +389,34 @@ class BacktestDataProvider:
         handler = self._handler("company_overview")
         if handler is not None:
             return handler(symbol, self._moment())
+        if self._overview_from_prices:
+            return self._price_overview(symbol)
         raise AllProvidersFailedError(f"backtest: no dated company overview for {symbol}")
+
+    def _price_overview(self, symbol: str) -> CompanyOverview:
+        """The overview a price history can support: the 52-week range over the
+        visible bars. The window is the 365 days up to the decision date, and a
+        history shorter than MIN_BARS_FOR_52_WEEK_RANGE is refused rather than
+        reported as a (too narrow) 52-week range."""
+        moment = self._moment()
+        series = self._series(symbol)
+        visible = self._visible(series, moment)
+        self._guard(series, visible, moment)
+        anchor = to_market_time(moment).date()
+        low = int(np.searchsorted(series.days, np.datetime64(anchor - timedelta(days=WEEK52_WINDOW_DAYS), "D"), side="left"))
+        if visible - low < MIN_BARS_FOR_52_WEEK_RANGE:
+            raise AllProvidersFailedError(f"backtest: too little {symbol} history to know a 52-week range at {moment}")
+        self._log("get_company_overview", symbol, moment, series.days[visible - 1].astype(object), visible - low)
+        return CompanyOverview(
+            symbol=symbol,
+            name=symbol,
+            market_cap=None,
+            pe_ratio=None,
+            revenue_ttm=None,
+            eps_ttm=None,
+            week52_low=float(series.lows[low:visible].min()),
+            week52_high=float(series.highs[low:visible].max()),
+        )
 
     def get_financials(self, symbol: str) -> FinancialsData:
         handler = self._handler("financials")

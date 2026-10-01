@@ -153,7 +153,7 @@ def test_only_one_run_at_a_time_and_cancel_keeps_the_partial_run(env, monkeypatc
     client, manager, _ = env
     started = threading.Event()
 
-    def slow_run(params, settings, book, *, progress=None, should_cancel=None, provider=None):
+    def slow_run(params, settings, book, *, progress=None, should_cancel=None, provider=None, fact_session_factory=None):
         started.set()
         while not should_cancel():
             time.sleep(0.01)

@@ -29,6 +29,7 @@ import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { BaselineHistogram, DrawdownChart, EquityVsBenchmarkChart } from '../components/backtest/BacktestCharts';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR } from '../components/common';
+import { ValidationTab } from '../components/backtest/ValidationTab';
 
 const MACHINERY_CHECK_SYMBOLS = ['NVDA', 'AAPL'];
 const DEFAULT_RUN_YEARS = 3;
@@ -84,6 +85,9 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
   const [endDate, setEndDate] = useState('');
   const [every, setEvery] = useState(1);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [includeFundamentals, setIncludeFundamentals] = useState(false);
+  const [includeInsiders, setIncludeInsiders] = useState(false);
+  const [includeEarnings, setIncludeEarnings] = useState(false);
   const [baselineOn, setBaselineOn] = useState(true);
   const [baselineRuns, setBaselineRuns] = useState(DEFAULT_BASELINE_RUNS);
   const coverage = useBacktestHistoryCoverage(symbols);
@@ -128,6 +132,9 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
         overrides: body,
         run_baseline: baselineOn && baselineRuns > 0,
         baseline_runs: baselineOn ? baselineRuns : 0,
+        include_fundamentals: includeFundamentals,
+        include_insiders: includeInsiders,
+        include_earnings: includeEarnings,
       },
       { onSuccess: (r) => onStarted(r.id) },
     );
@@ -246,6 +253,29 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
         </div>
       </div>
 
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontWeight: 600, fontSize: 13 }}>Dated data to score (off = prices only)</div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 14 }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={includeFundamentals} onChange={(e) => setIncludeFundamentals(e.target.checked)} />
+            Fundamentals (revenue by filing date, 52-week range)
+          </label>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={includeInsiders} onChange={(e) => setIncludeInsiders(e.target.checked)} />
+            Insider buying
+          </label>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={includeEarnings} onChange={(e) => setIncludeEarnings(e.target.checked)} />
+            Earnings surprise record
+          </label>
+        </div>
+        {(includeFundamentals || includeInsiders || includeEarnings) && (
+          <span className="text-muted" style={{ fontSize: 12 }}>
+            These read data stored beforehand by scripts/backfill_fundamentals.py, backfill_insider_trades.py and backfill_earnings.py. A symbol
+            with nothing stored scores 0 for that part; the run's summary says how much data was found.
+          </span>
+        )}
+      </div>
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14 }}>
           <input type="checkbox" checked={baselineOn} onChange={(e) => setBaselineOn(e.target.checked)} />
@@ -734,6 +764,19 @@ function BaselinePanel({ baseline, running }: { baseline: BacktestBaseline | und
   );
 }
 
+const DATED_PART_NAMES: Record<string, string> = { fundamentals: 'fundamentals', insiders: 'insiders', earnings: 'earnings' };
+
+/** "fundamentals: 12 symbols had data (80% of 1,200 lookups)", from the run summary, or null when the run was price-only. */
+function datedAvailability(summary: BacktestRun['summary']): string | null {
+  const raw = summary?.dated_data;
+  if (!raw || typeof raw !== 'object') return null;
+  const parts = Object.entries(raw as Record<string, { requests?: number; answered?: number; symbols_with_data?: number }>).map(([part, v]) => {
+    const requests = v.requests ?? 0;
+    const share = requests > 0 ? Math.round(((v.answered ?? 0) / requests) * 100) : 0;
+    return `${DATED_PART_NAMES[part] ?? part}: ${v.symbols_with_data ?? 0} symbol(s) had data (${share}% of ${requests} lookups)`;
+  });
+  return parts.length ? parts.join('; ') : null;
+}
 function CoveragePanel({ run }: { run: BacktestRun }) {
   const c = run.coverage;
   const s = run.summary;
@@ -744,7 +787,7 @@ function CoveragePanel({ run }: { run: BacktestRun }) {
       <div style={{ fontSize: 13 }}>{c.summary}</div>
       <div className="split-row">
         <div>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Scored (prices only)</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{c.profile === 'price_plus_dated_data' ? 'Scored (prices plus the dated data switched on)' : 'Scored (prices only)'}</div>
           <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: 13 }}>
             {c.active_parts.map((p) => (
               <li key={p.part}>{p.label}: up to {p.points_max} points{p.note ? ` (${p.note})` : ''}</li>
@@ -760,6 +803,11 @@ function CoveragePanel({ run }: { run: BacktestRun }) {
           </ul>
         </div>
       </div>
+      {datedAvailability(s) && (
+        <div className="text-muted" style={{ fontSize: 12 }}>
+          Dated data found: {datedAvailability(s)}
+        </div>
+      )}
       <div className="text-muted" style={{ fontSize: 12 }}>
         Confidence bar {c.min_confidence_for_trade}% needs {c.bar_points_needed ?? 'more than the maximum'} of the {c.achievable_points} reachable points
         {c.bar_reachable ? '.' : ', which is not reachable: no trade could be taken.'}
@@ -905,6 +953,46 @@ export function BacktestsPage() {
     else next.set('run', String(id));
     setParams(next);
   };
+  const validationTab = params.get('tab') === 'validation';
+  const setTab = (tab: 'runs' | 'validation') => {
+    const next = new URLSearchParams(params);
+    if (tab === 'validation') next.set('tab', 'validation');
+    else next.delete('tab');
+    setParams(next);
+  };
+  const selectedValidation = params.get('validation') ? Number(params.get('validation')) : null;
+  const selectValidation = (id: number | null) => {
+    const next = new URLSearchParams(params);
+    if (id === null) next.delete('validation');
+    else next.set('validation', String(id));
+    setParams(next);
+  };
+  const tabs = (
+    <div role="tablist" style={{ display: 'flex', gap: 8 }}>
+      <button role="tab" aria-selected={!validationTab} className={validationTab ? 'btn btn-secondary' : 'btn'} onClick={() => setTab('runs')}>
+        Runs
+      </button>
+      <button role="tab" aria-selected={validationTab} className={validationTab ? 'btn' : 'btn btn-secondary'} onClick={() => setTab('validation')}>
+        Validation
+      </button>
+    </div>
+  );
+  if (validationTab) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="page-header">
+          <div>
+            <h1 style={{ margin: 0 }}>Backtest Lab</h1>
+            <div className="text-muted" style={{ fontSize: 14 }}>
+              Walk-forward validation: does the strategy hold up on days it was not tuned on, and how much of its Sharpe ratio could be luck? Paper trading only; nothing here places an order.
+            </div>
+          </div>
+        </div>
+        {tabs}
+        <ValidationTab selected={selectedValidation} onSelect={selectValidation} />
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="page-header">

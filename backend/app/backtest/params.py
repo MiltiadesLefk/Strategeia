@@ -50,8 +50,28 @@ class BacktestParams(BaseModel):
     end: date
     decision_every_n_days: int = Field(default=1, ge=1, le=MAX_DECISION_EVERY_N_DAYS)
     overrides: SettingsOverrides = Field(default_factory=SettingsOverrides)
+    # Dated, non-price parts of the score a run may add (all off by default: a run
+    # is price-only unless asked). They read facts stored beforehand by the
+    # backfill scripts; a part with no stored facts for a symbol scores 0 there,
+    # and the run's summary says how much data each part actually found.
+    include_fundamentals: bool = False  # revenue growth (SEC filings by filing date) + 52-week range (prices)
+    include_insiders: bool = False  # open-market insider buying (Form 4 by acceptance time)
+    include_earnings: bool = False  # earnings-surprise track record (by report day)
 
     model_config = {"extra": "forbid"}
+
+    @property
+    def uses_dated_facts(self) -> bool:
+        """True when any dated part is on (the fundamentals part also reads stored revenue filings)."""
+        return self.include_fundamentals or self.include_insiders or self.include_earnings
+
+    def dated_switches(self) -> dict[str, bool]:
+        """The three switches as keyword arguments for coverage.describe_coverage."""
+        return {
+            "include_fundamentals": self.include_fundamentals,
+            "include_insiders": self.include_insiders,
+            "include_earnings": self.include_earnings,
+        }
 
     @field_validator("symbols")
     @classmethod

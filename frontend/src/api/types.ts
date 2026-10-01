@@ -831,6 +831,9 @@ export interface BacktestRun {
     decision_every_n_days?: number;
     run_baseline?: boolean;
     baseline_runs?: number;
+    include_fundamentals?: boolean;
+    include_insiders?: boolean;
+    include_earnings?: boolean;
     overrides?: Record<string, number>;
     effective_settings?: Record<string, number | string | boolean>;
     [key: string]: unknown;
@@ -841,6 +844,8 @@ export interface BacktestRun {
 
 export interface BacktestCoverage {
   summary: string;
+  profile?: string;
+  included?: { fundamentals: boolean; insiders: boolean; earnings: boolean };
   live_points_max: number;
   achievable_points: number;
   achievable_max_confidence_pct: number;
@@ -886,6 +891,9 @@ export interface BacktestStartRequest {
   overrides: Record<string, number>;
   run_baseline: boolean;
   baseline_runs: number;
+  include_fundamentals?: boolean;
+  include_insiders?: boolean;
+  include_earnings?: boolean;
 }
 
 export interface BacktestPeriodReturn {
@@ -1188,4 +1196,143 @@ export interface SmartMoneyRefreshResponse {
   rows_created: number;
   unknown_symbols: string[];
   errors: string[];
+}
+
+export interface ValidationKnob {
+  name: string;
+  label: string;
+  kind: 'int' | 'float';
+  low: number;
+  high: number;
+  help: string;
+  live_value: number;
+}
+
+export interface ValidationOptions {
+  knobs: ValidationKnob[];
+  min_folds: number;
+  max_folds: number;
+  default_folds: number;
+  modes: string[];
+  default_mode: string;
+  default_train_ratio: number;
+  min_train_ratio: number;
+  max_train_ratio: number;
+  default_embargo_days: number;
+  max_embargo_days: number;
+  min_window_days: number;
+  max_values_per_knob: number;
+  max_variants: number;
+  max_total_runs: number;
+}
+
+export interface ValidationRequest {
+  symbols: string[];
+  start: string;
+  end: string;
+  folds: number;
+  mode: string;
+  train_ratio: number;
+  embargo_days: number;
+  grid: Record<string, number[]>;
+  overrides: Record<string, number>;
+  decision_every_n_days: number;
+}
+
+export interface ValidationProgress {
+  runs_done: number;
+  runs_total: number;
+  label: string | null;
+  days_done: number;
+  days_total: number;
+}
+
+export interface ValidationWindowStats {
+  total_return_pct: number | null;
+  sharpe: number | null;
+  average_r: number | null;
+  win_rate_pct: number | null;
+  trade_count: number;
+  max_drawdown_pct: number | null;
+  trading_days: number;
+  open_at_end?: number;
+}
+
+export interface ValidationFold {
+  index: number;
+  train: { start: string; end: string; days: number };
+  test: { start: string; end: string; days: number };
+  embargo_days: number;
+  trials: { variant_index: number; params: Record<string, number>; is: ValidationWindowStats }[];
+  selected: {
+    variant_index: number;
+    params: Record<string, number>;
+    basis: string;
+    in_sample: ValidationWindowStats;
+    out_of_sample: ValidationWindowStats;
+  };
+}
+
+export interface ValidationDsr {
+  available: boolean;
+  reason?: string;
+  n_trials: number;
+  n_variants: number;
+  n_observations: number;
+  confidence_level: number;
+  sharpe_annualised?: number;
+  skewness?: number;
+  kurtosis?: number;
+  expected_max_sharpe_annualised?: number;
+  trial_sharpe_std_annualised?: number;
+  trial_spread_known?: boolean;
+  psr?: number;
+  dsr?: number;
+  min_track_record_years?: number | null;
+  reading?: string[];
+}
+
+export interface ValidationResult {
+  status: string;
+  mode: string;
+  folds_requested: number;
+  embargo_days: number;
+  selection_basis: string;
+  variants: { index: number; params: Record<string, number> }[];
+  n_variants: number;
+  n_trials: number;
+  runs_total: number;
+  period: { first_day: string; last_day: string; trading_days: number };
+  folds: ValidationFold[];
+  aggregate: (ValidationWindowStats & {
+    folds_positive: number;
+    folds: number;
+    in_sample_sharpe_mean: number | null;
+    out_of_sample_sharpe_mean: number | null;
+    calendar_days: number;
+  }) | null;
+  dsr: ValidationDsr | null;
+  oos_equity: { day: string; equity: number; open_positions: number }[];
+}
+
+export interface ValidationScorecard {
+  note: string;
+  checks: { key: string; label: string; criterion: string; status: 'pass' | 'fail' | 'insufficient_data'; actual: string; detail?: string | null }[];
+  counts: { pass: number; fail: number; insufficient_data: number; total: number };
+  banners: { key: string; level: 'warning' | 'info'; text: string }[];
+}
+
+export interface BacktestValidation {
+  id: number;
+  status: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+  cancel_requested: boolean;
+  progress: ValidationProgress;
+  strategy_fingerprint: string | null;
+  params: Record<string, unknown>;
+  result?: ValidationResult | null;
+  scorecard?: ValidationScorecard | null;
 }

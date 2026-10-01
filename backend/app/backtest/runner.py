@@ -45,6 +45,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.backtest.calendar import close_moment, decision_moment, trading_days
 from app.backtest.coverage import describe_coverage
 from app.backtest.data_provider import BacktestDataProvider, PriceBook
+from app.backtest.dated_sources import FactBackedSources
 from app.backtest.params import BENCHMARK_SYMBOLS, BacktestInputError, BacktestParams, settings_snapshot
 from app.config import AppSettings
 from app.knowledge.point_in_time import as_of, current_as_of
@@ -163,6 +164,7 @@ def run_backtest(
     should_cancel: Callable[[], bool] | None = None,
     provider: BacktestDataProvider | None = None,
     entry_policy: EntryPolicy | None = None,
+    fact_session_factory: Callable[[], Session] | None = None,
 ) -> BacktestResult:
     """Replay `params` and return the trades, the daily equity and a summary.
 
@@ -170,9 +172,14 @@ def run_backtest(
     may be passed in by tests that need to watch every request. `entry_policy`
     replaces the decision on each (symbol, day): None is the live scoring; the
     random-entry baseline (baseline.py) passes its own. Exits, fills, sizing
-    caps and the equity curve are the same whichever policy decides."""
+    caps and the equity curve are the same whichever policy decides.
+
+    `fact_session_factory` opens a read-only session on the database that holds the
+    dated facts (revenue filings, Form 4s, earnings reports): it is needed when the
+    run switches any of those parts on (include_fundamentals / include_insiders /
+    include_earnings)."""
     validate_run(params, book)
-    provider = provider or BacktestDataProvider(book)
+    provider = provider or _provider_for(params, book, fact_session_factory, entry_policy)
     llm = NullLLMProvider()
     days = trading_days(params.start, params.end)
     if not days:
@@ -212,14 +219,51 @@ def run_backtest(
     finally:
         scratch.dispose()
 
-    coverage = describe_coverage(settings.min_confidence_for_trade)
+    coverage = describe_coverage(settings.min_confidence_for_trade, **_coverage_switches(params, entry_policy))
     summary = summarize(
         params, settings, book, days, equity, trades, stats, errors, points_histogram, first_evaluated,
         skipped, decision_days, cancelled,
     )
+    availability = getattr(provider.dated_sources, "availability", None)
+    if availability is not None:
+        summary["dated_data"] = availability()
     return BacktestResult(
         status="cancelled" if cancelled else "done", trades=trades, equity=equity, summary=summary, coverage=coverage
     )
+
+
+def _coverage_switches(params: BacktestParams, entry_policy: EntryPolicy | None) -> dict[str, bool]:
+    """The dated-part switches that actually applied: a run with a replacement entry
+    policy (the random baseline) never scores, so it is price-only whatever the flags."""
+    if entry_policy is not None:
+        return {}
+    return params.dated_switches()
+
+
+def _provider_for(
+    params: BacktestParams,
+    book: PriceBook,
+    fact_session_factory: Callable[[], Session] | None,
+    entry_policy: EntryPolicy | None,
+) -> BacktestDataProvider:
+    """The data a run sees: prices, plus the dated parts its flags switch on. The
+    52-week range needs only prices; revenue, insiders and earnings need the stored
+    facts, so asking for them without a way to read the facts is an error, never a
+    silent price-only run that reports itself as something more."""
+    if entry_policy is not None or not params.uses_dated_facts:
+        return BacktestDataProvider(book)
+    if fact_session_factory is None:
+        raise BacktestInputError(
+            "this run asks for dated data (fundamentals, insiders or earnings) but no database of stored facts was "
+            "given: run scripts/backfill_fundamentals.py, backfill_insider_trades.py or backfill_earnings.py first"
+        )
+    sources = FactBackedSources(
+        fact_session_factory,
+        fundamentals=params.include_fundamentals,
+        insiders=params.include_insiders,
+        earnings=params.include_earnings,
+    )
+    return BacktestDataProvider(book, dated_sources=sources, overview_from_prices=params.include_fundamentals)
 
 
 def _decide(
@@ -466,6 +510,9 @@ def params_to_json(params: BacktestParams, settings: AppSettings, book: PriceBoo
         "start": params.start.isoformat(),
         "end": params.end.isoformat(),
         "decision_every_n_days": params.decision_every_n_days,
+        "include_fundamentals": params.include_fundamentals,
+        "include_insiders": params.include_insiders,
+        "include_earnings": params.include_earnings,
         "run_baseline": getattr(params, "run_baseline", False),
         "baseline_runs": getattr(params, "baseline_runs", 0),
         "overrides": params.overrides.model_dump(exclude_none=True),

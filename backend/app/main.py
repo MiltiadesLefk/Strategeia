@@ -11,6 +11,7 @@ from app.api.routers import signals as signals_router
 from app.api.routers import strategy as strategy_router
 from app.api.routers import calibration as calibration_router
 from app.api.routers import data_cache as data_cache_router
+from app.api.routers import backtest_validations as backtest_validations_router
 from app.api.routers import backtests as backtests_router
 from app.api.routers import missed_trades as missed_trades_router
 from app.api.routers import watchers as watchers_router
@@ -96,6 +97,8 @@ app.include_router(data_cache_router.router)
 app.include_router(watchlist_router.router)
 app.include_router(watchers_router.router)
 app.include_router(strategy_router.router)
+# Before the backtests router: its /{run_id} route would swallow /validations.
+app.include_router(backtest_validations_router.router)
 app.include_router(backtests_router.router)
 app.include_router(missed_trades_router.router)
 app.include_router(smart_money_router.router)

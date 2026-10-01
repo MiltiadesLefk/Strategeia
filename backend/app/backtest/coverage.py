@@ -3,7 +3,11 @@ confidence bar means for them.
 
 A live plan can earn up to MAX_SCORE_FOR_CONFIDENCE (16) points. A price-only
 backtest only has prices, so only the parts built from prices can score; the rest
-contribute 0 because their data is unavailable (see data_provider.py). That makes
+contribute 0 because their data is unavailable (see data_provider.py). A run may
+switch on the dated parts that CAN be rebuilt for a past date (fundamentals,
+insider buying, the earnings-surprise record); each switched-on part moves from
+"not in this run" to "scored" and raises the reachable points by what it can
+actually add. That makes
 the confidence percentage on a backtested plan a share of 16 points of which only
 some are reachable, and the live bar (`min_confidence_for_trade`, 30% = 5 points)
 is therefore a much higher bar here than it is live. This module spells that out
@@ -37,6 +41,22 @@ from app.services.trade_plan_service import (
 TECHNICAL_VOLUME_POINT = 1
 
 PROFILE_PRICE_ONLY = "price_only"
+PROFILE_PRICE_PLUS_DATED = "price_plus_dated_data"
+
+# What each switched-on part can add. Fundamentals: +1 for revenue growth and +1 for
+# sitting near the 52-week high (a near-low position is a separate branch of the
+# same rule, so the two price-range cases never add up); the third live point is the
+# earnings-date penalty, which is a deduction and is not rebuilt (see below).
+# A test (test_backtest_dated_data.py) checks these numbers against the real scorers.
+FUNDAMENTALS_REACHABLE_POINTS = 2
+
+
+# The switchable parts and how a summary sentence names them.
+OPTIONAL_PART_NAMES = {
+    "fundamentals": "fundamentals",
+    "insider": "insider buying",
+    "earnings_surprise": "the earnings surprise record",
+}
 
 
 def points_needed_for(min_confidence_for_trade: int) -> int | None:
@@ -48,8 +68,16 @@ def points_needed_for(min_confidence_for_trade: int) -> int | None:
     return None
 
 
-def describe_coverage(min_confidence_for_trade: int, live_min_confidence_for_trade: int | None = None) -> dict[str, Any]:
-    """The coverage record stored with a run (JSON-able)."""
+def describe_coverage(
+    min_confidence_for_trade: int,
+    live_min_confidence_for_trade: int | None = None,
+    *,
+    include_fundamentals: bool = False,
+    include_insiders: bool = False,
+    include_earnings: bool = False,
+) -> dict[str, Any]:
+    """The coverage record stored with a run (JSON-able). The `include_*` flags are
+    the run's switches for the dated parts (see params.BacktestParams)."""
     active = [
         {
             "part": "technical",
@@ -74,12 +102,41 @@ def describe_coverage(min_confidence_for_trade: int, live_min_confidence_for_tra
             "note": "can only subtract",
         },
     ]
+    optional_parts = [
+        (
+            include_fundamentals, "fundamentals", "Fundamentals: revenue growth and nearness to the 52-week high or low",
+            FUNDAMENTALS_REACHABLE_POINTS, FUNDAMENTAL_SCORE_CAP,
+            "revenue by SEC filing date; the 52-week range from prices; market cap, P/E and the earnings-date penalty are not rebuilt",
+            "no dated company data in a price history (switch it on for this run)",
+        ),
+        (
+            include_insiders, "insider", "Insider buying (Form 4)", INSIDER_SCORE_CAP, INSIDER_SCORE_CAP,
+            "dated by SEC acceptance time; a symbol whose filings were never downloaded scores 0",
+            "dated insider filings are available but were not switched on for this run",
+        ),
+        (
+            include_earnings, "earnings_surprise", "Earnings surprise record", SURPRISE_TRACK_RECORD_CAP, SURPRISE_TRACK_RECORD_CAP,
+            "dated by report day (public from the end of that day); needs 4 reported quarters",
+            "dated earnings history is available but was not switched on for this run",
+        ),
+    ]
+    for enabled, part, label, points_max, live_max, note, _reason in optional_parts:
+        if enabled:
+            active.append(
+                {"part": part, "label": label, "points_max": points_max, "live_points_max": live_max, "note": note}
+            )
     inactive = [
-        ("fundamentals", "Fundamentals", FUNDAMENTAL_SCORE_CAP, "no dated company data in a price history"),
+        (part, label, cap, reason)
+        for enabled, part, label, _points, cap, _note, reason in optional_parts
+        if not enabled
+    ]
+    inactive += [
         ("news", "News sentiment", NEWS_SCORE_CAP, "no free dated news history"),
         ("options", "Options positioning", OPTIONS_SCORE_CAP, "no free options history"),
-        ("insider", "Insider buying", INSIDER_SCORE_CAP, "dated insider filings are not plugged in yet"),
-        ("earnings_surprise", "Earnings surprise record", SURPRISE_TRACK_RECORD_CAP, "dated earnings history is not plugged in yet"),
+        (
+            "earnings_date", "Earnings-date proximity (penalty inside the fundamentals score)", 1,
+            "no source says when the next report date was announced, so it is never used (a backtest trades into reports a little more freely than the live app)",
+        ),
         ("expected_move", "Options-implied expected move (penalty)", EXPECTED_MOVE_SCORE_CAP, "no options history"),
         ("macro_event", "Macro-event proximity (penalty)", MACRO_EVENT_SCORE_CAP, "the event calendar covers 2026 only, so it is left out"),
         ("ai_overlay", "AI trading overlay (penalty)", AI_OVERLAY_SCORE_CAP, "an AI that already knows what happened cannot be tested honestly"),
@@ -87,12 +144,25 @@ def describe_coverage(min_confidence_for_trade: int, live_min_confidence_for_tra
     achievable = sum(part["points_max"] for part in active)
     live_bar_points = points_needed_for(live_min_confidence_for_trade if live_min_confidence_for_trade is not None else min_confidence_for_trade)
     bar_points = points_needed_for(min_confidence_for_trade)
-    return {
-        "profile": PROFILE_PRICE_ONLY,
-        "summary": (
+    switched_on = [OPTIONAL_PART_NAMES[part["part"]] for part in active if part["part"] in OPTIONAL_PART_NAMES]
+    if switched_on:
+        summary = (
+            f"Prices plus dated data ({', '.join(switched_on)}): {achievable} of the {MAX_SCORE_FOR_CONFIDENCE} "
+            "live points can be earned. News, options, the earnings date, macro events and the AI contribute 0"
+            + ("" if all(p in {x["part"] for x in active} for p in OPTIONAL_PART_NAMES) else ", as do the dated parts left switched off")
+            + "."
+        )
+    else:
+        summary = (
             f"Price-only: {achievable} of the {MAX_SCORE_FOR_CONFIDENCE} live points can be earned. "
             "News, options, fundamentals, insiders, earnings history, macro events and the AI all contribute 0."
-        ),
+        )
+    return {
+        "profile": PROFILE_PRICE_PLUS_DATED if switched_on else PROFILE_PRICE_ONLY,
+        "included": {
+            "fundamentals": include_fundamentals, "insiders": include_insiders, "earnings": include_earnings,
+        },
+        "summary": summary,
         "live_points_max": MAX_SCORE_FOR_CONFIDENCE,
         "achievable_points": achievable,
         "achievable_max_confidence_pct": _confidence_score(achievable),

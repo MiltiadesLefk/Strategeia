@@ -623,3 +623,56 @@ export function useRefreshSmartMoneyInsiders() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: smartMoneyKeys.all }),
   });
 }
+
+// ---- Backtest Lab: walk-forward validation ----
+
+import type { BacktestValidation, ValidationOptions, ValidationRequest } from './types';
+
+export const validationKeys = {
+  list: ['backtest-validations'] as const,
+  one: (id: number) => ['backtest-validations', id] as const,
+  options: ['backtest-validations', 'options'] as const,
+};
+
+/** The settings a sweep may vary (with live values) and the request limits. Read-only. */
+export function useValidationOptions() {
+  return useQuery({
+    queryKey: validationKeys.options,
+    queryFn: () => api.get<ValidationOptions>('/api/backtests/validation-options'),
+  });
+}
+
+/** Past validations, newest first; polls while one is going. */
+export function useValidations() {
+  return useQuery({
+    queryKey: validationKeys.list,
+    queryFn: () => api.get<BacktestValidation[]>('/api/backtests/validations?limit=50'),
+    refetchInterval: (query) => (query.state.data?.some((v) => backtestActive(v.status)) ? BACKTEST_POLL_MS : false),
+  });
+}
+
+/** One validation with its folds, out-of-sample curve, deflated Sharpe and scorecard; polls while it runs. */
+export function useValidation(id: number | null) {
+  return useQuery({
+    queryKey: validationKeys.one(id ?? 0),
+    queryFn: () => api.get<BacktestValidation>(`/api/backtests/validations/${id}`),
+    enabled: id !== null,
+    refetchInterval: (query) => (backtestActive(query.state.data?.status) ? BACKTEST_POLL_MS : false),
+  });
+}
+
+export function useStartValidation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ValidationRequest) => api.post<{ id: number; status: string }>('/api/backtests/validate', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: validationKeys.list }),
+  });
+}
+
+export function useCancelValidation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.post<{ id: number; status: string }>(`/api/backtests/validations/${id}/cancel`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: validationKeys.list }),
+  });
+}
