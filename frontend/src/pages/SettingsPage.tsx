@@ -6,7 +6,7 @@ import { DecisionModelField } from '../components/DecisionModelField';
 import { decisionModelInvalid } from '../lib/decisionModel';
 import { DataCacheCard } from '../components/DataCacheCard';
 import { WatchlistCard } from '../components/WatchlistCard';
-import type { AiOverlayObjectionAction } from '../api/types';
+import type { AiOverlayObjectionAction, TestConnectionOverrides } from '../api/types';
 
 const LLM_OPTIONS = [
   { value: 'none', label: 'None (rule-based text)' },
@@ -215,6 +215,38 @@ export function SettingsPage() {
     setAiOverlayAction(settings.ai_overlay_objection_action);
   }, [settings]);
 
+  // What the test buttons send: the values in the form right now, saved or not.
+  // A secret is only included once something was typed into it (an untouched
+  // field is the masked saved key, which the backend treats as "use the saved one").
+  function testOverridesLlm(): TestConnectionOverrides {
+    const o: TestConnectionOverrides = { llm_provider: llmProvider };
+    if (llmProvider === 'claude_code_cli') {
+      o.claude_cli_model = claudeCliModel.trim();
+      o.claude_cli_decision_model = claudeDecisionModel.trim();
+    } else if (llmProvider === 'openrouter') {
+      if (openrouterKey) o.openrouter_api_key = openrouterKey;
+      o.openrouter_model = openrouterModel.trim();
+      o.openrouter_decision_model = openrouterDecisionModel.trim();
+    } else if (llmProvider === 'orcarouter') {
+      if (orcarouterKey) o.orcarouter_api_key = orcarouterKey;
+      o.orcarouter_model = orcarouterModel.trim();
+      o.orcarouter_decision_model = orcarouterDecisionModel.trim();
+    } else if (llmProvider === 'openai') {
+      if (openaiKey) o.openai_api_key = openaiKey;
+      o.openai_model = openaiModel.trim();
+      o.openai_decision_model = openaiDecisionModel.trim();
+    } else if (llmProvider === 'gemini') {
+      if (geminiKey) o.gemini_api_key = geminiKey;
+      o.gemini_model = geminiModel.trim();
+      o.gemini_decision_model = geminiDecisionModel.trim();
+    }
+    return o;
+  }
+  const testOverridesFinnhub = (): TestConnectionOverrides => (finnhubKey ? { finnhub_api_key: finnhubKey } : {});
+  const testOverridesTelegram = (): TestConnectionOverrides => ({
+    ...(telegramToken ? { telegram_bot_token: telegramToken } : {}),
+    telegram_chat_id: telegramChatId,
+  });
   function saveLlm() {
     if (llmMissingKey || claudeModelInvalid || decisionModelBad) return;
     update(
@@ -544,15 +576,18 @@ export function SettingsPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
           <ResetButton onClick={resetLlm} />
-          <button className="btn btn-secondary" onClick={() => testLlm('llm')} disabled={testingLlm}>
+          <button className="btn btn-secondary" onClick={() => testLlm({ target: 'llm', overrides: testOverridesLlm() })}
+            disabled={testingLlm || claudeModelInvalid || decisionModelBad}
+            title="Tests what is in this form right now, saved or not"
+          >
             {testingLlm ? 'Testing…' : 'Test Connection'}
           </button>
           {llmProvider !== 'none' && (
             <button
               className="btn btn-secondary"
-              onClick={() => testLlm({ target: 'llm', tier: 'decision' })}
-              disabled={testingLlm}
-              title="Tests the saved decision model (or the routine one when none is set)"
+              onClick={() => testLlm({ target: 'llm', tier: 'decision', overrides: testOverridesLlm() })}
+              disabled={testingLlm || claudeModelInvalid || decisionModelBad}
+              title="Tests the decision model in this form (the routine one when it is blank), saved or not"
             >
               Test decision model
             </button>
@@ -697,7 +732,10 @@ export function SettingsPage() {
           <SaveButton pending={saving || testingFinnhub} justSaved={justSavedKey === 'finnhub'} onClick={saveFinnhub} disabled={finnhubMissingKey} />
           <ResetButton onClick={resetFinnhub} />
           {finnhubEnabled && (
-            <button className="btn btn-secondary" onClick={() => testFinnhub('finnhub')} disabled={testingFinnhub}>
+            <button className="btn btn-secondary" onClick={() => testFinnhub({ target: 'finnhub', overrides: testOverridesFinnhub() })}
+              disabled={testingFinnhub}
+              title="Tests what is in this form right now, saved or not"
+            >
               {testingFinnhub ? 'Testing…' : 'Test Connection'}
             </button>
           )}
@@ -737,7 +775,10 @@ export function SettingsPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <SaveButton pending={saving || testingTelegram} justSaved={justSavedKey === 'telegram'} onClick={saveTelegram} disabled={telegramIncomplete} />
           <ResetButton onClick={resetTelegram} />
-          <button className="btn btn-secondary" onClick={() => testTelegram('telegram')} disabled={testingTelegram}>
+          <button className="btn btn-secondary" onClick={() => testTelegram({ target: 'telegram', overrides: testOverridesTelegram() })}
+            disabled={testingTelegram || telegramIncomplete}
+            title="Tests what is in this form right now, saved or not"
+          >
             {testingTelegram ? 'Testing…' : 'Test Connection'}
           </button>
         </div>

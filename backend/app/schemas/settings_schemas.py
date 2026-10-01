@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.config import AiOverlayObjectionAction, normalize_api_model, normalize_claude_cli_model
 from app.llm_providers.base import LLMTier
@@ -79,11 +79,73 @@ class SettingsUpdateRequest(BaseModel):
         return None if value is None else normalize_api_model(value, allow_slash=False)
 
 
+class TestConnectionOverrides(BaseModel):
+    """What is typed in a Settings card but not saved yet. A test button sends
+    these so it tests what the form shows, not what happens to be on disk.
+
+    Nothing here is ever persisted. A field left out (None) means "use the saved
+    value". For secrets, the provider and the chat id, a blank value also means
+    "use the saved value", and so does a masked hint such as "••••ab12" (that is
+    what the settings API shows for a saved secret, never the secret itself). A
+    model name is the exception: blank is a real choice there ("don't pin" for
+    the Claude CLI, "use the routine model" for a decision model), so "" is
+    tested as typed. Unknown keys are rejected so a typo cannot silently test
+    the saved value instead.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    llm_provider: str | None = None
+    claude_cli_model: str | None = None
+    claude_cli_decision_model: str | None = None
+    openrouter_api_key: str | None = None
+    openrouter_model: str | None = None
+    openrouter_decision_model: str | None = None
+    orcarouter_api_key: str | None = None
+    orcarouter_model: str | None = None
+    orcarouter_decision_model: str | None = None
+    openai_api_key: str | None = None
+    openai_model: str | None = None
+    openai_decision_model: str | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str | None = None
+    gemini_decision_model: str | None = None
+    finnhub_api_key: str | None = None
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
+    @field_validator("claude_cli_model", "claude_cli_decision_model")
+    @classmethod
+    def _validate_claude_cli_model(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_claude_cli_model(value)
+
+    @field_validator(
+        "openrouter_model",
+        "orcarouter_model",
+        "openai_model",
+        "openrouter_decision_model",
+        "orcarouter_decision_model",
+        "openai_decision_model",
+    )
+    @classmethod
+    def _validate_api_model(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_api_model(value)
+
+    @field_validator("gemini_model", "gemini_decision_model")
+    @classmethod
+    def _validate_gemini_model(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_api_model(value, allow_slash=False)
+
+
 class TestConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     target: str  # "llm" | "finnhub" | "telegram"
     # Which model tier to test when target is "llm": the routine model (the
     # narratives) or the decision model (the AI overlay's verdict).
     tier: LLMTier = "routine"
+    # Unsaved form values to test instead of the saved ones (see the class).
+    overrides: TestConnectionOverrides | None = None
 
 
 class TestConnectionResponse(BaseModel):

@@ -418,6 +418,34 @@ export interface TestConnectionResponse {
   message: string;
 }
 
+/** Unsaved Settings-form values a test button sends so it tests what is typed, not what is saved.
+ *  Nothing here is persisted; a missing field (or a blank secret) means "use the saved value". */
+export interface TestConnectionOverrides {
+  llm_provider?: string;
+  claude_cli_model?: string;
+  claude_cli_decision_model?: string;
+  openrouter_api_key?: string;
+  openrouter_model?: string;
+  openrouter_decision_model?: string;
+  orcarouter_api_key?: string;
+  orcarouter_model?: string;
+  orcarouter_decision_model?: string;
+  openai_api_key?: string;
+  openai_model?: string;
+  openai_decision_model?: string;
+  gemini_api_key?: string;
+  gemini_model?: string;
+  gemini_decision_model?: string;
+  finnhub_api_key?: string;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
+}
+
+export type TestConnectionArg =
+  | 'llm'
+  | 'finnhub'
+  | 'telegram'
+  | { target: 'llm' | 'finnhub' | 'telegram'; tier?: 'routine' | 'decision'; overrides?: TestConnectionOverrides };
 /** What the AI Trading Overlay's objection actually does. One choice, not a
  *  set of flags: "cancel" and "hold" fire on the same trigger and cancel
  *  always wins, so they can never both be in effect. */

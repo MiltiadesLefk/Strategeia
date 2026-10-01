@@ -17,6 +17,7 @@ import type {
   ScanResponse,
   SettingsStatus,
   SettingsUpdateRequest,
+  TestConnectionArg,
   TestConnectionResponse,
   TradePlan,
   UniverseEntry,
@@ -308,7 +309,8 @@ export function useLogout() {
 export function useTestConnection() {
   return useMutation({
     // `tier` only matters for 'llm': the routine model (narratives, the default) or the decision model (AI overlay).
-    mutationFn: (arg: 'llm' | 'finnhub' | 'telegram' | { target: 'llm'; tier: 'routine' | 'decision' }) =>
+    // `overrides` carries unsaved form values so the test uses what is typed, not only what is saved.
+    mutationFn: (arg: TestConnectionArg) =>
       api.post<TestConnectionResponse>('/api/settings/test-connection', typeof arg === 'string' ? { target: arg } : arg),
   });
 }

@@ -3,12 +3,15 @@ import {
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
+  TickMarkType,
   createChart,
   type IChartApi,
   type ISeriesApi,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { Candle, SeriesPoint } from '../../api/types';
+import { formatEtCrosshair, formatEtTick } from '../../lib/intraday';
 
 function toTime(date: string): UTCTimestamp {
   // Daily bars arrive as a bare "YYYY-MM-DD"; intraday bars (1D/1W ranges)
@@ -89,7 +92,25 @@ export function CandlestickChart({
       height,
       layout: { background: { color: '#12151e' }, textColor: '#8b8fa3', attributionLogo: false },
       grid: { vertLines: { color: '#1c202c' }, horzLines: { color: '#1c202c' } },
-      timeScale: { borderColor: '#1e2332', timeVisible: intraday, secondsVisible: false },
+      timeScale: {
+        borderColor: '#1e2332',
+        timeVisible: intraday,
+        secondsVisible: false,
+        // Intraday only: lightweight-charts labels every timestamp as UTC, so a 9:30 am open
+        // read 1:30 pm. Daily ranges keep the default, which is correct for a bare date.
+        ...(intraday
+          ? {
+              tickMarkFormatter: (time: Time, type: TickMarkType) => {
+                const seconds = time as number;
+                if (type === TickMarkType.Year) return formatEtTick(seconds, 'year');
+                if (type === TickMarkType.Month) return formatEtTick(seconds, 'month');
+                if (type === TickMarkType.DayOfMonth) return formatEtTick(seconds, 'day');
+                return formatEtTick(seconds, 'time');
+              },
+            }
+          : {}),
+      },
+      ...(intraday ? { localization: { timeFormatter: (time: Time) => formatEtCrosshair(time as number) } } : {}),
       rightPriceScale: { borderColor: '#1e2332', scaleMargins: { top: 0.08, bottom: 0.22 } },
       crosshair: { mode: 0 },
     });
@@ -199,7 +220,7 @@ export function CandlestickChart({
       const at = new Date((param.time as number) * 1000);
       setHover({
         time: intraday
-          ? at.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+          ? formatEtCrosshair(param.time as number)
           : at.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
         rows,
       });
@@ -225,6 +246,11 @@ export function CandlestickChart({
   return (
     <div style={{ position: 'relative', width: '100%' }}>
       <div ref={containerRef} style={{ width: '100%' }} />
+      {intraday && (
+        <div className="text-muted" style={{ fontSize: 11, textAlign: 'right', marginTop: 4 }}>
+          Time axis: ET (US Eastern)
+        </div>
+      )}
       {hover && (
         <div
           // pointerEvents none: the legend sits over the plot area, and must

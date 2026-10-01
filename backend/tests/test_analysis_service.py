@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
+from app.data_providers.base import AllProvidersFailedError
+from app.data_providers.base import AllProvidersFailedError
 from app.llm_providers.null_provider import NullLLMProvider
 from app.services.analysis_service import get_analysis
 
@@ -54,3 +57,41 @@ def test_get_analysis_intraday_range_uses_full_datetime_strings():
     assert len(result.candles) == 80  # fake ignores period/interval, returns all fetched bars
     assert "T" in result.candles[0].date
     assert "T" in result.ema20_series[0].date
+
+
+class _NoIntradayProvider(FakeProvider):
+    """Daily bars work; intraday is rate-limited (the one source for it is down)."""
+
+    def get_ohlcv(self, symbol, period="6mo", interval="1d"):
+        if interval != "1d":
+            raise AllProvidersFailedError("yfinance: 429 Too Many Requests")
+        return super().get_ohlcv(symbol, period=period, interval=interval)
+
+
+def test_intraday_range_fails_loudly_instead_of_serving_daily_bars_as_intraday():
+    """With no intraday source answering, 1D/1W must raise (the API turns that into a
+    502 the chart's fallback reacts to). Quietly returning daily bars under a 1D
+    label would draw a wrong chart with no warning."""
+    provider = _NoIntradayProvider()
+    for range_ in ("1d", "1w"):
+        with pytest.raises(AllProvidersFailedError):
+            get_analysis("AAPL", provider, NullLLMProvider(), range_=range_)
+    # The daily view the UI falls back to still works against the same provider.
+    assert len(get_analysis("AAPL", provider, NullLLMProvider(), range_="1mo").candles) == 21
+
+
+def test_analysis_endpoint_returns_502_when_intraday_is_unavailable():
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_data_provider
+    from app.main import app
+
+    app.dependency_overrides[get_data_provider] = lambda: _NoIntradayProvider()
+    try:
+        client = TestClient(app)
+        resp = client.get("/api/analysis/AAPL?range=1d")
+        assert resp.status_code == 502
+        assert "No data available" in resp.json()["detail"]
+        assert client.get("/api/analysis/AAPL?range=1mo").status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_data_provider, None)

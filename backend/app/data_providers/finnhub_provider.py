@@ -49,6 +49,16 @@ class FinnhubProvider:
             raise DataProviderError(f"finnhub {path} failed: {exc}") from exc
         return resp.json()
 
+    def check_connection(self) -> None:
+        """One live, uncached call that only a valid key can answer, for the
+        Settings test button. get_quote is cached (and serves the last good
+        value when a call fails), so testing through it would report a bad or
+        just-typed key as working for as long as an old quote was cached.
+        Raises DataProviderError when the key is rejected or the call fails."""
+        data = self._get("/quote", {"symbol": "AAPL"})
+        if not data or data.get("c") in (None, 0):
+            raise DataProviderError("finnhub returned no quote for AAPL")
+
     def get_ohlcv(self, symbol: str, period: str = "6mo", interval: str = "1d") -> pd.DataFrame:
         raise NotImplementedError("finnhub free tier does not support historical candles")
 

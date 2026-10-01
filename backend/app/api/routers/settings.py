@@ -9,6 +9,7 @@ from app.config import load_app_settings, update_app_settings
 from app.data_providers.finnhub_provider import FinnhubProvider
 from app.data_providers.base import DataProviderError
 from app.llm_providers.factory import generate_with_tier, get_llm_provider
+from app.settings_overrides import SECRET_FIELDS, apply_test_overrides, is_masked_secret, scrub_secrets
 from app.schemas.settings_schemas import (
     SettingsUpdateRequest,
     StatusResponse,
@@ -72,6 +73,10 @@ def get_status() -> StatusResponse:
 @router.put("")
 def put_settings(req: SettingsUpdateRequest) -> dict:
     changes = {k: v for k, v in req.model_dump().items() if v is not None}
+    # A masked hint ("••••ab12") is what the API shows for a saved secret; a
+    # client that echoes it back means "unchanged", so it must never overwrite
+    # the real secret with the hint.
+    changes = {k: v for k, v in changes.items() if not (k in SECRET_FIELDS and is_masked_secret(v))}
     updated = update_app_settings(**changes)
     return updated.redacted()
 
@@ -131,8 +136,24 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
             )
     _last_test_connection_monotonic[cooldown_key] = now
 
-    settings = load_app_settings()
+    # The saved settings with whatever is typed in the form on top, used for this
+    # one call and then dropped: nothing is saved, and nothing here is logged.
+    saved = load_app_settings()
+    overrides = req.overrides.model_dump() if req.overrides else {}
+    try:
+        settings = apply_test_overrides(saved, overrides)
+    except ValueError as exc:  # a typed value that would not pass the save-time checks either
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    response = _run_connection_test(req, settings)
+    # An error from a provider or from httpx can echo the request URL, and a
+    # Telegram URL contains the bot token: never hand a secret back to the browser.
+    secrets = [getattr(settings, field, "") for field in SECRET_FIELDS]
+    response.message = scrub_secrets(response.message, secrets)
+    return response
+
+
+def _run_connection_test(req: TestConnectionRequest, settings) -> TestConnectionResponse:
     if req.target == "llm":
         provider = get_llm_provider(settings)
         if not provider.is_configured():
@@ -146,7 +167,7 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
         if not settings.finnhub_api_key:
             return TestConnectionResponse(ok=False, message="No Finnhub API key configured")
         try:
-            FinnhubProvider(settings.finnhub_api_key).get_quote("AAPL")
+            FinnhubProvider(settings.finnhub_api_key).check_connection()
         except DataProviderError as exc:
             return TestConnectionResponse(ok=False, message=str(exc))
         return TestConnectionResponse(ok=True, message="Finnhub connection OK")

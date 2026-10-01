@@ -21,10 +21,13 @@ from app.schemas.analysis_schemas import AnalysisResponse, CandleSchema, SeriesP
 RANGE_TO_DISPLAY_DAYS = {"1mo": 21, "3mo": 63, "6mo": 126, "1y": 252}
 
 # 1D/1W use real intraday bars instead — fetched and displayed in full, no
-# separate lookback/display split needed at this granularity. Best-effort
-# only: yfinance is the sole free source with intraday coverage (stooq and
-# Finnhub's free tier don't implement it), so a Yahoo outage means these two
-# ranges specifically have no fallback — see notes/Issues.md.
+# separate lookback/display split needed at this granularity. yfinance is the
+# only source used for them, on purpose: Stooq now blocks scripted requests,
+# Finnhub's free tier has no candles, and Nasdaq's public chart serves only
+# today's per-minute last-sale prices (no open/high/low, no volume, no earlier
+# days), which cannot be turned into honest 5-minute or 15-minute candles. So when
+# Yahoo is rate-limited these two ranges fail with a 502 and the UI says so and
+# falls back to the daily view; no data is made up.
 INTRADAY_PARAMS = {"1d": ("1d", "5m"), "1w": ("5d", "15m")}
 
 
