@@ -33,7 +33,12 @@ def summary(
     )[:TOP_SETUPS_LIMIT]
     potential_setups = sum(1 for r in scan_results if r.signal == "potential_setup")
 
-    build_engine(session, data_provider, settings).mark_to_market()
+    # snapshot=False: read-only, same rule as GET /api/portfolio/positions and
+    # /stats (see portfolio.list_positions). The exit check still runs so the
+    # stats below reflect a stop/TP1 hit since the last scheduled pass; only
+    # the equity-curve write is dropped. With the default snapshot=True, every
+    # Dashboard load appended a point, so the curve recorded page views.
+    build_engine(session, data_provider, settings).mark_to_market(snapshot=False)
     stats = compute_portfolio_stats(session, data_provider, settings.paper_starting_cash)
 
     latest_plan = session.exec(select(TradePlanRecord).order_by(TradePlanRecord.created_at.desc())).first()
