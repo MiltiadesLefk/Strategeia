@@ -138,6 +138,17 @@ class PaperPosition(SQLModel, table=True):
     mae_pct: Optional[float] = None
     mfe_r: Optional[float] = None
     mae_r: Optional[float] = None
+    # How the exit price was placed in time (see portfolio/intraday.py): "daily"
+    # (one level on a daily bar, or the open already settled the order), "hourly"
+    # (found on an hourly bar), "daily_ambiguous_stop_first" (a daily bar held both
+    # levels and no hourly answer was available, so the stop was taken),
+    # "hourly_ambiguous_stop_first" (both levels in one hourly bar). None for a
+    # manual close and for rows closed before this was recorded.
+    exit_resolution: Optional[str] = None
+    # Whether the rest of the entry day (after the position opened) has been checked
+    # hour by hour: "hourly" once every hour is covered, "daily_only" when the hourly
+    # history could not reach back to that day. None = not checked yet.
+    entry_day_check: Optional[str] = None
 
 
 DeferredEvaluationStatus = Literal["pending", "done", "skipped", "failed"]

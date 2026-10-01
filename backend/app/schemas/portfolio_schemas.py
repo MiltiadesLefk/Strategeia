@@ -37,6 +37,9 @@ class PositionSchema(BaseModel):
     mae_pct: float | None = None
     mfe_r: float | None = None
     mae_r: float | None = None
+    # How the exit was placed in time: see PaperPosition.exit_resolution / entry_day_check.
+    exit_resolution: str | None = None
+    entry_day_check: str | None = None
 
 
 class OpenPositionRequest(BaseModel):

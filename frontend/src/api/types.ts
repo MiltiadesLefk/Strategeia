@@ -281,6 +281,11 @@ export interface Position {
   mae_pct?: number | null;
   mfe_r?: number | null;
   mae_r?: number | null;
+  /** How the exit was placed in time: 'daily' | 'hourly' | 'daily_ambiguous_stop_first' |
+   *  'hourly_ambiguous_stop_first'; null for a manual close or a row from before this was recorded. */
+  exit_resolution?: string | null;
+  /** Whether the rest of the entry day was checked hour by hour: 'hourly' | 'daily_only'; null = not yet. */
+  entry_day_check?: string | null;
 }
 
 export interface PortfolioStats {

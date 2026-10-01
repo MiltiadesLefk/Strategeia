@@ -24,6 +24,22 @@ function closeReasonLabel(reason: string | null): string {
   return reason ? (CLOSE_REASON_LABELS[reason] ?? reason) : '—';
 }
 
+// Hover text for how an exit was placed in time (PaperPosition.exit_resolution).
+const EXIT_RESOLUTION_HINTS: Record<string, string> = {
+  daily: 'Found on the daily bar.',
+  hourly: 'Hourly bars showed which level was touched first.',
+  daily_ambiguous_stop_first:
+    'The day reached both the stop and the target and no hourly bars were available, so the stop was taken (the cautious order).',
+  hourly_ambiguous_stop_first:
+    'Both the stop and the target sat inside one hourly bar, so the stop was taken (the cautious order).',
+};
+function exitResolutionHint(p: Position): string | undefined {
+  const parts: string[] = [];
+  if (p.exit_resolution) parts.push(EXIT_RESOLUTION_HINTS[p.exit_resolution] ?? p.exit_resolution);
+  if (p.entry_day_check === 'daily_only') parts.push('The rest of the entry day could not be checked hour by hour.');
+  return parts.length ? parts.join(' ') : undefined;
+}
+
 /** Calendar date (YYYY-MM-DD) of the daily bar a position was entered on: bars
  *  carry the New York date for a US equity and the UTC date for a crypto pair. */
 function entryBarDate(symbol: string, openedAt: string): string {
@@ -281,7 +297,9 @@ export function PortfolioPage() {
                   <td className="tabular-nums">{formatMoney(p.entry_price)}</td>
                   <td className="tabular-nums">{p.shares}</td>
                   <td className="tabular-nums">{formatMoney(p.close_price)}</td>
-                  <td className="text-muted">{closeReasonLabel(p.close_reason)}</td>
+                  <td className="text-muted" title={exitResolutionHint(p)}>
+                    {closeReasonLabel(p.close_reason)}
+                  </td>
                   <td className={`tabular-nums ${p.realized_pnl && p.realized_pnl > 0 ? 'text-green' : p.realized_pnl && p.realized_pnl < 0 ? 'text-red' : ''}`}>
                     {p.realized_pnl !== null ? formatMoney(p.realized_pnl) : '—'}
                   </td>
