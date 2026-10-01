@@ -10,6 +10,11 @@ class LLMResult:
     provider: str
     latency_ms: int
     error: str | None = None
+    # The model that answered, when the provider can say. The Claude Code CLI
+    # reports it (the id an alias like "sonnet" resolved to); providers that
+    # don't leave it None. `provider` stays the plain provider name because it
+    # is stored on trade plans as a string.
+    model: str | None = None
 
 
 class LLMProvider(Protocol):

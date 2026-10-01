@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.config import AiOverlayObjectionAction
+from app.config import AiOverlayObjectionAction, normalize_claude_cli_model
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -15,6 +15,9 @@ class SettingsUpdateRequest(BaseModel):
     openai_model: str | None = None
     gemini_api_key: str | None = None
     gemini_model: str | None = None
+    # Model the Claude Code CLI is pinned to. "" is accepted on purpose and
+    # means "don't pin"; None means "leave unchanged" like every other field.
+    claude_cli_model: str | None = None
     finnhub_enabled: bool | None = None
     finnhub_api_key: str | None = None
     ai_trading_overlay_enabled: bool | None = None
@@ -33,9 +36,6 @@ class SettingsUpdateRequest(BaseModel):
     auto_execute_trade_plans: bool | None = None
     auto_scan_enabled: bool | None = None
     max_concurrent_positions: int | None = Field(default=None, gt=0)
-
-
-class TestConnectionRequest(BaseModel):
     # Trading days before a stalled position is closed at the close; 0 = no limit.
     # Capped at 60 (about three months): the exit scan reads 3 months of bars
     # and has to see the entry bar to count days from it.
@@ -45,6 +45,9 @@ class TestConnectionRequest(BaseModel):
     @classmethod
     def _validate_claude_cli_model(cls, value: str | None) -> str | None:
         return None if value is None else normalize_claude_cli_model(value)
+
+
+class TestConnectionRequest(BaseModel):
     target: str  # "llm" | "finnhub" | "telegram"
 
 
@@ -64,6 +67,10 @@ class StatusResponse(BaseModel):
 
     ai_online: bool
     ai_provider: str
+    # The model the provider is pinned to, shown next to the provider name
+    # ("claude_code_cli (sonnet)"). "" when the provider has no pin setting or
+    # the pin is blank (the CLI's own default).
+    ai_model: str = ""
     ai_overlay_online: bool
     finnhub_online: bool
     telegram_online: bool

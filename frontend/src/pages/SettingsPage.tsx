@@ -108,6 +108,7 @@ export function SettingsPage() {
   const [openrouterModel, setOpenrouterModel] = useState('');
   const [orcarouterKey, setOrcarouterKey] = useState('');
   const [orcarouterModel, setOrcarouterModel] = useState('');
+  const [claudeCliModel, setClaudeCliModel] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [finnhubEnabled, setFinnhubEnabled] = useState(false);
@@ -122,11 +123,11 @@ export function SettingsPage() {
   const [maxConcurrentPositions, setMaxConcurrentPositions] = useState(5);
   const [minConfidence, setMinConfidence] = useState(30);
   const [markToMarketMinutes, setMarkToMarketMinutes] = useState(15);
+  const [maxHoldingDays, setMaxHoldingDays] = useState(20);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
   const [aiOverlayScores, setAiOverlayScores] = useState(true);
   const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
 
-  const [maxHoldingDays, setMaxHoldingDays] = useState(20);
   const [justSavedKey, setJustSavedKey] = useState<string | null>(null);
   const flashTimeout = useRef<number | undefined>(undefined);
   function flashSaved(key: string) {
@@ -149,6 +150,12 @@ export function SettingsPage() {
     ({ openrouter: settings?.openrouter_api_key, orcarouter: settings?.orcarouter_api_key, openai: settings?.openai_api_key, gemini: settings?.gemini_api_key }[
       llmProvider
     ] as string | undefined) ?? '';
+  // Same rule as the backend (config.normalize_claude_cli_model): blank is fine
+  // (= don't pin), otherwise a plain model name. The backend re-checks it.
+  const claudeModelInvalid =
+    llmProvider === 'claude_code_cli' &&
+    claudeCliModel.trim() !== '' &&
+    !(CLAUDE_MODEL_PATTERN.test(claudeCliModel.trim()) && claudeCliModel.trim().length <= 64);
   const llmMissingKey = llmNeedsKey && !llmDraftKey && !llmExistingKey;
 
   const finnhubMissingKey = finnhubEnabled && !finnhubKey && !settings?.finnhub_api_key;
@@ -162,6 +169,7 @@ export function SettingsPage() {
     setLlmProvider(settings.llm_provider);
     setOpenrouterModel(settings.openrouter_model);
     setOrcarouterModel(settings.orcarouter_model);
+    setClaudeCliModel(settings.claude_cli_model);
     setFinnhubEnabled(settings.finnhub_enabled);
     setTelegramChatId(settings.telegram_chat_id);
     setStartingCash(settings.paper_starting_cash);
@@ -172,18 +180,19 @@ export function SettingsPage() {
     setMaxConcurrentPositions(settings.max_concurrent_positions);
     setMinConfidence(settings.min_confidence_for_trade);
     setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
+    setMaxHoldingDays(settings.max_holding_days);
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
   }, [settings]);
 
   function saveLlm() {
-    if (llmMissingKey) return;
+    if (llmMissingKey || claudeModelInvalid) return;
     update(
       {
         llm_provider: llmProvider,
+        claude_cli_model: claudeCliModel.trim(),
         ...(openrouterKey ? { openrouter_api_key: openrouterKey } : {}),
-    setMaxHoldingDays(settings.max_holding_days);
         openrouter_model: openrouterModel,
         ...(orcarouterKey ? { orcarouter_api_key: orcarouterKey } : {}),
         orcarouter_model: orcarouterModel,
@@ -252,6 +261,7 @@ export function SettingsPage() {
         auto_execute_trade_plans: autoExecute,
         min_confidence_for_trade: minConfidence,
         mark_to_market_interval_minutes: markToMarketMinutes,
+        max_holding_days: maxHoldingDays,
       },
       { onSuccess: () => flashSaved('account') },
     );
@@ -264,7 +274,6 @@ export function SettingsPage() {
         max_concurrent_positions: maxConcurrentPositions,
       },
       { onSuccess: () => flashSaved('automation') },
-        max_holding_days: maxHoldingDays,
     );
   }
 
@@ -284,6 +293,7 @@ export function SettingsPage() {
     setLlmProvider(settings.llm_provider);
     setOpenrouterModel(settings.openrouter_model);
     setOrcarouterModel(settings.orcarouter_model);
+    setClaudeCliModel(settings.claude_cli_model);
     setOpenrouterKey('');
     setOrcarouterKey('');
     setOpenaiKey('');
@@ -316,6 +326,7 @@ export function SettingsPage() {
     setAutoExecute(settings.auto_execute_trade_plans);
     setMinConfidence(settings.min_confidence_for_trade);
     setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
+    setMaxHoldingDays(settings.max_holding_days);
   }
 
   function resetAutomation() {
@@ -329,7 +340,6 @@ export function SettingsPage() {
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
-    setMaxHoldingDays(settings.max_holding_days);
   }
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
@@ -430,6 +440,32 @@ export function SettingsPage() {
           />
         )}
         {llmProvider === 'claude_code_cli' && (
+          <div>
+            <label>Model</label>
+            <input
+              type="text"
+              value={claudeCliModel}
+              onChange={(e) => setClaudeCliModel(e.target.value)}
+              placeholder="sonnet"
+              maxLength={64}
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              The model every call is pinned to, so it can't change underneath you. Use an alias —{' '}
+              <code>sonnet</code>, <code>opus</code> or <code>haiku</code> (always the latest of that family) — or a
+              full id such as <code>claude-sonnet-5-5</code> for an exact version. Leave it blank to not pin:{' '}
+              <strong>blank means "whatever the CLI is set to"</strong> (the model last picked in an interactive{' '}
+              <code>claude</code> session, or your account default), which can change without you noticing.
+            </div>
+            {claudeModelInvalid && (
+              <div className="text-red" style={{ fontSize: 12, marginTop: 4 }}>
+                Use letters, digits and . _ - : @ [ ] only (max 64), starting with a letter or digit.
+              </div>
+            )}
+          </div>
+        )}
+        {llmProvider === 'claude_code_cli' && (
           <div className="text-muted" style={{ fontSize: 13 }}>
             Best-effort option: shells out to your local Claude Code CLI. No key needed, but no SLA either — higher
             latency than a direct API and depends on the CLI being installed and logged in on this machine.
@@ -444,7 +480,7 @@ export function SettingsPage() {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey} />
+          <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid} />
           <ResetButton onClick={resetLlm} />
           <button className="btn btn-secondary" onClick={() => testLlm('llm')} disabled={testingLlm}>
             {testingLlm ? 'Testing…' : 'Test Connection'}
@@ -703,6 +739,25 @@ export function SettingsPage() {
           </div>
         </div>
         <div>
+          <label>Maximum Holding Time (trading days)</label>
+          <input
+            type="number"
+            value={maxHoldingDays}
+            min={0}
+            max={60}
+            step={1}
+            onChange={(e) => setMaxHoldingDays(Number(e.target.value))}
+          />
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            A third way out after the stop and the first target: a position still open after this many trading days
+            (weekends and holidays don't count) is closed at that day's close, as a market order, so it pays
+            slippage like a stop. It only fires if neither the stop nor TP1 was touched that day. Trade plans are
+            labelled 1-4 weeks, so the default 20 (four weeks) is the end of that horizon; a position that stalls
+            past it ties up one of your slots and a sector cap. 0 turns the limit off. Applies to positions that
+            are already open, so lowering it can close stalled ones at the next check.
+          </div>
+        </div>
+        <div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             Auto-Execute Trade Plans
             <OnOffBadge on={autoExecute} />
@@ -741,25 +796,6 @@ export function SettingsPage() {
             <span>Auto-Scan</span>
             <OnOffBadge on={autoScanEnabled} />
           </div>
-        <div>
-          <label>Maximum Holding Time (trading days)</label>
-          <input
-            type="number"
-            value={maxHoldingDays}
-            min={0}
-            max={60}
-            step={1}
-            onChange={(e) => setMaxHoldingDays(Number(e.target.value))}
-          />
-          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            A third way out after the stop and the first target: a position still open after this many trading days
-            (weekends and holidays don't count) is closed at that day's close, as a market order, so it pays
-            slippage like a stop. It only fires if neither the stop nor TP1 was touched that day. Trade plans are
-            labelled 1-4 weeks, so the default 20 (four weeks) is the end of that horizon; a position that stalls
-            past it ties up one of your slots and a sector cap. 0 turns the limit off. Applies to positions that
-            are already open, so lowering it can close stalled ones at the next check.
-          </div>
-        </div>
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
             {autoScanEnabled ? 'Enabled — scan and trade on a schedule, unattended.' : 'Disabled — scan and generate plans manually.'}
           </div>

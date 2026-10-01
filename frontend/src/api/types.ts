@@ -240,6 +240,8 @@ export interface PortfolioStats {
   portfolio_value: number;
   starting_cash: number;
   current_cash: number;
+  /** How closed trades ended: close_reason -> count, from the closed rows. */
+  exit_reasons: Record<string, number>;
 }
 
 export interface EquityPoint {
@@ -268,6 +270,8 @@ export interface AppSettings {
   openai_model: string;
   gemini_api_key: string;
   gemini_model: string;
+  /** Model the Claude Code CLI is pinned to ("sonnet", "opus", a full id...). "" = don't pin (whatever the CLI is set to). */
+  claude_cli_model: string;
   finnhub_enabled: boolean;
   finnhub_api_key: string;
   telegram_bot_token: string;
@@ -279,8 +283,8 @@ export interface AppSettings {
   auto_execute_trade_plans: boolean;
   auto_scan_enabled: boolean;
   max_concurrent_positions: number;
-  /** How closed trades ended: close_reason -> count, from the closed rows. */
-  exit_reasons: Record<string, number>;
+  /** Trading days before a stalled position is closed at the close; 0 = no limit. */
+  max_holding_days: number;
   ai_trading_overlay_enabled: boolean;
   ai_overlay_scores_confidence: boolean;
   ai_overlay_objection_action: AiOverlayObjectionAction;
@@ -297,6 +301,7 @@ export interface SettingsUpdateRequest {
   openai_model?: string;
   gemini_api_key?: string;
   gemini_model?: string;
+  claude_cli_model?: string;
   finnhub_enabled?: boolean;
   finnhub_api_key?: string;
   telegram_bot_token?: string;
@@ -308,6 +313,7 @@ export interface SettingsUpdateRequest {
   auto_execute_trade_plans?: boolean;
   auto_scan_enabled?: boolean;
   max_concurrent_positions?: number;
+  max_holding_days?: number;
   ai_trading_overlay_enabled?: boolean;
   ai_overlay_scores_confidence?: boolean;
   ai_overlay_objection_action?: AiOverlayObjectionAction;
@@ -322,13 +328,13 @@ export interface TestConnectionResponse {
 /** What the AI Trading Overlay's objection actually does. One choice, not a
  *  set of flags: "cancel" and "hold" fire on the same trigger and cancel
  *  always wins, so they can never both be in effect. */
-  /** Trading days before a stalled position is closed at the close; 0 = no limit. */
-  max_holding_days: number;
 export type AiOverlayObjectionAction = 'cancel' | 'hold' | 'none';
 
 export interface SettingsStatus {
   ai_online: boolean;
   ai_provider: string;
+  /** Model the provider is pinned to ("" when it has no pin or the pin is blank). */
+  ai_model: string;
   ai_overlay_online: boolean;
   finnhub_online: boolean;
   telegram_online: boolean;
@@ -347,4 +353,3 @@ export interface LoginResponse {
   ok: boolean;
   message: string;
 }
-  max_holding_days?: number;

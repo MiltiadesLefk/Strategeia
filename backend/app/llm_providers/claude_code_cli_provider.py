@@ -5,7 +5,29 @@ import shutil
 import subprocess
 import time
 
+from app.config import normalize_claude_cli_model
 from app.llm_providers.base import LLMResult
+
+
+def _served_model(parsed: object) -> str | None:
+    """The model that actually answered, from the CLI's JSON `modelUsage`.
+
+    That map can list more than one model (the CLI makes small helper calls
+    with a cheaper model alongside the real one), so the answering model is the
+    one that cost the most. None when the field is missing or malformed: the
+    caller then falls back to the model it asked for."""
+    if not isinstance(parsed, dict):
+        return None
+    usage = parsed.get("modelUsage")
+    if not isinstance(usage, dict) or not usage:
+        return None
+    best_name, best_cost = None, -1.0
+    for name, stats in usage.items():
+        cost = stats.get("costUSD") if isinstance(stats, dict) else None
+        cost = cost if isinstance(cost, (int, float)) else 0.0
+        if isinstance(name, str) and cost > best_cost:
+            best_name, best_cost = name, cost
+    return best_name
 
 
 class ClaudeCodeCLIProvider:
@@ -24,13 +46,28 @@ class ClaudeCodeCLIProvider:
     text-completion call — no permission-mode override is used or needed,
     since a call with zero allowed tools can never trigger a permission
     prompt in the first place.
+
+    `model` pins the model with `--model`. Without it the CLI uses whichever
+    model was last chosen in an interactive session (or the account default),
+    which would change the narratives and the AI overlay's objections without
+    any change on our side. Blank means "don't pass --model".
     """
 
     name = "claude_code_cli"
 
-    def __init__(self, cli_path: str | None = None, timeout_sec: int = 45):
+    def __init__(self, cli_path: str | None = None, timeout_sec: int = 45, model: str | None = None):
         self.cli_path = cli_path or shutil.which("claude")
         self.timeout_sec = timeout_sec
+        # A bad value (e.g. a hand-edited setting) must never reach argv. The
+        # provider is still built so one bad field can't take narrative
+        # generation down with an exception; generate() reports the problem and
+        # generate_with_fallback falls back to the rule-based text.
+        self._model_error: str | None = None
+        try:
+            self.model = normalize_claude_cli_model(model or "")
+        except ValueError as exc:
+            self.model = ""
+            self._model_error = str(exc)
 
     def is_configured(self) -> bool:
         return self.cli_path is not None
@@ -38,6 +75,8 @@ class ClaudeCodeCLIProvider:
     def generate(self, prompt: str, *, max_tokens: int = 300, temperature: float = 0.4) -> LLMResult:
         if not self.cli_path:
             return LLMResult("", self.name, 0, error="Claude Code CLI not found on PATH")
+        if self._model_error:
+            return LLMResult("", self.name, 0, error=f"Invalid Claude CLI model setting: {self._model_error}")
 
         argv = [
             self.cli_path,
@@ -49,6 +88,8 @@ class ClaudeCodeCLIProvider:
             "--max-turns",
             "1",
         ]
+        if self.model:
+            argv += ["--model", self.model]
         start = time.monotonic()
         try:
             proc = subprocess.run(
@@ -68,12 +109,14 @@ class ClaudeCodeCLIProvider:
         if proc.returncode != 0:
             return LLMResult("", self.name, latency_ms, error=(proc.stderr or "non-zero exit")[:300])
 
+        served: str | None = None
         try:
             parsed = json.loads(proc.stdout)
-            text = parsed.get("result", "") or ""
+            text = (parsed.get("result", "") or "") if isinstance(parsed, dict) else ""
+            served = _served_model(parsed)
         except json.JSONDecodeError:
             text = proc.stdout.strip()
 
         if not text:
             return LLMResult("", self.name, latency_ms, error="Claude Code CLI returned empty output")
-        return LLMResult(text=text, provider=self.name, latency_ms=latency_ms)
+        return LLMResult(text=text, provider=self.name, latency_ms=latency_ms, model=served or self.model or None)

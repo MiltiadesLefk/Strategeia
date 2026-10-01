@@ -613,6 +613,7 @@ def generate_trade_plan(
         max_positions_per_sector=settings.max_positions_per_sector,
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         clock=clock,
+        max_holding_days=settings.max_holding_days,
     )
     sizing = calculate_position_size(account_size, risk_pct, entry, stop, engine.available_cash())
     targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
@@ -621,7 +622,6 @@ def generate_trade_plan(
     # number, not just the verdict" pattern as ATR/MACD. options_summary and
     # earnings_history were already fetched above for scoring; this reuses
     # them rather than fetching again.
-        max_holding_days=settings.max_holding_days,
     expected_move_days = days_to_expiration(options_summary.expiration) if options_summary else None
     expected_move_pct = (
         compute_expected_move_pct(options_summary.atm_implied_volatility, expected_move_days)

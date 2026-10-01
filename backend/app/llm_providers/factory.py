@@ -12,7 +12,7 @@ from app.llm_providers.orcarouter_provider import OrcaRouterProvider
 
 def get_llm_provider(settings: AppSettings) -> LLMProvider:
     if settings.llm_provider == "claude_code_cli":
-        return ClaudeCodeCLIProvider()
+        return ClaudeCodeCLIProvider(model=settings.claude_cli_model)
     if settings.llm_provider == "openrouter":
         return OpenRouterProvider(settings.openrouter_api_key, settings.openrouter_model)
     if settings.llm_provider == "orcarouter":

@@ -308,6 +308,33 @@ def _load_or_create_session_secret(infra: InfraSettings) -> str:
 
 LlmProviderName = Literal["none", "claude_code_cli", "openrouter", "orcarouter", "openai", "gemini"]
 
+# The model the Claude Code CLI provider asks for with `--model`. The value
+# ends up in an argv list (never a shell), but it is validated strictly anyway:
+# it must start with a letter or digit (so it can never be read as another
+# flag) and may then use only the characters real model names use: letters,
+# digits and . _ - : @ [ ] (aliases like "sonnet", full ids like
+# "claude-opus-4-1-20250805", and context-size suffixes like "sonnet[1m]").
+# Blank is allowed and means "do not pass --model; use whatever the CLI is
+# set to", which is the unpinned behaviour.
+CLAUDE_CLI_MODEL_MAX_LENGTH = 64
+CLAUDE_CLI_MODEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@\[\]-]*$")
+
+
+def normalize_claude_cli_model(value: str) -> str:
+    """Trim and validate a Claude CLI model name; "" is a valid value (unpinned).
+    Raises ValueError for anything that is not a plain model name."""
+    cleaned = value.strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) > CLAUDE_CLI_MODEL_MAX_LENGTH:
+        raise ValueError(f"Claude model name must be at most {CLAUDE_CLI_MODEL_MAX_LENGTH} characters")
+    if not CLAUDE_CLI_MODEL_PATTERN.fullmatch(cleaned):
+        raise ValueError(
+            "Claude model name may only use letters, digits and . _ - : @ [ ] "
+            "and must start with a letter or digit (e.g. sonnet, opus, claude-sonnet-5-5)"
+        )
+    return cleaned
+
 # What happens when the AI Trading Overlay says it would not take the trade.
 # One choice, not a set of flags: "cancel" and "hold" fire on the identical
 # trigger and cancel always wins (a cancelled evaluation never reaches the
@@ -349,6 +376,22 @@ class AppSettings(BaseModel):
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-1.5-flash"
+
+    # Model the Claude Code CLI provider is pinned to (`claude -p --model X`).
+    # Without a pin the CLI answers with whichever model was last picked in an
+    # interactive session (or the account default), so narratives and the AI
+    # overlay's objections would silently change model between runs, an
+    # invisible variable in a system whose decisions are meant to be measured.
+    # "sonnet" is the CLI's own alias for the latest Sonnet: stable across
+    # releases (no dated id to go stale) and the cost/quality middle ground.
+    # It still moves when a newer Sonnet ships; use a full id for an exact
+    # version. Blank means "do not pin" (whatever the CLI is set to).
+    claude_cli_model: str = "sonnet"
+
+    @field_validator("claude_cli_model", mode="before")
+    @classmethod
+    def _validate_claude_cli_model(cls, value):
+        return normalize_claude_cli_model(value) if isinstance(value, str) else value
 
     finnhub_enabled: bool = False
     finnhub_api_key: str = ""
@@ -470,6 +513,18 @@ class AppSettings(BaseModel):
     max_positions_per_sector: int = 2
     max_position_pct_of_adv: float = 1.0
 
+    # A third way out after the stop and TP1: a position that has been open this
+    # many TRADING days (bars, so weekends and holidays don't count) without
+    # touching either is closed at that day's close. Plans are labelled "1-4
+    # weeks", so 20 trading days (four weeks) is the top of the plan's own
+    # horizon: a trade still unresolved after it has outlived the thesis it was
+    # sized for and is only holding a slot and a sector cap hostage. 0 turns the
+    # limit off (positions then close only at the stop, TP1 or by hand). The
+    # upper bound (SettingsUpdateRequest) keeps the limit inside the 3-month
+    # window the exit scan reads, since the scan must see the position's entry
+    # bar to count days.
+    max_holding_days: int = 20
+
     def redacted(self) -> dict:
         """Copy safe to return over the API — secrets collapsed to a masked
         hint (e.g. "••••ab12") so the UI can show *that* a key is set and
@@ -513,18 +568,6 @@ def get_infra_settings() -> InfraSettings:
             infra.auth_password = _load_or_create_auth_password(infra)
         if not infra.session_secret:
             infra.session_secret = _load_or_create_session_secret(infra)
-    # A third way out after the stop and TP1: a position that has been open this
-    # many TRADING days (bars, so weekends and holidays don't count) without
-    # touching either is closed at that day's close. Plans are labelled "1-4
-    # weeks", so 20 trading days (four weeks) is the top of the plan's own
-    # horizon: a trade still unresolved after it has outlived the thesis it was
-    # sized for and is only holding a slot and a sector cap hostage. 0 turns the
-    # limit off (positions then close only at the stop, TP1 or by hand). The
-    # upper bound (SettingsUpdateRequest) keeps the limit inside the 3-month
-    # window the exit scan reads, since the scan must see the position's entry
-    # bar to count days.
-    max_holding_days: int = 20
-
     return infra
 
 

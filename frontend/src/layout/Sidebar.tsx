@@ -45,7 +45,7 @@ function ServiceStatus({ status }: { status?: SettingsStatus }) {
   const [expanded, setExpanded] = useState(false);
 
   const services = [
-    { key: 'ai', online: !!status?.ai_online, label: status?.ai_online ? `AI · ${status.ai_provider}` : 'AI offline', optional: false },
+    { key: 'ai', online: !!status?.ai_online, label: status?.ai_online ? `AI · ${status.ai_provider}${status.ai_model ? ` (${status.ai_model})` : ''}` : 'AI offline', optional: false },
     { key: 'overlay', online: !!status?.ai_overlay_online, label: status?.ai_overlay_online ? 'AI overlay on' : 'AI overlay off', optional: true },
     { key: 'finnhub', online: !!status?.finnhub_online, label: status?.finnhub_online ? 'Finnhub online' : 'Finnhub off', optional: true },
     { key: 'telegram', online: !!status?.telegram_online, label: status?.telegram_online ? 'Telegram online' : 'Telegram off', optional: true },

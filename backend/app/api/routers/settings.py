@@ -49,6 +49,8 @@ def get_status() -> StatusResponse:
     return StatusResponse(
         ai_online=ai_online,
         ai_provider=provider.name,
+        # Only providers with a public `model` pin (the Claude CLI) report one.
+        ai_model=getattr(provider, "model", "") or "" if ai_online else "",
         ai_overlay_online=ai_overlay_online,
         finnhub_online=finnhub_online,
         telegram_online=telegram_online,
@@ -78,6 +80,21 @@ TEST_CONNECTION_COOLDOWN_SECONDS = 10
 _last_test_connection_monotonic: dict[str, float] = {}
 
 
+def _llm_ok_message(provider, result) -> str:
+    """"claude_code_cli responded in 1300ms (model: claude-sonnet-5-5, pinned to
+    'sonnet')". The model the call actually used is what you want to see after
+    changing the pin, so say it when the provider reports one."""
+    message = f"{provider.name} responded in {result.latency_ms}ms"
+    pinned = getattr(provider, "model", "")
+    if result.model and pinned and result.model != pinned:
+        return f"{message} (model: {result.model}, pinned to '{pinned}')"
+    if result.model:
+        return f"{message} (model: {result.model})"
+    if provider.name == "claude_code_cli":
+        return f"{message} (model: CLI default, not pinned)"
+    return message
+
+
 @router.post("/test-connection", response_model=TestConnectionResponse)
 def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
     now = time.monotonic()
@@ -101,7 +118,7 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
         result = provider.generate("Reply with exactly: OK", max_tokens=10)
         if result.error:
             return TestConnectionResponse(ok=False, message=result.error)
-        return TestConnectionResponse(ok=True, message=f"{provider.name} responded in {result.latency_ms}ms")
+        return TestConnectionResponse(ok=True, message=_llm_ok_message(provider, result))
 
     if req.target == "finnhub":
         if not settings.finnhub_api_key:
