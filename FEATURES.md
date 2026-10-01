@@ -23,6 +23,9 @@
 17. [Glossary](#17-glossary)
 18. [Backtesting](#18-backtesting)
 19. [Watchers](#19-watchers)
+20. [Smart Money](#20-smart-money)
+21. [Market Terminal](#21-market-terminal)
+22. [Calendar and earnings preview](#22-calendar-and-earnings-preview)
 
 ---
 
@@ -81,7 +84,7 @@ still answer, and messages you on Telegram if one goes down or comes back.
 
 ## 3. The pages
 
-The sidebar holds Dashboard, Market Scan, Analysis, Trade Plans, Portfolio, Backtest Lab (§18) and Settings, plus status
+The sidebar holds Dashboard, Market Scan, Analysis, Calendar (§22), Trade Plans, Portfolio, Market Terminal (§21), Smart Money (§20), Backtest Lab (§18) and Settings, plus status
 pills (AI, AI overlay, Finnhub, Telegram) that expand when something is down, and a log-out button.
 
 ### Backtest Lab
@@ -165,8 +168,12 @@ and couldn't test.
   - **AI Summary**,
   - **Key Financials** (a revenue chart),
   - **Key Catalysts**,
-  - **Upcoming Earnings**, with analyst estimates under "About These Estimates",
+  - **Upcoming Earnings**, with analyst estimates under "About These Estimates" and an **Earnings preview** below them (§22),
   - **Recent News**. Links are only clickable if they're normal web links, for safety.
+  - **Press releases and AI labels** (News tab): PR Newswire press releases saved for this stock (with a
+    "PR Newswire" badge), a **Collect press releases** button, and a **Label now** button (needs News cards
+    switched on in Settings and an AI provider). A headline that has an AI label also shows chips for its
+    event type, sentiment and materiality, marked "AI-labelled" (§11, "News cards").
   - **Saved history** (News tab): how many news items and fundamentals snapshots the app has saved for
     this stock, and since when, with a note that a backtest can only use news from the day the archive
     began (§11).
@@ -491,6 +498,37 @@ way and never breaks the plan.
 days (volume-weighted) with the stock's own median share over up to 60 earlier days (needs at least 20). A
 share at least **5 percentage points above its own baseline** reads as mildly bearish context: it would
 subtract 1 from a long and add 1 to a short. Anything else adds 0.
+
+**Negative 8-K items** is the second one (§11, "Company announcements"). It looks for an 8-K filed in the
+**last 3 days** that lists a bad-news item: bankruptcy (1.03), a material impairment (2.06), a delisting
+notice (3.01), a statement that earlier financials can no longer be relied on (4.02) or a director or officer
+change (5.02, the weakest: that item also covers appointments and pay changes, and the filing's text is not
+read). It would subtract 1 from a long and add 1 to a short. A company with no stored 8-Ks reads "no data
+yet"; one with stored 8-Ks but nothing in the window reads 0.
+
+**Fed event window** (`fed_event_window`) is a market-wide **risk flag**, like the macro-calendar penalty but read
+from the Fed's own published items (§11, "The Fed"). It reads **1** and would subtract **1** when a Fed **policy
+statement** or a speech or testimony by a **Chair** was published within **one day** of the plan's moment, and
+reads 0 otherwise. It ignores the trade's direction (a Fed day says the chart is less reliable, not which way to
+trade) and can never add. It reads nothing of what was said. Because the app only sees what was already
+published, a statement due tomorrow cannot be seen here; the macro calendar covers the dates ahead. Reads "no
+data yet" until some Fed item is stored.
+
+**News cards** (`news_cards`) reads the AI labels on this stock's saved headlines (§11, "News cards"). Only
+headlines published in the **last 3 days** count, and only labels that say the headline is mainly about this
+company and rate it **high** or **medium** materiality. Each counts with a weight (high 2, medium 1) and a
+sign (positive +1, negative -1, neutral or mixed 0), and the weights are added up. A total of at least +2 or
+at most -2 is evidence (one high-materiality story, or two medium ones); anything between reads 0. Positive
+news would add 1 to a long and subtract 1 from a short, negative news the reverse, and with no clear direction
+it reads 0. The AI only fills in the labels: these rules decide what they mean, and the existing keyword news
+check still decides the real score. It reads "no data yet" when there is no label for the last 3 days. A label
+is saved when it is made, so a backtest of an earlier moment sees none.
+
+**Post mentions** (`post_mentions`) counts the posts in the **last 24 hours** that name this company (§11, "Posts").
+It reads the count and would subtract **1** when the count is above 0, whatever the trade's direction, because a
+post can be good or bad for a company and nothing here reads which. A repost or a post with no words is not
+counted. It reads 0 when none named the company and "no data yet" until some post is stored. The source is an
+unofficial archive.
 
 The code is `backend/app/portfolio/missed_trades.py` (sorting, rebuilding, walking, refreshing),
 `missed_trade_report.py` (the report) and `missed_trade_models.py` (the stored results, table
@@ -1097,6 +1135,55 @@ stock for a trade plan), it also saves them:
   and nothing is deleted automatically.
 - `GET /api/archive/{symbol}` shows what's saved (§16). It only reads.
 
+**Press releases (PR Newswire).** A company's own announcement (an earnings date, a deal, a new director)
+is often on a news wire before it reaches Yahoo's list. The app can read PR Newswire's two public RSS feeds
+(all releases, and financial services) and save the releases that are about a watchlist stock as news, with
+the source "PR Newswire" (`backend/app/data_providers/pr_newswire.py`). Each feed holds only the newest
+20 or so releases, so this collects from now on; it is not a backfill.
+
+- **Known at:** the release's own time stamp (the feeds give it with a time zone). It is never later than
+  the moment the app fetched it. A release with no usable time is saved at the fetch time instead.
+- **Matching is strict**, because a wrong match would put another company's news under your stock. A release
+  matches a symbol only when it names it with an exchange tag ("(NASDAQ: NVDA)", "NYSE: IBM", or a
+  parenthesised list such as "(NASDAQ: CHI, CHY and CSQ)") or contains the company's **exact full name**
+  from the watchlist (for example "Apple Inc.", same capital letters, whole words; a short or similar name
+  does not count, nor does a name shorter than 5 characters). A release that matches nothing is not saved.
+- **Polite:** the app identifies itself, waits at least a second between requests, keeps a feed in memory
+  for 5 minutes, retries a failed request a couple of times with growing pauses, and reads only the title,
+  link, time and the short summary in the feed (never the release page). It makes 2 requests per collection.
+- **Failures degrade:** a feed that cannot be fetched or read is reported and skipped; the other feed still
+  runs and nothing is invented. A feed that declares a DOCTYPE or entity (which a plain RSS feed never does)
+  is refused.
+- **How it runs:** the **Collect press releases** button on the Analysis page's News tab, or
+  `POST /api/news/collect` (60-second cooldown). A later watcher can call the same function. It never runs
+  during a backtest.
+
+**News cards (AI labels on headlines).** When switched on, an AI labels each saved headline **once**
+(`backend/app/services/news_card_service.py`, the card form in `backend/app/knowledge/news_cards.py`). The
+form has: the event type (earnings, guidance, mna, product, legal, regulatory, leadership, analyst, macro,
+other), the sentiment (positive, negative, neutral, mixed), the materiality (high, medium, low), the
+companies mentioned, a one-line summary and whether the headline is mainly about this company.
+
+- **Which AI, which model:** the provider chosen in Settings, on its normal (routine) model. With no AI
+  set up nothing is labelled and no label is made up.
+- **Batches and limits:** about 10 headlines per AI call, at most 3 calls per run, and at most the "Most
+  headlines labelled per run" setting (default 20, up to 30). A headline that already has a label is never
+  sent again.
+- **The AI only extracts.** The prompt marks every headline as untrusted text pulled from third-party feeds
+  (never instructions) and forbids views on the stock. The reply must match the form exactly (a wrong word,
+  a missing or extra field, a repeated or out-of-range headline number): if any part does not, **nothing**
+  from that batch is saved and those headlines stay unlabelled for next time. An AI error saves nothing
+  either.
+- **What a label does:** it is shown as chips on the News tab and recorded as the silent signal `news_cards`
+  (§5). It changes no score, direction or trade today.
+- **Not point-in-time (an honest limit).** A label is saved with the time it was **made**, not the time the
+  headline was published, and each label records the model and the moment (`label_model`, `labelled_at`).
+  A model asked about an old headline may already know how the story ended, so its label can quietly carry
+  that knowledge. Labels are therefore only meant to be judged going forward (or on headlines published after
+  the model's training), and a backtest simulating a past moment sees none of them.
+- **Switched on in Settings** (News cards card; off by default because it spends AI calls). **Label now** on
+  the News tab, or `POST /api/news/label/{symbol}` (20-second cooldown per symbol), runs one labelling pass.
+
 **FINRA short-sale volume (a silent signal, §5 "Silent signals").** FINRA posts one free file per
 trading day listing, for every US stock, how much of that day's volume was a short sale. The app
 downloads those files for your watchlist symbols only (`backend/app/data_providers/finra_provider.py`),
@@ -1134,7 +1221,7 @@ days. The app can read these filings and store **every transaction row as a date
   is stored). It lists each company's filings from the SEC (the recent list and the older pages), downloads
   each one, and stores the rows. Re-running is safe: filings already stored are skipped. A filing that
   fails is reported and skipped; the rest continue. `fetch_new_insider_trades` does the same for just the
-  newest filings and is what a future watcher will call.
+  newest filings, and the SEC watcher (§19) uses it to keep the table current.
 - **Being polite to the SEC:** all of this shares one client (`sec_client.py`) that identifies itself with
   your SEC contact (§12), makes **at most 5 requests per second** across the whole app (the SEC allows 10),
   waits and retries when the SEC says "slow down" or has a hiccup, and gives up with a clear error after four
@@ -1154,9 +1241,115 @@ days. The app can read these filings and store **every transaction row as a date
 - **Honest limit:** a company with no stored insider rows gives "no data" from `insider_activity_as_of`
   (not "no insider trades"), because the history may simply not have been loaded.
 
-Other planned sources (company announcements (8-K),
-Fed speeches, posts, Congress trades and big funds' holdings) will use the same table, and each new
-signal is backtested on these dates before it may earn points.
+**Company announcements (SEC 8-K).** A company files an 8-K within four business days of a material event.
+Each filing lists numbered **item codes** (2.02 results, 5.02 officer changes, 1.01 a material agreement,
+8.01 other events, and so on), which the SEC's company index already carries, so no filing has to be
+downloaded to classify it (`backend/app/data_providers/sec_8k.py`). Each filing is stored as one dated fact:
+
+| Time | What it is for an 8-K |
+|---|---|
+| **Known at** | The moment the SEC **accepted** the filing |
+| **About** (effective) | The filing's **report date** (the event it describes, often a day or two earlier) |
+
+- **What is stored:** the filing number, the form (8-K or 8-K/A), the item codes, a plain title for each, a
+  coarse **category** for each (results, leadership, agreement, restructuring, regulatory, other), and links
+  to the filing's page and main document. A code the app does not know is kept and called "Unlisted item".
+- **Filling it in:** `backend/.venv/Scripts/python scripts/backfill_8k.py AAPL MSFT --since 2016-01-01`
+  (`--db` picks the database file; `--report` only prints what is stored). One request per company plus one
+  per older index page. Re-running is safe: filings already stored are skipped, and a symbol that fails is
+  reported and skipped. The SEC watcher (§19) keeps it current afterwards.
+- **Reading it back:** `filings_8k_as_of(session, symbol, as_of, window_days, items)` returns the filings
+  accepted in the window as they were known at that moment, optionally only those listing given item codes.
+  A filing accepted after the moment is invisible.
+- **Scoring:** none yet. The only use is the silent signal in §5 ("Silent signals").
+
+**The Fed (statements, speeches, testimony).** The Fed publishes three public RSS feeds (monetary policy
+releases, speeches, testimony), read by `backend/app/data_providers/fed_feed.py`. Each item is stored as one
+dated fact of kind `fed_speech`, market-wide (no symbol):
+
+| Time | What it is for a Fed item |
+|---|---|
+| **Known at** | The item's publication time in the feed, converted to UTC. An item whose time has no time zone is skipped, not guessed |
+| **About** (effective) | The day of the event |
+
+- **What is stored:** the title, the link, the category (monetary policy, speech, testimony), a plain **type**
+  worked out from the title by rules (policy statement, projections, meeting minutes, other), the speaker for
+  speeches and testimony, whether that speaker is a Chair, and the feed's one-line summary.
+- **Who counts:** a small list in the code of the Chair and the Board members. A speech by anyone else is stored and
+  never alerts. The list is edited by hand when the Board changes.
+- **Depth:** each feed lists only its newest 15 items, which reaches back a few months. Older history is not loaded.
+  `backend/.venv/Scripts/python scripts/backfill_fed.py` stores what the feeds list now (`--db` picks the database
+  file; `--report` only prints what is stored). Re-running is safe, and a feed that failed gets another try. The
+  Fed watcher (§19) keeps it current.
+- **Tone is not read.** Whether a speech is hawkish or dovish needs a language model, and such a reading can only
+  be tested honestly on speeches made after the model's training cut-off. It is a planned, separate step. Nothing
+  here uses an AI.
+- **Scoring:** none. The only use is the silent signal in §5.
+
+**Posts (Donald Trump, Truth Social).** Truth Social refuses scripts (HTTP 403), so the posts are read from
+**trumpstruth.org, an unofficial third-party archive** that republishes them as an RSS feed
+(`backend/app/data_providers/posts_feed.py`). Every place the app shows a post says so. The archive can lag
+behind the real post, drop or change items, change its format, or stop. In a live check its post times matched the
+posting times to the second, but nothing guarantees that. Each post is stored as one dated fact of kind `post`
+(market-wide: which companies it names is worked out by rules when it is read, not stored):
+
+| Time | What it is for a post |
+|---|---|
+| **Known at** | The post time the feed gives, converted to UTC |
+| **About** (effective) | The same moment |
+
+- **What is stored:** the post's id, its text (HTML removed), the Truth Social link, the archive's link, and whether
+  it is a repost ("RT ...") or has no words (an image or a video).
+- **Depth:** the feed lists its newest 100 posts, a day or two at the current pace.
+  `backend/.venv/Scripts/python scripts/backfill_posts.py` stores what it lists now (same options as the Fed
+  script). His older tweets (2009 to 2021) are kept by thetrumparchive.com as a JSON export; they are not loaded,
+  because they say nothing about how the live feed behaves.
+- **No AI reads a post.** An AI may only ever extract facts from words; what a post means for a stock is decided
+  by rules (§19, "The posts watcher"). Nothing here uses an AI.
+- **Scoring:** none. The only use is the silent signal in §5.
+
+Other planned sources (Congress trades and big funds' holdings) will use the same table, and each new signal is
+backtested on these dates before it may earn points.
+
+### Macro series: US (FRED) and euro-area (ECB)
+
+Two free sources that need no key give plain data series, not per-stock quotes. They are not part of the
+fallback chain above. Nothing in the scoring uses them yet; they are there for the Market Terminal and later pages.
+
+| Source | What it gives | How |
+|---|---|---|
+| **FRED** (St. Louis Fed) | Treasury yields (3-month, 2-year, 10-year), the 10y minus 2y spread, the fed funds rate, the VIX close, CPI, unemployment, the broad dollar index | The public CSV download, no key |
+| **ECB** (European Central Bank) | The euro-area deposit and refinancing rates, EUR/USD, EUR/GBP and EUR/JPY reference rates, euro-area inflation | The ECB Data Portal, CSV, no key |
+
+- **Missing values are skipped, never turned into zero.** FRED writes "." for a day with no reading (a holiday);
+  the ECB leaves the value blank. Both become a gap.
+- **Kept for 6 hours** in the data cache (the cache card above). If a refresh fails, the last good copy is shown
+  instead of an error, and the response says when it was fetched.
+- **Policy rates are one point per change**, not one per day.
+- **The ECB's older inflation dataset stopped at December 2025** (the ECB moved to a new one). The series is still
+  offered, but its `last_observation_date` shows how old it is. A replacement was not found.
+- **Where to read it:** `GET /api/macro/series` lists what is offered; `GET /api/macro/series/{id}?start=YYYY-MM-DD`
+  returns the points (FRED series default to the last five years, ECB series to their newest 520 points).
+
+### The Data sources card (Settings)
+
+Settings shows every source with its live health, so a slow or broken source is visible before it hurts a scan.
+Every call the app makes to a source is counted once, in one place, since the server started.
+
+| Column | Meaning |
+|---|---|
+| **Dot** | Healthy (recent calls worked), degraded (some failed, or old cached data had to be shown), failing (most failed, or three in a row), unused (not called yet) |
+| **Calls** | Calls since the server started. A cached answer counts as a call but not as a latency sample |
+| **Success** | Share of the last 100 calls that worked |
+| **p50 / p95** | Median and slow-end (95th percentile) time of real requests among the last 100 |
+| **Last success / last error** | When it last worked, and the last error text (shortened; web addresses and keys are removed) |
+| **Probe** | One tiny real request (a SPY quote, or a small series) that skips the cache. 10-second wait per source |
+
+- **The chain is listed in its fallback order**, then the other sources: SEC filings, FINRA, ECB and FRED.
+  FINRA has no probe, because its files exist only for trading days.
+- **Nothing is invented.** Before any call has been made the card says so and shows dashes.
+- **Backtests and replays are not counted**, so live health is not coloured by simulated runs.
+- **Numbers reset when the server restarts**; they are not saved.
 
 ---
 
@@ -1178,13 +1371,15 @@ signal is backtested on these dates before it may earn points.
 | Minimum confidence for a trade | 30% | The trade / no-trade bar |
 | Telegram bot token, and chat ID | empty | Messages (§10) |
 | Scan universe size | 50 | How many symbols from the top of the watchlist to scan (25, 50, 100 or 200 in the app) |
+| News cards on / off (`news_cards_enabled`) | off | Lets the AI label saved headlines (§11, "News cards"). Spends AI calls, so it is off until you switch it on |
+| Most headlines labelled per run (`news_card_batch_limit`) | 20 | 1 to 30. A run also never makes more than 3 AI calls |
 | Watchlist | the bundled list | The symbols to scan, saved separately in `runtime/universe.json` (§11), not in `settings.json` |
 | Starting cash | $100,000 | Only applies to a fresh or reset account |
 | Default risk per trade | 1% | Sets the share count (§6) |
 | Exit-check interval | 15 minutes | How often positions are checked |
 | Slippage | 5 bps | The cost added to market fills (entries and stops) |
 | Commission per trade | $0 | — |
-| Watchers on / off (`watchers_enabled`) | off | Master switch for the background watchers (§19). Nothing is installed yet, so it does nothing until one is |
+| Watchers on / off (`watchers_enabled`) | off | Master switch for the background watchers (§19). Installed: the SEC filings watcher, the Fed watcher and the posts watcher |
 | What a watcher event does (`watchers_action`) | record, alert and re-evaluate | `record`, `alert` or `alert_and_reevaluate` (§19) |
 | Watcher check interval (`watchers_poll_minutes`) | 5 | How often the app looks for watchers that are due, 1 to 60. Takes effect after a restart |
 | Auto-execute trade plans | on | Opens a position as soon as a plan is made, if the market is open (otherwise the plan is redone at the next open, §8) |
@@ -1229,10 +1424,22 @@ signal is backtested on these dates before it may earn points.
 ## 14. Limitations and known bugs
 
 ### Limitations
+- **Data source health is in memory.** The Data sources card counts calls since the server started and forgets
+  them on restart. A bad symbol counts as a failed call for every source asked about it, which can make a healthy
+  source look worse than it is.
+- **The ECB's euro-area inflation series is frozen at December 2025** (the ECB replaced the dataset); the macro
+  endpoint still serves it and shows its last date.
 - **Insider history is only as complete as what has been loaded** (§11). It exists for the companies and
   dates you ran the backfill for; the SEC's ticker list has no delisted companies (pass their SEC number
   instead), and the transaction-level price is sometimes missing in the filing itself. A filing that
   reports no transaction rows leaves no trace and is simply re-read (from the local copy) on the next run.
+- **The posts source is unofficial and slow for what it measures** (§11, §19). Trump's posts come from a
+  third-party archive that can lag, drop posts, change format or stop, and a post moves a stock in minutes while
+  the watcher polls every 5 minutes and the scans run 3 times a day. Testing it needs hourly bars (about two
+  years exist). Only the newest ~100 posts and the Fed feeds' newest ~15 items per feed can be loaded; older
+  history is not.
+- **Fed speakers are a hand-kept list** (§11). When the Board changes the list in `fed_feed.py` must be
+  edited, or a new member's speeches are stored but never alert. The tone of a speech is not read.
 - **Missed-trade results are hypothetical** (§5): entry at the last known daily close, daily bars only,
   today's rules, no cash or position limits, and the quote a plan used is not stored. A small count
   proves nothing; the card says "too early to tell" below 20 resolved trades.
@@ -1289,15 +1496,23 @@ signal is backtested on these dates before it may earn points.
   stock with fewer years of history than asked for simply has fewer bars.
 - **News and fundamentals history only exists from the day the archive began** (§11). Backtests of
   earlier days have no recorded news or past fundamentals.
+- **News card labels are not point-in-time** (§11): they are written when the headline is labelled and the AI may
+  know how an older story ended. They are only meant for news from now on, and they change no score yet.
+- **PR Newswire collection is shallow and strict** (§11): each feed holds only the newest 20 or so releases, so
+  press releases are collected from the day you start; releases that name a company only loosely are skipped on
+  purpose. The feeds are a third party's and can change or stop.
 - **Yahoo can temporarily block** heavy use.
 - **The SEC contact** is still the made-up address, by choice for now. The SEC asks for a
   real contact, so set a separate email (not your personal one) as `SEC_EDGAR_USER_AGENT` before the
   S&P 500 backtest run (§12). Docker passes it in from the `.env` file next to `docker-compose.yml`.
 - **The first plan for a stock** can take about 20 seconds on a cold cache (SEC and earnings
   downloads).
-- **The backtester only tests the price-based part of the score** (§18): news, options, fundamentals,
-  insiders, earnings history, macro events and the AI all count as 0 in it, so it tests a smaller
-  strategy than the live one. Its results are **probably optimistic**: it trades today's winners (§11)
+- **The backtester tests a smaller strategy than the live one** (§18): by default only the price-based
+  part of the score. Fundamentals, insider buying and the earnings surprise record can be switched on
+  per run, but only where their facts were stored first. News, options, the earnings-date penalty,
+  macro events and the AI always count as 0 in it. Revenue is dated by the SEC filing **day** (public
+  from its end) and earnings reports by the report day, so some information appears a little later than
+  it really did. Its results are **probably optimistic**: it trades today's winners (§11)
   and it does not see a stop or target touched later on the day a position opens.
 - **Lessons are one AI's reading of one trade.** A single small trade proves little, so a lesson can be
   wrong or over-fitted, and the overlay is told to treat it as a note. Lessons are written only for
@@ -1336,7 +1551,7 @@ touches `backend/runtime/` or the Docker app.
 | Folder | What's in it | Survives a Docker rebuild? |
 |---|---|---|
 | `backend/data/` | The stock list (`sp500.csv`), built into the image | No: it's rebuilt from the repo |
-| `backend/runtime/` (in Docker, the `backend_runtime` volume) | The cache file `cache.db` (§11; safe to delete), the price history file `history.db` (§11; deleting it means downloading again), the database (`strategeia.db`: plans, positions (with each closed trade's AI lesson), equity points, account, the queue of plans waiting to be redone at the market open, the dated facts table `knownfact` from §11, which holds the saved news items, fundamentals snapshots and FINRA short-volume days (the downloaded FINRA files themselves sit in the `finra` folder beside it), and the insider trades from SEC Form 4 filings (the downloaded filings sit in the `sec_archive` folder beside it; safe to delete), the strategy-version table `strategyversion` from §4, the three backtest result tables `backtestrun` (which also holds the random-entry baseline's numbers), `backtesttrade` and `backtestequitypoint` from §18, and the missed-trade results `missedtradeoutcome` from §5, the saved state of each watcher `watcherstate` from §19, which can be rebuilt from the plans and the price history), `settings.json`, your watchlist `universe.json` (§11; delete it to go back to the bundled list), and the generated password, API key and session secret | **Yes** |
+| `backend/runtime/` (in Docker, the `backend_runtime` volume) | The cache file `cache.db` (§11; safe to delete), the price history file `history.db` (§11; deleting it means downloading again), the database (`strategeia.db`: plans, positions (with each closed trade's AI lesson), equity points, account, the queue of plans waiting to be redone at the market open, the dated facts table `knownfact` from §11, which holds the saved news items (including PR Newswire press releases), the AI labels on them (news cards), fundamentals snapshots, annual revenue from SEC filings, past earnings reports and FINRA short-volume days (the downloaded FINRA files themselves sit in the `finra` folder beside it), and the insider trades from SEC Form 4 filings and the 8-K announcements (the downloaded filings sit in the `sec_archive` folder beside it; safe to delete), the strategy-version table `strategyversion` from §4, the three backtest result tables (plus `backtestvalidation`, one row per walk-forward validation) `backtestrun` (which also holds the random-entry baseline's numbers), `backtesttrade` and `backtestequitypoint` from §18, and the missed-trade results `missedtradeoutcome` from §5, the saved state of each watcher `watcherstate` from §19, which can be rebuilt from the plans and the price history), `settings.json`, your watchlist `universe.json` (§11; delete it to go back to the bundled list), and the generated password, API key and session secret | **Yes** |
 
 ---
 
@@ -1355,6 +1570,9 @@ Every route except login, auth status and health needs you logged in (or an API 
 | `GET /api/analysis/{symbol}?range=` | Chart data and indicators |
 | `GET /api/research/{symbol}` | The research panel data. Also saves the news and fundamentals it just fetched into the archive (§11) |
 | `GET /api/archive/{symbol}?limit=` | What the news and fundamentals archive holds for a stock: counts, when saving began, the most recent items (with the time each became public) and the archive's overall size. Read-only |
+| `GET /api/news/{symbol}` | The stock's saved headlines (PR Newswire releases included) with their AI label when one exists, the News cards switch, whether an AI is usable, and how many are labelled and unlabelled. Read-only |
+| `POST /api/news/collect` | Reads PR Newswire's public feeds once and saves releases that match the watchlist (or the symbols in the body). 60-second cooldown |
+| `POST /api/news/label/{symbol}?limit=` | Has the AI label the stock's unlabelled headlines (400 while News cards is off; 20-second cooldown per symbol; at most 3 AI calls) |
 | `POST /api/trade-plans/generate`, `GET /api/trade-plans`, `GET /api/trade-plans/{id}` | Make a plan, list plans, get one plan. Each carries its `strategy_version` (empty for plans from before versioning) |
 | `GET /api/strategy/versions` | Every strategy version (§4), newest first: its number, date, the full settings and rules snapshot, what changed from the version before, and how many plans, no-trade decisions, opened positions and closed trades were made under it. Also the number of plans with no version, and which version the current settings map to (empty until a plan is generated under them). Read-only: it never creates a version |
 | `GET /api/portfolio/positions`, `POST /api/portfolio/positions` | List positions (each shows its plan's `strategy_version`, and its best and worst price as `mfe_pct`, `mae_pct`, `mfe_r`, `mae_r`: stored for a closed position, live for an open one; a closed one also carries `exit_resolution` and `entry_day_check`, §7); open a position from a plan (refused with a 400 while the market is closed, or while the plan waits for its redo) |
@@ -1365,10 +1583,18 @@ Every route except login, auth status and health needs you logged in (or an API 
 | `POST /api/portfolio/reset` | Reset the paper account |
 | `GET /api/settings`, `PUT /api/settings`, `GET /api/settings/status`, `POST /api/settings/test-connection` | Read or save settings, check status, test a provider. The test accepts an optional `tier` (`routine`, the default, or `decision`) to test the decision model, and optional `overrides` (unsaved form values: provider, models, keys, Telegram token and chat ID; unknown names are rejected, masked keys mean "unchanged") |
 | `GET /api/cache/status`, `POST /api/cache/clear` | The Data cache card (§11): entries in memory and on disk, how often answers were reused since the app started, the price history store's symbols, bar count, date range and size (read-only, writes nothing); and empty the cache, memory and file (30-second cooldown; the price history store is not touched) |
+| `GET /api/data-sources`, `POST /api/data-sources/{name}/probe` | The Data sources card (§11): every source with calls, success rate, latency, last success and last error (read-only, never calls a source), and one real probe request per source (10-second wait per source; `404` unknown source, `400` no probe for it, `429` too soon) |
+| `GET /api/macro/series`, `GET /api/macro/series/{id}?start=&end=` | The FRED and ECB series on offer, and one series' points (§11); `404` unknown id, `502` when the source has nothing |
+| `GET /api/research/{symbol}/earnings-preview` | The earnings preview (§22): facts from our own data plus an optional AI paragraph. Read-only; cached 15 minutes. |
+| `GET /api/calendar?from=&to=&symbols=` | The merged calendar (§22): economic releases, Fed / CPI / jobs dates, earnings, position flags, per-source status and the date check. Range up to 62 days (default 14 from today). Read-only. |
 | `GET /api/market/session` | The US market right now: its state (open, pre-market, after hours, closed, holiday), the next open and close (1:00 pm early closes included), and the holiday's name. The Dashboard badge and the Execute button read it. |
 | `GET /api/backtests/{id}/metrics`, `.../benchmarks`, `.../baseline`, `.../scorecard`, `GET /api/backtests/history-coverage?symbols=A,B` | Read-only statistics for a finished or partly finished run, worked out from its stored rows (§18); `409` while a run has no results yet; the scorecard takes its criteria as query parameters. History-coverage lists what price history is stored for the symbols and for SPY and ^VIX, and the exact preload command when something is missing |
-| `POST /api/backtests`, `GET /api/backtests`, `GET /api/backtests/{id}`, `GET /api/backtests/{id}/trades`, `GET /api/backtests/{id}/equity`, `POST /api/backtests/{id}/cancel` | The backtester (§18). The POST body also takes `run_baseline` (default true) and `baseline_runs` (default 20, 0 to 50); a run's progress says whether the main run or which baseline seed is going. POST starts a run in the background and answers `202` with its id at once (`409` while another run is active, `429` if one was started in the last 5 seconds, `400` for a request that can't work, such as missing price history, `422` for an invalid body); GET list and GET one give the status, progress, settings used, coverage and summary; trades and equity give the stored results; cancel stops a run at its next simulated day and keeps what it did so far |
+| `GET /api/smart-money/insiders`, `.../insiders/clusters`, `.../insiders/summary/{symbol}`, `GET /api/smart-money/status`, `POST /api/smart-money/insiders/refresh` | The Smart Money page (§20). The first two take `days` (1 to 365, default 90), `symbol`, and for trades `min_value` and `side` (`buys`, `sells`, `all`); the summary gives one symbol's 90-day numbers and what the score would do with them. Status says what is stored (`has_data` is false when nothing was loaded). All GETs only read. The POST loads Form 4 filings from SEC for a few watchlist symbols per call (`symbols_remaining` says how many are left) and answers `429` if used in the last 60 seconds |
+| `GET /api/terminal/heatmap`, `GET /api/terminal/macro`, `GET /api/terminal/recap` | The Market Terminal page (§21). Heatmap takes `window` (`1d`, `5d`, `1m`) and `limit` (1 to 200 symbols, default 60). Recap takes `ai` (default false) and `limit`. All three only read, are cached for 5 minutes, and carry an `as_of` time |
+| `POST /api/backtests/validate`, `GET /api/backtests/validation-options`, `GET /api/backtests/validations`, `GET /api/backtests/validations/{id}`, `POST /api/backtests/validations/{id}/cancel` | Walk-forward validation (§18). POST takes the symbols, dates, `folds`, `mode` (`rolling` or `anchored`), `train_ratio`, `embargo_days`, a `grid` of settings to try and fixed `overrides`; it answers `202` with an id (`409` while any backtest or validation is active, `400` when the folds do not fit the period or history is missing, `422` for an invalid body). The options endpoint lists the settings a grid may vary with your live value for each, and the limits. GET one returns the folds, the stitched out-of-sample curve, the deflated Sharpe block and the scorecard |
+| `POST /api/backtests`, `GET /api/backtests`, `GET /api/backtests/{id}`, `GET /api/backtests/{id}/trades`, `GET /api/backtests/{id}/equity`, `POST /api/backtests/{id}/cancel` | The backtester (§18). The POST body also takes `include_fundamentals`, `include_insiders` and `include_earnings` (default false: the dated parts of §18), `run_baseline` (default true) and `baseline_runs` (default 20, 0 to 50); a run's progress says whether the main run or which baseline seed is going. POST starts a run in the background and answers `202` with its id at once (`409` while another run is active, `429` if one was started in the last 5 seconds, `400` for a request that can't work, such as missing price history, `422` for an invalid body); GET list and GET one give the status, progress, settings used, coverage and summary; trades and equity give the stored results; cancel stops a run at its next simulated day and keeps what it did so far |
 | `GET /api/watchers`, `GET /api/watchers/events?limit=`, `PUT /api/watchers/{name}`, `POST /api/watchers/{name}/run` | Watchers (§19). The first two only read. PUT turns one watcher on or off. POST polls one watcher now (`429` for a repeat within 30 seconds, `404` for an unknown name) |
+| `POST /api/replay` | The What if? card (Trade Plans page, §18). Body: `{"overrides": {...}}` with one or more replayable settings (`min_confidence_for_trade`, `ai_overlay_objection_action`, `ai_overlay_scores_confidence`, `allowed_directions`). Re-decides every stored plan (newest 5000) and returns before and after trades taken, win rate and average R with their 95% intervals, the list of decisions that flip (newest 300) with the rules version of each, and the caveats. Sizing, cap, slippage, commission and exit settings are refused with `422` and the reason. Read-only: nothing is written or fetched |
 | `GET /api/missed-trades`, `POST /api/missed-trades/refresh` | The Missed trades card (§5). GET: per kind of missed trade (AI veto, under the confidence bar, held by the AI, written but never filled, no trend, other) the number of plans, resolved and open hypothetical trades, win rate and average R with their 95% intervals, total R; the closed trades for comparison; the two headline questions with their verdicts; every declined plan (newest 300); and the caveats. Read-only: it never computes, fetches prices or writes. POST: compute the results that are new or still open (at most 200 per call; `429` for a repeat within 30 seconds; results already final are never recomputed) |
 | `POST /api/signals/finra/refresh`, `GET /api/signals/finra/{symbol}` | FINRA short volume (§5 "Silent signals"). POST downloads the last days for the given symbols (default: the watchlist) and stores them; days already stored are not downloaded again (`429` for a repeat within 60 seconds). GET shows what is stored for one symbol (recent days, recent ratio, baseline) and what the silent signal reads for an optional `?direction=long|short`. Read-only: it never downloads or writes. Plans carry a `shadow_signals` list |
 | `POST /api/risk/calculate` | Position-size calculator (only reachable from the API docs) |
@@ -1413,16 +1639,20 @@ Every route except login, auth status and health needs you logged in (or an API 
 | **Implied move** | The size of move the options market expects |
 | **Silent signal** | A new signal that is recorded on every plan with the points it would have added, but is not scored until a backtest shows it beats luck (§5) |
 | **Short volume** | The share of a day's trading volume that was a short sale. Not the same as short interest, the number of shares currently sold short (§11) |
+| **8-K** | The SEC form a company files within four business days of a material event (results, a major contract, an officer leaving, a delisting notice). It lists numbered item codes (§11) |
 | **Form 4** | The SEC filing an insider must submit within 2 business days of trading their company's stock |
 | **Acceptance time** | The second the SEC accepted a filing. The app treats a Form 4 as public from then, not from the date of the trade |
 | **10b5-1 plan** | A trading plan an insider sets up in advance, so later sales follow a schedule rather than a fresh decision. Form 4 rows made under one are flagged |
 | **Drawdown** | The biggest fall from a peak |
 | **Strategy version** | A number (v1, v2, ...) naming one exact combination of the decision-relevant settings and the rules in the code. Every plan records the one it was made under, so results before and after a change can be told apart (§4). |
 | **Known at** | The moment a piece of information became public. A backtest may only use facts known before its simulated moment (§11). |
+| **News card** | An AI's label for one saved headline: event type, sentiment, materiality, companies mentioned, a one-line summary and whether it is about this company. Not point-in-time (§11). |
 | **Archive** | The app's own dated record of the news and fundamentals it has loaded. It is the only source of past news a backtest can use (§11). |
 | **Sharpe / Sortino / Calmar** | Return per unit of risk: risk as day-to-day jumpiness, as down days only, and as the worst fall from a peak (§18) |
 | **Beta / alpha** | How much a strategy moves with SPY, and the return left over after that (§18) |
 | **Random-entry baseline** | The same run repeated with entries picked by chance, to see whether the real entries beat luck (§18) |
+| **Deflated Sharpe ratio** | A Sharpe ratio corrected for how many things were tried and for fat tails, as the chance it beats what luck alone would give (§18). |
+| **Walk-forward** | Testing on days that come after the days the settings were chosen on, fold by fold (§18). |
 | **Backtest** | A replay of the app's own rules over past days, to see what they would have done (§18). Not a promise of future results. |
 | **Look-ahead** | A backtest mistake: using information that wasn't public yet at the simulated moment, which makes results look better than they could have been |
 | **Bollinger bands, MACD, VWAP** | Common chart indicators. VWAP is only shown on intraday ranges. |
@@ -1476,15 +1706,59 @@ Only the parts built from prices can be rebuilt for past days:
 | Daily chart (trend, momentum, near a key level, RSI) | **Yes**, up to 5 of its 6 points (not the volume point) |
 | Weekly chart and SPY agreeing | **Yes**, up to 2 points |
 | VIX regime | **Yes**, a penalty only |
-| Fundamentals, news, options, insider buying, earnings surprise record | **No**: 0 |
-| Expected-move and macro-event penalties, the AI overlay | **No**: 0 |
+| Fundamentals (revenue growth, nearness to the 52-week high or low) | **Only if switched on for the run**, up to 2 points (see below); otherwise 0 |
+| Insider buying | **Only if switched on**, up to 1 point; otherwise 0 |
+| Earnings surprise record | **Only if switched on**, up to 1 point; otherwise 0 |
+| News, options | **No**: 0 |
+| Expected-move and macro-event penalties, the earnings-date penalty, the AI overlay | **No**: 0 |
 
-So a backtested plan can earn at most **7 of the 16 points** (44%), not 16. The **confidence bar is not
+With nothing switched on, a backtested plan can earn at most **7 of the 16 points** (44%), not 16. The **confidence bar is not
 changed**: the live bar of 30% still means 5 points, which here is 5 of the 7 that can be earned, a
 tougher bar than live. Every run stores this explanation (its **coverage**) next to its results: the
 bar as a percentage and as points of the achievable maximum. A run may override the bar (see below);
-the override is recorded beside the live value. Later, dated company filings and earnings dates can be
-plugged in through the same data provider without touching the rules.
+the override is recorded beside the live value. The coverage also lists which dated parts the run
+switched on (next section), and the reachable points grow by what those parts can really add.
+
+### Dated company data (switched on per run)
+Three parts of the score can be rebuilt for a past day, because their data comes with a date. A run
+switches each on with `include_fundamentals`, `include_insiders` and `include_earnings` (all off by
+default; the Backtest Lab form has three checkboxes). They read **facts stored beforehand** (§11); a run
+never downloads anything.
+
+| Part | Where the data comes from | When it counts as public |
+|---|---|---|
+| **Fundamentals** | Revenue by year from the company's 10-K filings (SEC's XBRL data), and the 52-week high and low worked out from the prices known at that moment | A year's revenue from the end of the day its 10-K was filed (the data gives the filing day, not the time, so the later reading is used) |
+| **Insider buying** | SEC Form 4 filings (§11) | The moment SEC accepted the filing |
+| **Earnings surprise record** | Past reported quarters (estimate, actual, surprise) from yfinance | The end of the report day (the source does not say whether a company reported before the open or after the close) |
+
+How the dates are handled:
+- **A restated year shows its old number until the restating filing is public.** Each 10-K reports the
+  last three years, so one year can appear in several filings. At any moment the app uses the **latest
+  filing public by then** for each year. Years are lined up by their end date; only the newest unbroken run
+  of years is used, and a history whose newest year is more than two years old counts as missing.
+- **The 52-week range** uses only bars already final at the moment, over the last 365 days, and is
+  refused when fewer than 200 bars fall inside it. Market cap, P/E and revenue over the last twelve
+  months stay empty.
+- **Fundamentals** can earn at most **2 points** here (revenue growth +1, near the 52-week high +1; near
+  the low is the opposite case, not an extra point). Their third live point is the earnings-date
+  penalty, which is not rebuilt.
+- **The next earnings date is never used.** Companies announce it weeks ahead, but the data has no
+  announcement time, and a backtest may only use a date it can show was already public. So the
+  "earnings within 3 days" penalty is missing from a backtest, which therefore trades into reports a
+  little more freely than the live app does.
+- **A symbol with nothing stored scores 0 for that part.** A finished run's summary has a `dated_data`
+  block per switched-on part: how many lookups were made, how many found data, and for how many symbols.
+  Check it: a part that was switched on but never downloaded looks like "no signal", not like an error.
+- With everything on, a plan can earn up to **11 of the 16 points** (69%), and the live bar of 5 points
+  is then 5 of 11.
+
+Filling the facts in (each is safe to repeat; run it from the repository folder):
+- `backend/.venv/Scripts/python scripts/backfill_fundamentals.py AAPL MSFT` downloads annual revenue from
+  SEC (about three requests per symbol, at most 5 per second, identified by `SEC_EDGAR_USER_AGENT`).
+- `backend/.venv/Scripts/python scripts/backfill_insider_trades.py AAPL MSFT --since 2016-01-01` (§11).
+- `backend/.venv/Scripts/python scripts/backfill_earnings.py AAPL MSFT` downloads past earnings reports
+  from yfinance, a few symbols at a time to stay inside Yahoo's limits.
+All three accept `--db FILE` (a scratch database) and `--report` (show what is stored, no network).
 
 ### Starting a run
 `POST /api/backtests` (§16) takes the **symbols** (their prices must already be stored: run
@@ -1600,13 +1874,92 @@ roughly half an hour, and the full S&P 500 several hours (an estimate from that 
 - **Price-only.** The 3 missing news and options points, the insiders, and the AI can't be tested this
   way; they are measured going forward instead (§5).
 
+### Walk-forward validation and the deflated Sharpe ratio (the Validation tab)
+A single backtest judges a strategy on the same days its settings were chosen on, which flatters it.
+**Walk-forward validation** checks that honestly. The period is cut into **folds** (2 to 12). Each fold
+has a **train** window and a later **test** window, with an **embargo** (a gap of trading days, default
+5) between them. Test windows follow each other and never overlap. The train window is either
+**rolling** (a fixed length that slides forward) or **anchored** (it always starts at the first day).
+The train window is a chosen multiple (default 2) of one test window, and each window needs at least
+20 trading days.
+
+Optionally you give a small **grid** of settings to try: the confidence bar, the risk per trade, the
+holding limit and slippage (up to 5 values each, 16 combinations, 100 runs in all). In every fold each
+combination ("variant") is run on the train days, the one with the best **in-sample Sharpe** is
+**selected**, and only that one is run on the test days it has never seen. Without a grid there is a
+single variant and nothing is selected. Every window is a separate run of the same backtester on a
+throwaway database, starting with the full starting cash and no open positions, and the data provider
+shows each simulated day only what was known then. Because the windows are independent, nothing carries
+over from a train window into a test window; the embargo is an extra safety gap.
+
+What you get (`GET /api/backtests/validations/{id}`):
+
+| Part | Meaning |
+|---|---|
+| **Fold table** | For each fold: the train and test dates, the selected settings, and return, Sharpe and trade count in-sample against out-of-sample. A big gap between the two sides is the sign of tuning to noise |
+| **Out-of-sample equity** | The test windows only, joined end to end (each continues from where the last one ended), plus the combined return, Sharpe, drawdown and trades |
+| **Probabilistic Sharpe ratio (PSR)** | The chance that the true Sharpe is above zero, given the Sharpe measured, how many days it was measured on, and how fat-tailed and skewed the returns are |
+| **Expected luck** | The best Sharpe that the number of tries would give by chance alone. It grows with the number of tries and with how far apart the tries' Sharpe ratios were |
+| **Deflated Sharpe ratio (DSR)** | The PSR measured against that expected luck instead of zero: the chance the strategy is better than what trying that many times would produce by luck |
+| **Tries** | Variants times folds when a grid is used (every variant was tried in every fold); 1 without a grid |
+| **Scorecard** | Two lines: out-of-sample return positive in more than half the folds (needs 3 or more folds), and DSR of at least 0.95. Plus the same kind of honesty notes as a run's scorecard |
+
+How to read it: a DSR near 100% means the out-of-sample Sharpe is hard to explain by luck; under 95% means
+it could plausibly be luck. It is evidence, not proof. It assumes the tries were independent, which
+neighbouring settings are not, so it can understate the luck. The sample is the out-of-sample days only,
+and with fewer than 60 of them no DSR is given. A validation is a job on the same single worker as a
+run: one at a time, with progress counted in window runs, cancel (the finished folds are kept, but a
+partial validation gets no combined result), and "failed (interrupted)" if the app stops. It stores its
+result in one row of the `backtestvalidation` table and never writes backtest rows.
+
 ---
+
+### Look-ahead guard tests
+
+A backtest is only honest if no decision can see the future. A dedicated test file guards that for every
+reader of dated data, and any new one has to pass it:
+
+- A **probe** wraps a data source and records, for every answer, the decision moment against the latest
+  date the answer carries (a bar's day, a fact's "known at" time, a news time). Any value at or after the
+  moment fails the test. The probe is itself tested against a deliberately leaky source to prove it
+  can fail.
+- **Future-change tests**: for many random decision moments on made-up prices and facts, everything after
+  the moment is rewritten and the answer must be identical. This covers the backtest data source, the
+  dated-fact readers, the insider, filing, fundamentals, earnings and FINRA readers, the weekly
+  resample and a whole mini backtest (a shorter run must also be the start of a longer one).
+- **Date-edge tests**: the clock change in March and November, half-day closes, weekend and holiday
+  decision days, midnight in UTC versus New York, and a filing accepted at 17:59 versus 18:01 New York
+  time against a decision at 09:45 the next morning.
+- **Every reader must be listed**: the tests find every public function whose name ends in `_as_of`
+  and fail if one is not on the guarded list, so a new reader cannot ship unchecked.
+
+### What if? (replaying a settings change)
+
+Before switching a setting on, the **What if?** card (Trade Plans page) re-decides the plans already made
+under it and shows what would have changed. Only settings that decide take or skip can be replayed,
+because only their inputs are stored on every plan:
+
+| Replayable | Not replayable (use a backtest) |
+|---|---|
+| Minimum confidence to trade | Risk per trade, caps, starting cash |
+| What an AI objection does (cancel, hold, nothing) | Slippage, commission |
+| Whether an objection costs confidence points | Stops, targets, holding limit |
+| Long only or short only | |
+
+How it works: for each stored plan the take/skip verdict is recomputed from the stored confidence points
+and AI opinion. A decision flips only if the new setting gives a different verdict from today's setting
+on the same stored inputs. A trade that is now taken uses its hypothetical result from the Missed trades
+list (§5); a trade that is now skipped loses its real result. A flipped trade with no result yet is
+listed but not counted in the rates. The card shows before and after trades taken, win rate and average R
+with 95% intervals, the flipped decisions with the rules version each was made under, and the limits:
+taking an extra trade would change cash and caps for later trades, which the replay does not model.
+It writes nothing.
 
 ## 19. Watchers
 
 A **watcher** checks one source in the background (a new filing, a headline, a spike in short selling)
-and reports **events**. This part of the app is the framework only: **no watcher is installed yet**, so
-the master switch has nothing to run. Each real watcher is added on its own later.
+and reports **events**. Three watchers are installed today: the SEC filings watcher, the Fed watcher and the
+posts watcher (below). More are planned, each added on its own.
 
 **What a watcher is.** A name, how often it should be polled, a cooldown, a daily cap, and one function
 that fetches its source and returns events. An event holds the symbol (or none for a market-wide item),
@@ -1649,9 +2002,201 @@ restart.
 
 **On the Settings page:** the master switch, the action, the check interval, a table of installed
 watchers (with a Run now button and an on/off switch each), and the latest events. With none installed
-it says "No watchers are installed yet".
+it would say "No watchers are installed yet".
+
+### The SEC filings watcher (`sec_filings`)
+
+Looks for **new Form 4 and 8-K filings** for your watchlist companies (`backend/app/watchers/sec_watcher.py`).
+Polled every **5 minutes**, with a **6-hour cooldown per company** and a daily cap of 20 alerts. It runs only
+while the master switch (Settings, Watchers) is on.
+
+**Every poll, in this order:**
+
+1. Find filings the app has not stored yet. "Already stored" is read from the saved facts themselves (a
+   filing number with stored rows is not fetched again), so there is no separate bookmark to lose.
+2. **Store them first** as dated facts (§11): Form 4 rows and 8-Ks, each known from its SEC acceptance time.
+3. Only then return events, which the framework saves and (if you chose so) alerts on.
+
+**What alerts, and what never does:**
+
+| Alert | When |
+|---|---|
+| **Insider buy** (notable) | One new Form 4 whose open-market purchases minus its sales come to at least **$100,000** |
+| **Insider cluster** (urgent) | A new Form 4 completes a group of **2 or more different insiders** buying within 14 days of each other (looked for over the last 30 days) |
+| **8-K** (notable) | The filing lists one of: 1.01, 1.02, 1.03, 2.01, 2.02, 2.05, 2.06, 3.01, 4.01, 4.02, 5.01, 5.02. Urgent for 1.03 (bankruptcy), 3.01 (delisting) and 4.02 (restated financials) |
+
+**Insider sales never alert.** Insiders sell for many reasons (taxes, diversifying, pre-set plans) that say
+little about the company. Sales, grants, option exercises, 8-Ks with only routine items (8.01 "other events",
+9.01 exhibits) and amendments (4/A, 8-K/A) are stored and stay quiet. A filing accepted more than **48 hours**
+before the poll is stored but never alerts, so the first run on an empty database does not announce a week
+of old filings. The alert's link is the SEC's page for the filing.
+
+**How it finds filings.** With up to **40** companies on the watchlist it asks each company's filing list
+(one request per company per poll). With more (the bundled list has about 500) it reads the SEC's
+market-wide "latest filings" feeds for Form 4 and 8-K, keeps the entries for watchlist companies, and asks
+only those companies' filing lists. It reads the feed back to the last successful poll (plus 30 minutes),
+at most 6 pages of 100 entries per feed. Crypto pairs, indexes and symbols the SEC does not list are skipped.
+All requests go through the shared SEC client (§11): your SEC contact, at most 5 requests per second.
+
+**If the SEC refuses.** A refusal (403 or 429) ends the poll at once. If nothing had been found yet the
+failure is saved and shown like any watcher failure and the watcher backs off (see Failures). Events already
+found in that poll are kept. A single filing that cannot be read is skipped and tried again next poll.
+
+**Limits.** A poll that crashes after storing a filing but before returning its event loses that alert (the
+filing itself is kept). A watchlist company missing from the SEC's company file is not watched.
 
 **The scheduler** wakes every `watchers_poll_minutes` (5 by default, with a small random delay) and runs
 the watchers that are past their own interval.
 
 **Limitation:** changing the check interval takes effect after the app restarts.
+
+### The Fed watcher (`fed`)
+
+Watches the Fed's public feeds for **policy statements and speeches** (`backend/app/watchers/fed_watcher.py`).
+Polled every **15 minutes**, with a **1-hour cooldown** (all Fed events share one, because they name no company)
+and a daily cap of 10 alerts. Every poll stores each item as a dated fact first (§11, "The Fed"), then returns events:
+
+| Alert | When |
+|---|---|
+| **FOMC statement** (urgent) | The Fed issues its rate-decision statement |
+| **Economic projections, meeting minutes** (notable) | The projections or the minutes of a Committee meeting are released |
+| **Chair speech or testimony** (urgent) | A Chair speaks or testifies |
+| **Board member speech or testimony** (notable) | A Board member on the code's list speaks or testifies |
+
+Everything else (discount-rate minutes, task-force notices, a staff member's testimony) is stored and stays quiet.
+An item published more than **48 hours** before the poll is stored but never alerts.
+
+**It is a risk flag, not a trade idea.** A Fed event names no company, so it is saved and alerted but can **never
+start an evaluation**, whatever the action setting says. What a statement means for any one stock is not decided:
+nothing reads the words (the tone is not read, §11). If no feed can be read, the failure is saved and shown and the
+watcher backs off; if only some can, the others still count.
+
+### The posts watcher (`trump_posts`)
+
+Watches **Donald Trump's Truth Social posts** through an **unofficial archive feed** (§11, "Posts")
+(`backend/app/watchers/posts_watcher.py`). Polled every **5 minutes**, with a **30-minute cooldown** per company
+(and one shared cooldown for market-wide topics) and a daily cap of 30 alerts. Every poll stores each post as a
+dated fact first, then returns events. **Rules decide, there is no AI.**
+
+| Alert | When |
+|---|---|
+| **Names a watchlist company** (notable) | The post contains a watchlist company's exact name (without "Inc." or "Corporation"), or its ticker as `$NVDA`, `NASDAQ: NVDA`, or a bare ticker of 4 or more capital letters. One event per company. This is the only kind that may start an ordinary full evaluation of the company (queued for the open if the market is shut, like any watcher event) |
+| **Market topic** (notable or info) | The post touches tariffs, China, the Fed or interest rates, semiconductors, oil and gas, drug makers, banks, electric vehicles or crypto, and names no watchlist company. Alert only. Tariffs, China and the Fed are notable, the others info |
+
+Names that are also ordinary words ("Target", "Visa", "Block", "Fox", "Dow", "News", ...) match only with their full
+legal name, so "Fox News" or "the Dow" names no company. A short ticker ("F", "T", "ALL") is never matched bare.
+Crypto pairs are not matched by name; crypto is a topic. Reposts and posts with no words are stored and never alert.
+A post older than **6 hours** is stored but never alerts. The post does not choose a direction: whether it is good
+or bad for the company is not read.
+
+**Honest limits.** A post can move a stock within **minutes**; this watcher checks every 5 minutes and the scans
+run three times a day, so most of the move is usually over by the time anything reacts. The source is unofficial
+and can lag, drop posts or stop (a feed that cannot be read, or whose format changed so that no post can be read,
+is saved as an error and produces no events). Testing whether posts predict anything needs **hourly price bars**,
+and only about two years of those exist, so any result will rest on a short, thin sample.
+
+---
+
+## 20. Smart Money
+
+The **Smart Money** page (`/smart-money`) shows what people with inside knowledge have done with a
+company's stock, read from public filings. Insiders is the only tab that works today. **Congress** and
+**Funds** are shown as planned tabs with a one-line explanation each; they hold no data.
+
+**Where the numbers come from.** SEC Form 4 filings, stored one row per trade as dated facts (§11). Each row has
+two dates, and the page shows both: the **trade date** (what happened) and **public since** (the moment SEC accepted
+the filing, the first time anyone could see it), with the delay between them. Every row links to its SEC filing.
+A filing only appears from the moment it was accepted.
+
+**What is listed.** Open-market buys (SEC code P) and open-market sells (code S). Grants, option exercises and tax
+withholding are left out because they are not market decisions. A row flagged as made under a pre-arranged
+**10b5-1 plan** carries a chip. Roles show as badges (CEO, CFO, Officer, Director, 10% owner).
+
+**How it relates to the score (§5).** Only open-market **buys** can ever add a point, at most one, and only when net
+buying is large enough. **Sells are never scored.** The page says so on its face. The Analysis page's Overview tab has
+a compact "Insider activity" card for the shown symbol: 90-day buy and sell counts and values, cluster count, what
+today's rules would add to a long (for information only, it changes nothing), and the latest trades.
+
+**What the Insiders tab holds.**
+
+| Part | What it shows |
+|---|---|
+| Summary cards | Trades in the window, value bought, value sold, number of cluster buys |
+| Cluster buys | Two or more different insiders buying within 14 days of each other, with value, roles, trade dates and the moment the cluster became visible |
+| Trades table | Newest filing first, up to 500 rows. Filters: side, minimum value, days (30 to 365) and symbol. A minimum value hides rows whose filing gave no price |
+
+**Nothing loaded is not "quiet".** With no stored filings the page says so and shows the command to load them
+(`python scripts/backfill_insider_trades.py AAPL MSFT --since 2025-01-01`) and a **Load / refresh from SEC** button.
+The button asks SEC for the watchlist's filings, a few symbols per click (symbols with nothing stored first; 90 days for
+a new symbol, 14 days for one already stored). Click again while it says symbols are waiting. If the install still uses the
+placeholder SEC contact the page notes it (set `SEC_EDGAR_USER_AGENT`).
+
+**Limits.** Only symbols you have loaded appear. Buys by an insider with no price in the filing add to the count but not
+to the value. Two buys by the same person never form a cluster.
+
+## 21. Market Terminal
+
+The **Market Terminal** page (`/terminal`) is a read-only overview of the market. It places no trades and
+changes nothing. It has three parts, top to bottom.
+
+**Market recap.** A short summary written by fixed rules from the numbers on the page: how many of the
+scanned symbols rose and fell, how many closed at a 52-week high or low, the top gainers and decliners,
+the strongest and weakest sectors, and the VIX. It is labelled **rule-based**. If an AI provider is
+connected, an **Add an AI paragraph** button appears. The model is given only the listed numbers and told
+not to add anything. That paragraph is labelled as AI-written, is only made when you press the button
+(it costs one model call), and is kept for 30 minutes. If the call fails, the rule-based recap stands alone.
+
+**Sector heatmap.** One tile per symbol, grouped by sector. Tile **area** is market cap (a symbol whose cap
+is unknown gets the median; if most caps are unknown, all tiles are equal and the page says so). Tile
+**colour** is the price change over 1 day, 5 days or 1 month, from green to red. Clicking a tile opens that
+symbol in Analysis. Below it is a row of the eleven sector ETFs (XLK, XLF, XLE, XLV, XLY, XLP, XLI, XLB,
+XLU, XLRE, XLC), which show each sector across the whole market, not just your list. To avoid hundreds of
+requests, the page reads only the **first 60** symbols of your universe by default (you can pick 30 to
+200). The page says how many it read out of how many exist. Symbols with no data are listed, not drawn.
+
+**Macro panel.** Tiles for the S&P 500, Nasdaq Composite, Dow Jones, Russell 2000, VIX, the US dollar
+index and the 3-month, 5-year, 10-year and 30-year Treasury yields. Each tile shows the last value, the
+change since the previous close, a sparkline of about 30 daily closes, the date of the last bar and the
+source. A yield curve chart shows the **10-year minus 3-month spread** and marks the curve **inverted**
+when it is negative. The VIX is marked **elevated** from 25, the same level the scoring uses to lower
+confidence. A series the data providers cannot supply shows **not available**. A 2-year yield is not
+available from the free sources, so it is shown as missing and never estimated.
+
+All three come from daily bars through the normal data providers (so they share the 15-minute price
+cache) and are also kept for 5 minutes by the page's own cache. The page shows an "as of" time on each
+part. Nothing here is stored in the database.
+
+---
+
+## 22. Calendar and earnings preview
+
+### The Calendar page (`/calendar`)
+One list of dated events, by **week** or **month**, in US Eastern time. Three sources feed it, and each can fail on its own without hiding the others:
+
+| Source | What it gives | Limits |
+|---|---|---|
+| **Economic feed** (Forex Factory's free weekly JSON, no key) | US releases with time, impact (Low / Medium / High / Holiday), **forecast** and **previous** value | Only the current Monday-to-Sunday week. It never has the released "actual" value, so the page says "not in this feed". It is unofficial and can answer with an empty page when asked too often. |
+| **Built-in dates** (`analysis/macro_calendar.py`) | Fed decisions (to the end of 2027), CPI releases and jobs reports (2026 only so far) | Kept by hand from the Fed and BLS schedules. |
+| **Market data provider** | The next earnings date of every watchlist symbol (the first 60) plus every open position and any symbols named in the request | Crypto pairs have none. One lookup per symbol, cached for a day. |
+
+**How the lists merge.** When the feed lists a Fed / CPI / jobs release on the same day as the built-in table, the feed row (with its forecast) is shown and the table row is dropped. When the feed does not list it on a day it covers, the built-in row stays and says so. Fed decisions show 2:00 pm and CPI / jobs reports 8:30 am, the agencies' fixed times.
+
+**My positions.** An earnings row for a symbol you hold is flagged. A Fed / CPI / jobs row, or a High-impact economic row, in the next **14 days** is flagged for every open position, since it hits the whole market. A card at the top lists, per open position, its earnings date and the macro days inside that window. The "My positions" chip filters to the flagged rows.
+
+**When a source is down** the page says so, for example "economic calendar source unavailable: showing the built-in Fed/CPI/jobs dates only". The feed is cached 3 hours; if a refresh fails the last good copy is shown (marked stale) for up to a week; after a failure it is not asked again for 10 minutes. The page never invents events.
+
+**Date check.** The footer compares the feed with the built-in table for the days the feed covers and lists any disagreement (a Fed / CPI / jobs date in one and not the other). It only reports: the table is never changed automatically. A feed title the app does not recognise is simply not compared.
+
+### Earnings preview (Analysis page, Earnings tab)
+Below the upcoming-earnings card. **Facts first, computed by rules from our own data; the paragraph on top is optional.**
+
+| Part | How it is made |
+|---|---|
+| Report date and estimates | The data provider's next earnings date, EPS and revenue estimate |
+| Median past move | Median absolute % move around the last reports (close before to first close after), from up to 5 years of prices |
+| Options-implied move | From the options' at-the-money implied volatility to the nearest expiry. It is **compared** with the median past move (ratio, "rich" at 1.25x or more, "cheap" at 0.8x or less) only when that expiry is on or after the report date; otherwise it does not price the report and is shown without a ratio |
+| Scenarios (Bull / Base / Bear) | The 75th / 50th / 25th percentile of the stock's own **signed** past reactions. They are how it reacted before, never a forecast or a price target. Needs at least 4 past reactions |
+| Surprise record | Beats and misses of EPS consensus (by 1% or more) and the last 4 quarters with the stock's reaction |
+| What to watch | Short bullets, each from a number above (rich or cheap options, beat streak, estimate vs last EPS, RSI, 52-week range). Nothing generic |
+
+The paragraph is written from those facts by the configured AI (routine model, facts only, marked as data, no web search, no price target, no direction guess). With no AI, or if it fails, a rule-based paragraph is shown. The finished preview is cached 15 minutes. A section whose data cannot be read is listed as missing instead of guessed. Crypto symbols have no preview.
