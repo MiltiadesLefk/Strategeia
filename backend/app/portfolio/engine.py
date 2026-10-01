@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from datetime import datetime
 
 import pandas as pd
 from sqlmodel import Session, select
@@ -8,8 +10,32 @@ from sqlmodel import Session, select
 from app.data_providers.base import AllProvidersFailedError, DataProvider
 from app.data_providers.cache import fresh_data_only
 from app.data_providers.universe import get_sector
+from app.markets import format_market_time, is_market_open_for, next_us_open, us_closure_reason
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
 from app.timeutil import utcnow_naive
+
+# Returns "now" as a naive-UTC datetime, the convention for every stored
+# timestamp (timeutil.utcnow_naive).
+Clock = Callable[[], datetime]
+
+
+def default_clock() -> datetime:
+    """The engine's notion of "now" when no clock is passed in: the real time.
+
+    Everything time-dependent in the engine reads its clock — the market-session
+    gate in open_position, and the opened_at / closed_at / equity-snapshot
+    timestamps — so a backtest can drive it through simulated time by passing
+    `clock=` instead. A module-level function looked up when an engine is
+    built (see resolve_clock), never bound as a default argument, so the test
+    suite can pin it to a known open session (tests/conftest.py)."""
+    return utcnow_naive()
+
+
+def resolve_clock(clock: Clock | None) -> Clock:
+    """`clock`, or whatever default_clock is at call time. Callers outside
+    this module use this rather than importing default_clock by name, which
+    would bind the original and ignore a pinned one."""
+    return clock if clock is not None else default_clock
 
 # How much history mark_to_market() pulls when looking for a stop/TP touch.
 # Must comfortably exceed the longest realistic gap between two runs (an app
@@ -65,6 +91,18 @@ class StalePlanError(Exception):
     UI still shows the original ones."""
 
 
+class MarketClosedError(Exception):
+    """Raised when the symbol's market is closed at the engine's `now`. The
+    only price available then is the previous session's close, and a paper
+    fill at it is a trade nobody could actually have made: on Sunday
+    2026-09-27 two auto-executed plans opened NVDA and AAPL at Friday's close
+    plus slippage (plan.md F-6). Checked here, in the engine, like
+    MaxPositionsExceededError, so every path that opens a position — a plan's
+    auto-execute, the manual Execute button, the auto-scan loop, and later
+    the watchers and the backtester — shares one rule. Crypto (`-USD`) never
+    closes, so it can always open."""
+
+
 class PaperTradingEngine:
     def __init__(
         self,
@@ -76,6 +114,7 @@ class PaperTradingEngine:
         commission_per_trade: float = 0.0,
         max_positions_per_sector: int | None = None,
         max_position_pct_of_adv: float | None = None,
+        clock: Clock | None = None,
     ):
         self._session = session
         self._data_provider = data_provider
@@ -85,6 +124,18 @@ class PaperTradingEngine:
         self._commission_per_trade = commission_per_trade
         self._max_positions_per_sector = max_positions_per_sector
         self._max_position_pct_of_adv = max_position_pct_of_adv
+        self._clock = resolve_clock(clock)
+
+    def now(self) -> datetime:
+        """The engine's current moment (naive UTC): real time, or a simulated
+        one when a clock was passed in."""
+        return self._clock()
+
+    def is_market_open_for(self, symbol: str) -> bool:
+        """Whether open_position would accept `symbol` right now, by the
+        engine's own clock — lets a caller decide what to do with a plan
+        (trade_plan_service defers it) before attempting the fill."""
+        return is_market_open_for(symbol, self.now())
 
     def get_account_state(self) -> AccountState:
         account = self._session.exec(select(AccountState)).first()
@@ -126,6 +177,16 @@ class PaperTradingEngine:
     # ------------------------------------------------------------ open/close
 
     def open_position(self, trade_plan: TradePlanRecord) -> PaperPosition:
+        # First, before any other check or the re-quote: nothing else about
+        # the fill means anything if no real trade could happen right now.
+        now = self.now()
+        if not is_market_open_for(trade_plan.symbol, now):
+            raise MarketClosedError(
+                f"The US market is closed ({us_closure_reason(now)}), so {trade_plan.symbol} can't be "
+                f"filled at a real price — the only quote is the last session's close. It reopens "
+                f"{format_market_time(next_us_open(now))}."
+            )
+
         account = self.get_account_state()
 
         existing = self._session.exec(
@@ -189,6 +250,7 @@ class PaperTradingEngine:
             tp2=trade_plan.tp2,
             shares=shares,
             fees_paid=self._commission_per_trade,
+            opened_at=now,
         )
         trade_plan.status = "executed"
 
@@ -292,7 +354,7 @@ class PaperTradingEngine:
         account.current_cash -= self._commission_per_trade
 
         position.status = "closed"
-        position.closed_at = utcnow_naive()
+        position.closed_at = self.now()
         position.close_price = close_price
         position.close_reason = reason
         position.realized_pnl = realized_pnl
@@ -317,9 +379,9 @@ class PaperTradingEngine:
         The entry price is a daily CLOSE, so the entry bar is already spent —
         including it would let that bar's pre-entry low trigger a stop the
         position was never exposed to. Rather than assume the entry bar is
-        "today" (wrong whenever a position opens outside US hours, which the
-        3x/day auto-scan does routinely), it's identified as the last bar at
-        or before opened_at, and everything after that is in scope."""
+        "today" (wrong whenever a position opens outside US hours, which a
+        24/7 crypto pair can do at any hour), it's identified as the last bar
+        at or before opened_at, and everything after that is in scope."""
         if bars.empty:
             return bars
         if "date" not in bars.columns:
@@ -422,6 +484,8 @@ class PaperTradingEngine:
             # position were closed right now," not a raw notional sum.
             mark_value += position.shares * price if position.direction == "long" else -(position.shares * price)
 
-        snapshot = EquitySnapshot(equity_value=account.current_cash + mark_value, cash_balance=account.current_cash)
+        snapshot = EquitySnapshot(
+            timestamp=self.now(), equity_value=account.current_cash + mark_value, cash_balance=account.current_cash
+        )
         self._session.add(snapshot)
         self._session.commit()

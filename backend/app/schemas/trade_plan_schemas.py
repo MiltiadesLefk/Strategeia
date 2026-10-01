@@ -64,9 +64,14 @@ class TradePlanResponse(BaseModel):
     # ai_opinion_stance (its directional read) and the field acted on.
     ai_trade_verdict: str | None = None
     # Plain-English outcome of the auto-execute step (executed / skipped-with-
-    # reason / held for manual review on overlay disagreement). Null on a
-    # no_trade record — auto-execute is never attempted there.
+    # reason / held for manual review on overlay disagreement / deferred
+    # because the market was closed). Null on a no_trade record — auto-execute
+    # is never attempted there.
     auto_execute_note: str | None = None
+    # Set while this plan, made with its market closed, waits to be redone
+    # from fresh data at the next open (D10 = C): when that redo is due. Such
+    # a plan can't be executed by hand — only the fresh plan can.
+    redo_at: UtcDatetime | None = None
     # Informational only, tradeable plans only (parallels atr/stop_atr_multiple):
     # options-implied +/-% move by the nearest usable expiration, and the
     # median actual +/-% move this stock has made around its last reported

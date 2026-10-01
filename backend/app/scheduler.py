@@ -11,10 +11,18 @@ from app.config import load_app_settings
 from app.data_providers.factory import get_data_provider
 from app.database import engine
 from app.llm_providers.factory import get_llm_provider
-from app.markets import US_MARKET_TZ, is_always_on, is_us_market_open, is_within_post_close_grace
+from app.markets import (
+    US_MARKET_TZ,
+    is_always_on,
+    is_us_market_open,
+    is_us_trading_day,
+    is_within_post_close_grace,
+    to_market_time,
+    us_holiday_name,
+)
 from app.portfolio.engine import PaperTradingEngine
 from app.portfolio.models import PaperPosition
-from app.services.automation_service import run_auto_scan
+from app.services.automation_service import run_auto_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
 
 logger = logging.getLogger(__name__)
@@ -35,13 +43,21 @@ AUTO_SCAN_SESSION_TIMES_ET = [
     ("post_close", 16, 15),  # after the close, once the day's bar is final
 ]
 
+# The market-open redo (D10 = C) is polled on this cadence through the US
+# session, weekdays; run_market_open_redos itself waits for 09:45 ET (the
+# open + REDO_DELAY_AFTER_OPEN) and skips holidays and closed hours. Polling
+# rather than one 09:45 run means a redo missed while the app was down, or
+# one whose data fetch failed, is picked up on a later tick the same day.
+MARKET_OPEN_REDO_CRON = {"day_of_week": "mon-fri", "hour": "9-15", "minute": "0,15,30,45"}
+
 
 def _should_mark_now(session: Session) -> bool:
     """Skip ticks that cannot possibly find anything new: outside the US
-    session nothing an equity position depends on moves, so polling every 15
-    minutes through the night just burns provider quota (and, on yfinance,
-    rate limit that the next real scan needs). Crypto positions never stop
-    moving, so the presence of one keeps marking on around the clock."""
+    session (weekends, holidays, and after a 1:00 pm early close included)
+    nothing an equity position depends on moves, so polling every 15 minutes
+    through the night just burns provider quota (and, on yfinance, rate limit
+    that the next real scan needs). Crypto positions never stop moving, so the
+    presence of one keeps marking on around the clock."""
     if is_us_market_open() or is_within_post_close_grace():
         return True
     open_symbols = session.exec(select(PaperPosition.symbol).where(PaperPosition.status == "open")).all()
@@ -82,6 +98,13 @@ def _auto_scan_job() -> None:
     settings = load_app_settings()
     if not settings.auto_scan_enabled:
         return
+    today = to_market_time().date()
+    if not is_us_trading_day(today):
+        # The cron only knows weekdays. On a market holiday there is no new
+        # bar to evaluate, and every plan it made could only be queued for
+        # the next open, which evaluates it again anyway.
+        logger.info("Auto-scan skipped: US market closed for %s", us_holiday_name(today))
+        return
     data_provider = get_data_provider(settings)
     llm_provider = get_llm_provider(settings)
     with Session(engine) as session:
@@ -89,6 +112,19 @@ def _auto_scan_job() -> None:
             run_auto_scan(settings, data_provider, llm_provider, session)
         except Exception:
             logger.exception("Scheduled auto-scan tick failed")
+
+
+def _market_open_redo_job() -> None:
+    if not is_us_market_open():
+        return  # cheap exit before building providers: holidays, early closes
+    settings = load_app_settings()
+    data_provider = get_data_provider(settings)
+    llm_provider = get_llm_provider(settings)
+    with Session(engine) as session:
+        try:
+            run_market_open_redos(settings, data_provider, llm_provider, session)
+        except Exception:
+            logger.exception("Scheduled market-open redo tick failed")
 
 
 def start_scheduler() -> BackgroundScheduler:
@@ -116,6 +152,11 @@ def start_scheduler() -> BackgroundScheduler:
             CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone=US_MARKET_TZ),
             id=f"auto_scan_{session_name}",
         )
+    _scheduler.add_job(
+        _market_open_redo_job,
+        CronTrigger(**MARKET_OPEN_REDO_CRON, timezone=US_MARKET_TZ),
+        id="market_open_redo",
+    )
     _scheduler.start()
     return _scheduler
 

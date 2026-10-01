@@ -6,9 +6,11 @@ from sqlmodel import Session, select
 from app.api.deps import get_app_settings, get_data_provider, get_session, require_auth
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
+from app.markets import format_market_time
 from app.portfolio.engine import (
     DuplicatePositionError,
     InsufficientCashError,
+    MarketClosedError,
     MaxPositionsExceededError,
     PaperTradingEngine,
     SectorConcentrationError,
@@ -23,6 +25,7 @@ from app.schemas.portfolio_schemas import (
     PortfolioStatsSchema,
     PositionSchema,
 )
+from app.services.deferred_evaluation_service import pending_redo_for_plan
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"], dependencies=[Depends(require_auth)])
 
@@ -73,8 +76,26 @@ def open_position(
         raise HTTPException(status_code=404, detail="Trade plan not found")
     if plan.status != "pending":
         raise HTTPException(status_code=400, detail=f"Trade plan is already {plan.status}")
+    # D10 = C: a plan made while the market was closed is replaced by a fresh
+    # one shortly after the open, and only the fresh one may execute — not
+    # this one, built on the previous session's prices, even in the minutes
+    # between the bell and its redo.
+    redo = pending_redo_for_plan(session, plan.id)
+    if redo is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This plan was made while the market was closed. It will be redone from fresh data at "
+                f"{format_market_time(redo.due_at)}, and only the fresh plan can be executed."
+            ),
+        )
     try:
         position = build_engine(session, data_provider, settings).open_position(plan)
+    except MarketClosedError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{exc} Plans made while the market is closed are redone from fresh data at the next open.",
+        ) from exc
     except (
         InsufficientCashError,
         DuplicatePositionError,

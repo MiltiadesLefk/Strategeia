@@ -22,7 +22,39 @@ import os
 # with a fake, bypassing the real cached one entirely.
 os.environ.setdefault("ALLOW_UNAUTHENTICATED_API", "true")
 
+import time
+from datetime import datetime, timedelta
+
 import pytest
+
+# A known open US session: Tuesday 2026-09-29, 11:00 New York time (15:00
+# UTC, naive like every stored timestamp). An ordinary trading day, mid-session,
+# hours from either bell.
+PINNED_OPEN_SESSION = datetime(2026, 9, 29, 15, 0)
+
+
+@pytest.fixture(autouse=True)
+def _engine_clock_in_an_open_session(monkeypatch):
+    """PaperTradingEngine.open_position refuses to fill while the symbol's
+    market is closed (plan.md F-6: on Sunday 2026-09-27 two auto-executed
+    plans filled at Friday's close). Most tests that open a position predate
+    that rule and assume a live market; on the real clock they would pass or
+    fail depending on the weekday and hour the suite happens to run, and the
+    auto-execute tests would quietly turn into "deferred to the open" tests
+    every evening.
+
+    So the rule stays strict and the clock is made deterministic instead: the
+    engine's default clock is pinned to PINNED_OPEN_SESSION, ticking forward
+    in real time from it so timestamps written in one test still come out in
+    order. Only the DEFAULT clock is pinned: tests about the session gate
+    itself (test_market_session_gate.py) pass their own `clock=` or re-patch
+    this. Anything built on the real clock alone (app.markets called with no
+    `now`, GET /api/market/session) is untouched."""
+    started = time.monotonic()
+    monkeypatch.setattr(
+        "app.portfolio.engine.default_clock",
+        lambda: PINNED_OPEN_SESSION + timedelta(seconds=time.monotonic() - started),
+    )
 
 
 @pytest.fixture(autouse=True)

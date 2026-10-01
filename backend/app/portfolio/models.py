@@ -126,6 +126,52 @@ class PaperPosition(SQLModel, table=True):
     fees_paid: Optional[float] = None
 
 
+DeferredEvaluationStatus = Literal["pending", "done", "skipped", "failed"]
+
+
+class DeferredEvaluation(SQLModel, table=True):
+    """A symbol whose evaluation has to wait for its market to open.
+
+    Decision D10 = C (plan.md): a tradeable plan made while the market is
+    closed is never filled. It stays pending, and a fresh evaluation from
+    fresh data is queued here for shortly after the next open; only the plan
+    that fresh evaluation produces may execute (services/automation_service
+    .run_market_open_redos). Generic on purpose — WA-6's watchers will queue
+    their off-hours re-checks in the same table, so nothing here assumes a
+    trade plan exists: `source` says who asked, `trade_plan_id` is optional.
+
+    One pending row per symbol at most: a second off-hours request for the
+    same symbol updates the pending row instead of queuing a duplicate redo.
+    Times are naive UTC like every other column.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True)
+    # Who asked for the evaluation that had to wait: "manual" (Generate
+    # Trade Plan), "auto_scan", "market_open_redo", later "watcher:<name>".
+    source: str
+    # Why it waited, in plain words ("weekend", "Thanksgiving Day", ...).
+    reason: str
+    requested_at: datetime = Field(default_factory=utcnow_naive)
+    # The redo runs at or after this moment, and only while the market is
+    # open — so a job that missed it (app down at 09:45) still catches up.
+    due_at: datetime
+    status: str = Field(default="pending", index=True)
+    attempts: int = 0
+    resolved_at: Optional[datetime] = None
+    # The off-hours plan being redone, when there is one. Null for a request
+    # that never had a plan (a watcher event).
+    trade_plan_id: Optional[int] = Field(default=None, foreign_key="tradeplanrecord.id")
+    # The fresh plan (or no_trade record) the redo produced.
+    result_plan_id: Optional[int] = Field(default=None, foreign_key="tradeplanrecord.id")
+    # What happened, in plain English, once resolved (or why a retry is due).
+    outcome: Optional[str] = None
+    # The sizing inputs of the original request, so the redo sizes the same
+    # way. Null means "the Settings defaults at redo time".
+    account_size: Optional[float] = None
+    risk_pct: Optional[float] = None
+
+
 class EquitySnapshot(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     timestamp: datetime = Field(default_factory=utcnow_naive)

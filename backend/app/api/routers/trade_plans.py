@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
@@ -9,6 +11,7 @@ from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
 from app.portfolio.models import TradePlanRecord
 from app.schemas.trade_plan_schemas import TradePlanGenerateRequest, TradePlanResponse
+from app.services.deferred_evaluation_service import pending_redo_for_plan, pending_redo_times
 from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, clamp_points, generate_trade_plan
 
 router = APIRouter(prefix="/api/trade-plans", tags=["trade-plans"], dependencies=[Depends(require_auth)])
@@ -30,7 +33,8 @@ def generate(
 @router.get("", response_model=list[TradePlanResponse])
 def list_trade_plans(session: Session = Depends(get_session)) -> list[TradePlanResponse]:
     records = session.exec(select(TradePlanRecord).order_by(TradePlanRecord.created_at.desc())).all()
-    return [trade_plan_to_response(r) for r in records]
+    redo_times = pending_redo_times(session)
+    return [trade_plan_to_response(r, redo_at=redo_times.get(r.id)) for r in records]
 
 
 @router.get("/{plan_id}", response_model=TradePlanResponse)
@@ -38,10 +42,13 @@ def get_trade_plan(plan_id: int, session: Session = Depends(get_session)) -> Tra
     record = session.get(TradePlanRecord, plan_id)
     if record is None:
         return TradePlanResponse(symbol="", direction=None, reason="Trade plan not found")
-    return trade_plan_to_response(record)
+    redo = pending_redo_for_plan(session, record.id)
+    return trade_plan_to_response(record, redo_at=redo.due_at if redo else None)
 
 
-def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
+def trade_plan_to_response(record: TradePlanRecord, *, redo_at: datetime | None = None) -> TradePlanResponse:
+    """`redo_at` comes from the off-hours queue, not the row itself; callers
+    that never show an Execute button (the Dashboard) can leave it out."""
     # No-trade records (status="no_trade") have no entry/tp1/suggested_shares
     # — nothing to size a potential gain/risk against.
     has_sizing = record.suggested_shares is not None and record.tp1 is not None and record.entry is not None
@@ -94,6 +101,7 @@ def trade_plan_to_response(record: TradePlanRecord) -> TradePlanResponse:
         ),
         confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         auto_execute_note=record.auto_execute_note,
+        redo_at=redo_at,
         signal_reasons=record.signal_reasons,
         ai_opinion_stance=record.ai_opinion_stance,
         ai_opinion_score=record.ai_opinion_score,

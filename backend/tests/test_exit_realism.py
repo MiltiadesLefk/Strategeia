@@ -175,11 +175,16 @@ def test_take_profit_gap_fills_at_the_better_open(session: Session):
 
 def test_entry_bar_cannot_trigger_its_own_stop(session: Session):
     """Entry is a daily CLOSE, so the entry bar is already spent. Its
-    pre-entry low must not stop out a position that did not exist yet."""
-    opened = utcnow_naive()
-    rows = [(100, 101, 80, 100)]  # entry bar dipped to 80, below the 95 stop
-    provider = BarsProvider(bars_from(opened, rows), price=100.0)
+    pre-entry low must not stop out a position that did not exist yet.
+
+    The entry bar is dated by the engine's own clock, which also stamps
+    opened_at, rather than by the wall clock: tests/conftest.py pins that
+    clock to a fixed open session, so a wall-clock bar would land on a
+    different day from the entry it is meant to be."""
+    provider = BarsProvider([], price=100.0)
     engine = build_engine(session, provider)
+    rows = [(100, 101, 80, 100)]  # entry bar dipped to 80, below the 95 stop
+    provider._bars = bars_from(engine.now(), rows)
     plan = make_plan(session)
     engine.open_position(plan)
 

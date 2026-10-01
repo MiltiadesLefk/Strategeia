@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from sqlmodel import Session, select
 
@@ -40,9 +40,12 @@ from app.data_providers.base import AllProvidersFailedError, CompanyOverview, Da
 from app.llm_providers.base import LLMProvider
 from app.llm_providers.factory import generate_with_fallback
 from app.llm_providers.prompts import build_ai_opinion_prompt, build_trade_plan_take_prompt
+from app.markets import format_market_time, us_closure_reason
 from app.portfolio.engine import (
+    Clock,
     DuplicatePositionError,
     InsufficientCashError,
+    MarketClosedError,
     MaxPositionsExceededError,
     PaperTradingEngine,
     SectorConcentrationError,
@@ -51,6 +54,7 @@ from app.portfolio.engine import (
 from app.portfolio.models import TradePlanRecord
 from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
+from app.services.deferred_evaluation_service import queue_market_open_redo
 from app.services.telegram_service import notify_trade_plan
 
 logger = logging.getLogger(__name__)
@@ -296,6 +300,38 @@ def _maybe_get_ai_opinion(
     return _parse_ai_opinion(result.text)
 
 
+def _defer_to_market_open(
+    session: Session,
+    record: TradePlanRecord,
+    now: datetime,
+    *,
+    source: str,
+    account_size: float,
+    risk_pct: float,
+) -> tuple[str, datetime]:
+    """D10 = C: the plan was made while its market is closed, so it is left
+    pending, never filled, and a fresh evaluation is queued for shortly after
+    the next open (see services/deferred_evaluation_service.py). Returns the
+    plain-English note for the plan and when the redo is due."""
+    reason = us_closure_reason(now)
+    deferral = queue_market_open_redo(
+        session,
+        record.symbol,
+        source=source,
+        reason=reason,
+        now=now,
+        trade_plan_id=record.id,
+        account_size=account_size,
+        risk_pct=risk_pct,
+    )
+    note = (
+        f"Market closed ({reason}), so this plan was not executed. It will be redone from fresh data "
+        f"at the next open, {format_market_time(deferral.due_at)}, and only the fresh plan can execute."
+    )
+    logger.info("Plan for %s deferred to the market open (%s): redo due %s", record.symbol, reason, deferral.due_at)
+    return note, deferral.due_at
+
+
 def _overlay_contradicts_direction(direction: str | None, opinion: AiOpinion) -> bool:
     """Thin wrapper over analysis.ai_overlay_scoring.overlay_opposes_trade,
     kept here because this is where the two settings that read it live.
@@ -327,13 +363,21 @@ def generate_trade_plan(
     session: Session,
     *,
     allow_auto_execute: bool = True,
+    source: str = "manual",
+    clock: Clock | None = None,
 ) -> TradePlanResponse:
     """Fully evaluates `symbol` (price/volume/technicals + fundamentals +
     news + earnings) and either returns a tradeable plan or an explicit
     no-trade decision (`direction is None`, `reason` set) — never silently
     skips a symbol. `allow_auto_execute=False` lets a caller (the unattended
     auto-scan loop) request a full evaluation/plan without letting it open a
-    paper position, e.g. once the position-count cap is already reached."""
+    paper position, e.g. once the position-count cap is already reached.
+
+    A tradeable plan made while its market is closed is never executed: it
+    stays pending and a redo is queued for the next open (D10 = C, see
+    _defer_to_market_open). `source` names the caller on that queued redo;
+    `clock` is the paper engine's (tests and, later, the backtester pass a
+    simulated one)."""
     settings = load_app_settings()
 
     # 1y, matching analysis_service.get_analysis's fetch exactly — trend/EMA/
@@ -568,6 +612,7 @@ def generate_trade_plan(
         commission_per_trade=settings.commission_per_trade,
         max_positions_per_sector=settings.max_positions_per_sector,
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
+        clock=clock,
     )
     sizing = calculate_position_size(account_size, risk_pct, entry, stop, engine.available_cash())
     targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
@@ -641,7 +686,23 @@ def generate_trade_plan(
     session.refresh(record)
 
     auto_execute_note = ""
-    if settings.auto_execute_trade_plans and allow_auto_execute:
+    redo_at: datetime | None = None
+    if not engine.is_market_open_for(symbol):
+        # D10 = C, and ahead of the auto-execute switch on purpose: with
+        # auto-execute off the plan still describes the last session's
+        # prices, and the Execute button is refused for it until the fresh
+        # plan replaces it. Nothing below (the overlay hold, the fill) is
+        # evaluated for a plan that will be redone anyway — the redo runs
+        # every one of those checks again on the open's data.
+        auto_execute_note, redo_at = _defer_to_market_open(
+            session, record, engine.now(), source=source, account_size=account_size, risk_pct=risk_pct
+        )
+        record.auto_execute_note = auto_execute_note
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        auto_execute_note = f"\n{auto_execute_note}"
+    elif settings.auto_execute_trade_plans and allow_auto_execute:
         if settings.ai_overlay_objection_action == "hold" and _overlay_contradicts_direction(direction, opinion):
             # "hold": the plan is written and left pending for a human,
             # on the reasoning that the one moment a second opinion is
@@ -670,6 +731,14 @@ def generate_trade_plan(
                 engine.open_position(record)
                 session.refresh(record)
                 auto_execute_note = "\nAuto-executed as a paper position."
+            except MarketClosedError:
+                # The bell rang between the session check above and the fill
+                # (a plan finishing at 15:59:59). Same outcome as a plan made
+                # after the close: pending, and redone at the next open.
+                note, redo_at = _defer_to_market_open(
+                    session, record, engine.now(), source=source, account_size=account_size, risk_pct=risk_pct
+                )
+                auto_execute_note = f"\n{note}"
             except (
                 InsufficientCashError,
                 DuplicatePositionError,
@@ -721,6 +790,7 @@ def generate_trade_plan(
         confidence_score=confidence_score,
         time_horizon=record.time_horizon,
         auto_execute_note=record.auto_execute_note,
+        redo_at=redo_at,
         ai_take_text=llm_result.text,
         ai_provider=llm_result.provider,
         status=record.status,
