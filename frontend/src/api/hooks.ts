@@ -45,7 +45,7 @@ import type {
   SmartMoneyStatus,
 } from './types';
 import type { HeatmapResponse, MacroResponse, RecapResponse, TerminalWindow } from './types';
-import type { WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
+import type { FinraRefreshResponse, FinraSymbolResponse, WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
 import type {
   BacktestBaseline,
   BacktestBenchmarks,
@@ -1245,5 +1245,28 @@ export function useStartCommitteeRun() {
       queryClient.setQueryData(committeeKeys.run(run.id), run);
       queryClient.invalidateQueries({ queryKey: committeeKeys.list });
     },
+  });
+}
+
+// ---- FINRA short volume ----
+
+/** One symbol's stored FINRA short-volume days and what the silent signal reads. Read-only on the server. */
+export function useFinraSymbol(symbol: string | undefined, direction?: 'long' | 'short') {
+  return useQuery({
+    queryKey: ['finra', symbol, direction ?? null],
+    enabled: !!symbol,
+    queryFn: () =>
+      api.get<FinraSymbolResponse>(
+        `/api/signals/finra/${encodeURIComponent(symbol ?? '')}${direction ? `?direction=${direction}` : ''}`,
+      ),
+  });
+}
+
+/** Download the last few days of FINRA short volume (429 within 60 seconds of the last refresh). */
+export function useRefreshFinra() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (symbols?: string[]) => api.post<FinraRefreshResponse>('/api/signals/finra/refresh', symbols ? { symbols } : {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['finra'] }),
   });
 }

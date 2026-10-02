@@ -46,6 +46,7 @@ from app.watchers.fed_watcher import register_fed_watcher
 from app.watchers.posts_watcher import register_posts_watcher
 from app.watchers.fund_watcher import register_fund_watcher
 from app.watchers.house_watcher import register_house_watcher
+from app.watchers.finra_watcher import register_finra_watcher
 
 
 @asynccontextmanager
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI):
     register_fed_watcher()  # fed_watcher: Fed statements and speeches (market-wide, alert-only)
     register_posts_watcher()  # posts_watcher: posts from an unofficial archive feed
     register_fund_watcher()  # fund_watcher: 13F reports of followed funds and 13D/13G 5% owner filings
+    register_finra_watcher()  # finra_watcher: daily FINRA short-volume files (quiet, never alerts)
     register_house_watcher()  # house_watcher: House members' stock-trade reports
     start_scheduler()
     yield

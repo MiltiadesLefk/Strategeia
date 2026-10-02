@@ -2509,3 +2509,32 @@ export interface CommitteeRun extends CommitteeRunSummary {
   error: string | null;
   note: string;
 }
+
+export interface FinraRefreshResponse {
+  symbols: number;
+  days_checked: number;
+  days_fetched: number;
+  days_without_file: number;
+  facts_created: number;
+  facts_existing: number;
+  errors: string[];
+}
+
+export interface FinraDay {
+  trade_date: string;
+  short_volume: number;
+  total_volume: number;
+  ratio: number;
+}
+
+export interface FinraSymbolResponse {
+  symbol: string;
+  stored_days: number;
+  recent_ratio: number | null;
+  recent_days: number;
+  baseline_ratio: number | null;
+  baseline_days: number;
+  latest_trade_date: string | null;
+  days: FinraDay[];
+  signal: ShadowSignal | null;
+}
