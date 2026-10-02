@@ -9,6 +9,9 @@ import type { ApiError } from '../api/client';
 import type { SmartMoneyInsiderCluster, SmartMoneySide, SmartMoneyStatus } from '../api/types';
 import { StatCard } from '../components/StatCard';
 import { TickerLink } from '../components/TickerLink';
+import { CongressTab } from '../components/smartmoney/CongressTab';
+import { ActivistsTab } from '../components/smartmoney/ActivistsTab';
+import { FundsTab } from '../components/smartmoney/FundsTab';
 import { InsiderTradesTable, RoleBadges, formatAccepted } from '../components/smartmoney/InsiderTradesTable';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, formatRelativeTime } from '../components/common';
 
@@ -27,36 +30,57 @@ const SIDE_OPTIONS: { value: SmartMoneySide; label: string }[] = [
 ];
 const SYMBOL_PATTERN = /^[A-Z0-9.-]{0,10}$/;
 
-const PLANNED_TABS = [
-  { label: 'Congress', why: 'Trades members of Congress report, dated by the day the report was filed. Not built yet.' },
-  { label: 'Funds', why: 'What large funds hold, from their quarterly filings, which arrive weeks late. Not built yet.' },
-];
+type SourceTab = 'insiders' | 'congress' | 'funds' | 'activists';
 
-function SourceTabs() {
+const PLANNED_TABS: { label: string; why: string }[] = [];
+
+function SourceTabs({ tab, onTab }: { tab: SourceTab; onTab: (tab: SourceTab) => void }) {
+  const tabs: { id: SourceTab; label: string }[] = [
+    { id: 'insiders', label: 'Insiders' },
+    { id: 'congress', label: 'Congress' },
+    { id: 'funds', label: 'Funds' },
+    { id: 'activists', label: '5% owners' },
+  ];
   return (
     <div className="card">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span
-          style={{ padding: '7px 16px', borderRadius: 6, fontSize: 13, fontWeight: 600, background: 'var(--canvas)', color: 'var(--text)' }}
-          aria-current="page"
-        >
-          Insiders
-        </span>
-        {PLANNED_TABS.map((tab) => (
+        {tabs.map((t) => (
           <button
-            key={tab.label}
+            key={t.id}
+            type="button"
+            onClick={() => onTab(t.id)}
+            aria-current={tab === t.id ? 'page' : undefined}
+            style={{
+              border: 'none',
+              padding: '7px 16px',
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: tab === t.id ? 600 : 400,
+              cursor: 'pointer',
+              background: tab === t.id ? 'var(--canvas)' : 'transparent',
+              color: tab === t.id ? 'var(--text)' : 'var(--text-muted)',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+        {PLANNED_TABS.map((t) => (
+          <button
+            key={t.label}
             type="button"
             disabled
-            title={tab.why}
+            title={t.why}
             style={{ border: 'none', background: 'transparent', padding: '7px 16px', fontSize: 13, color: 'var(--text-muted)', cursor: 'not-allowed' }}
           >
-            {tab.label} <span style={{ fontSize: 11 }}>(planned)</span>
+            {t.label} <span style={{ fontSize: 11 }}>(planned)</span>
           </button>
         ))}
       </div>
-      <div className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>
-        {PLANNED_TABS.map((t) => `${t.label}: ${t.why}`).join(' · ')}
-      </div>
+      {PLANNED_TABS.length > 0 && (
+        <div className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>
+          {PLANNED_TABS.map((t) => `${t.label}: ${t.why}`).join(' · ')}
+        </div>
+      )}
     </div>
   );
 }
@@ -254,6 +278,7 @@ function InsidersTab({ status }: { status: SmartMoneyStatus }) {
 
 export function SmartMoneyPage() {
   const status = useSmartMoneyStatus();
+  const [tab, setTab] = useState<SourceTab>('insiders');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -267,11 +292,18 @@ export function SmartMoneyPage() {
           </div>
         </div>
       </div>
-      <SourceTabs />
-      <ScoringNote />
-      {status.isLoading && <LoadingSpinner />}
-      {status.error && <ErrorBanner message={(status.error as ApiError).message} onRetry={() => status.refetch()} />}
-      {status.data && (status.data.has_data ? <InsidersTab status={status.data} /> : <EmptyInsiders status={status.data} />)}
+      <SourceTabs tab={tab} onTab={setTab} />
+      {tab === 'congress' && <CongressTab />}
+      {tab === 'funds' && <FundsTab />}
+      {tab === 'activists' && <ActivistsTab />}
+      {tab === 'insiders' && (
+        <>
+          <ScoringNote />
+          {status.isLoading && <LoadingSpinner />}
+          {status.error && <ErrorBanner message={(status.error as ApiError).message} onRetry={() => status.refetch()} />}
+          {status.data && (status.data.has_data ? <InsidersTab status={status.data} /> : <EmptyInsiders status={status.data} />)}
+        </>
+      )}
     </div>
   );
 }

@@ -12,7 +12,8 @@ from app.data_providers.universe import get_default_watchlist
 from app.llm_providers.base import LLMProvider
 from app.markets import format_market_time
 from app.portfolio.engine import Clock, resolve_clock
-from app.portfolio.models import DeferredEvaluation, PaperPosition, TradePlanRecord
+from app.portfolio.models import DeferredEvaluation, PaperPosition, Sleeve, TradePlanRecord
+from app.portfolio.sleeves import read_scope, scope_clause
 from app.services.deferred_evaluation_service import MAX_REDO_ATTEMPTS, PENDING, due_redos, redo_window_open
 from app.services.telegram_service import notify
 from app.services.trade_plan_service import generate_trade_plan
@@ -159,8 +160,15 @@ def run_market_open_redos(
             continue  # a holiday, before 09:45, or after the close: wait for the next tick
 
         plan = session.get(TradePlanRecord, deferral.trade_plan_id) if deferral.trade_plan_id else None
+        # The redo trades in the sleeve it was queued for (no sleeve = core), so
+        # "already held" is asked of that sleeve's positions only.
+        redo_sleeve = session.get(Sleeve, deferral.sleeve_id) if deferral.sleeve_id is not None else None
         held = session.exec(
-            select(PaperPosition).where(PaperPosition.symbol == symbol, PaperPosition.status == "open")
+            select(PaperPosition).where(
+                PaperPosition.symbol == symbol,
+                PaperPosition.status == "open",
+                scope_clause(PaperPosition.sleeve_id, read_scope(session, redo_sleeve.key if redo_sleeve else None)),
+            )
         ).first()
         if held is not None:
             _resolve(deferral, "skipped", f"{symbol} is already held (position #{held.id}), so there was nothing to redo.", now)
@@ -198,6 +206,7 @@ def run_market_open_redos(
                 session,
                 source="market_open_redo",
                 clock=clock,
+                sleeve=redo_sleeve,
             )
         except Exception as exc:
             logger.exception("Market-open redo failed for %s (attempt %d)", symbol, deferral.attempts)

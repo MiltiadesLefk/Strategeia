@@ -39,7 +39,13 @@ from app.portfolio.intraday import (
     levels_touched,
     market_day_of,
 )
-from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, TradePlanRecord
+from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, Sleeve, TradePlanRecord
+from app.portfolio.sleeves import (
+    SleeveScope,
+    ensure_core_sleeve,
+    find_core_sleeve,
+    scope_clause,
+)
 from app.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -152,7 +158,23 @@ class MarketClosedError(Exception):
     closes, so it can always open."""
 
 
+class SleeveDisabledError(Exception):
+    """Raised when a position is opened in a sleeve that was switched off. A
+    disabled sleeve takes no new trades, but its open positions are still
+    managed (marked, stopped out, closed) until they are gone."""
+
+
 class PaperTradingEngine:
+    """The paper account of ONE sleeve (the core sleeve unless `sleeve` is given).
+
+    Every read and write below is scoped to that sleeve: its cash, its open
+    positions, the duplicate-symbol rule, the position and sector caps, the
+    equity snapshots and the exit scan. Two sleeves may hold the same symbol at
+    the same time, and the caps apply to each sleeve on its own. An engine built
+    without a sleeve is exactly the single-account engine the app always had
+    (rows with no sleeve_id belong to core), which is what backtests, replays
+    and the missed-trade study rely on."""
+
     def __init__(
         self,
         session: Session,
@@ -166,8 +188,13 @@ class PaperTradingEngine:
         clock: Clock | None = None,
         max_holding_days: int | None = None,
         intraday_exits: bool = True,
+        sleeve: Sleeve | None = None,
     ):
         self._session = session
+        # Only plain values are kept (not the ORM object, whose attributes expire
+        # on every commit). None = core, resolved lazily: see _scope().
+        self._sleeve_id = sleeve.id if sleeve is not None and sleeve.key != "core" else None
+        self._is_core = self._sleeve_id is None
         self._data_provider = data_provider
         self._starting_cash = starting_cash
         self._max_concurrent_positions = max_concurrent_positions
@@ -197,10 +224,43 @@ class PaperTradingEngine:
         (trade_plan_service defers it) before attempting the fill."""
         return is_market_open_for(symbol, self.now())
 
+    # --------------------------------------------------------------- sleeve
+
+    def _scope(self) -> SleeveScope:
+        """Which rows this engine covers. For core it is looked up each time
+        (cheap) because the core row may not exist yet, and a read must not
+        create it; NULL-sleeve rows are core's either way."""
+        if not self._is_core:
+            return SleeveScope(self._sleeve_id, False)
+        core = find_core_sleeve(self._session)
+        return SleeveScope(core.id if core else None, True)
+
+    def _sleeve_row(self) -> Sleeve:
+        """The sleeve this engine writes to (core is created on first use)."""
+        if self._is_core:
+            return ensure_core_sleeve(self._session)
+        sleeve = self._session.get(Sleeve, self._sleeve_id)
+        if sleeve is None:
+            raise ValueError(f"Sleeve {self._sleeve_id} no longer exists")
+        return sleeve
+
+    def _in_sleeve(self, column):
+        return scope_clause(column, self._scope())
+
+    def _open_positions(self) -> list[PaperPosition]:
+        return list(
+            self._session.exec(
+                select(PaperPosition).where(PaperPosition.status == "open", self._in_sleeve(PaperPosition.sleeve_id))
+            ).all()
+        )
+
     def get_account_state(self) -> AccountState:
-        account = self._session.exec(select(AccountState)).first()
+        account = self._session.exec(select(AccountState).where(self._in_sleeve(AccountState.sleeve_id))).first()
         if account is None:
-            account = AccountState(starting_cash=self._starting_cash, current_cash=self._starting_cash)
+            sleeve_id = self._sleeve_row().id
+            account = AccountState(
+                starting_cash=self._starting_cash, current_cash=self._starting_cash, sleeve_id=sleeve_id
+            )
             self._session.add(account)
             self._session.commit()
             self._session.refresh(account)
@@ -247,15 +307,28 @@ class PaperTradingEngine:
                 f"{format_market_time(next_us_open(now))}."
             )
 
+        sleeve = self._sleeve_row()
+        if not sleeve.enabled:
+            raise SleeveDisabledError(
+                f"The '{sleeve.name}' sleeve is disabled, so it opens no new positions (its open ones are still managed)."
+            )
+        sleeve_id = sleeve.id
+
         account = self.get_account_state()
 
+        # Per sleeve: two sleeves may each hold the same symbol (they are separate
+        # accounts); within one the one-position-per-symbol rule is unchanged.
         existing = self._session.exec(
-            select(PaperPosition).where(PaperPosition.symbol == trade_plan.symbol, PaperPosition.status == "open")
+            select(PaperPosition).where(
+                PaperPosition.symbol == trade_plan.symbol,
+                PaperPosition.status == "open",
+                self._in_sleeve(PaperPosition.sleeve_id),
+            )
         ).first()
         if existing is not None:
             raise DuplicatePositionError(f"{trade_plan.symbol} already has an open position (id={existing.id})")
 
-        open_positions = self._session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()
+        open_positions = self._open_positions()
 
         if self._max_concurrent_positions is not None and len(open_positions) >= self._max_concurrent_positions:
             raise MaxPositionsExceededError(
@@ -311,6 +384,7 @@ class PaperTradingEngine:
             shares=shares,
             fees_paid=self._commission_per_trade,
             opened_at=now,
+            sleeve_id=sleeve_id,
         )
         trade_plan.status = "executed"
 
@@ -385,7 +459,11 @@ class PaperTradingEngine:
         — see the comment in open_position() for why raw current_cash isn't
         the right number to size a new position against."""
         open_shorts = self._session.exec(
-            select(PaperPosition).where(PaperPosition.status == "open", PaperPosition.direction == "short")
+            select(PaperPosition).where(
+                PaperPosition.status == "open",
+                PaperPosition.direction == "short",
+                self._in_sleeve(PaperPosition.sleeve_id),
+            )
         ).all()
         reserved = sum(p.shares * p.entry_price for p in open_shorts)
         return account.current_cash - reserved
@@ -413,6 +491,11 @@ class PaperTradingEngine:
         fetched here, best effort. Recording the excursion can never fail the close.
         `resolution` is how the exit scan placed the exit in time (see
         PaperPosition.exit_resolution); a manual close has none."""
+        if not self._owns(position):
+            raise ValueError(
+                f"Position {position.id} belongs to another sleeve; close it through that sleeve's engine "
+                "(closing it here would move the wrong account's cash)."
+            )
         self._record_excursion(position, close_price, reason, held_bars, last_bar)
         account = self.get_account_state()
         risk_per_share = abs(position.entry_price - position.stop_loss)
@@ -446,6 +529,12 @@ class PaperTradingEngine:
             self._record_equity_snapshot()
             self._session.refresh(position)  # _record_equity_snapshot()'s commit expires attributes
         return position
+
+    def _owns(self, position: PaperPosition) -> bool:
+        """Whether `position` is in this engine's sleeve (no sleeve_id = core's)."""
+        if self._is_core:
+            return position.sleeve_id is None or position.sleeve_id == self._scope().sleeve_id
+        return position.sleeve_id == self._sleeve_id
 
     def _record_excursion(
         self,
@@ -732,7 +821,7 @@ class PaperTradingEngine:
         `snapshot=False` lets a read-only caller evaluate exits without
         appending a point to the equity curve — see api/routers/portfolio.py."""
         closed: list[PaperPosition] = []
-        open_positions = self._session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()
+        open_positions = self._open_positions()  # this sleeve's only: another sleeve's exits are its own engine's job
         # One hourly history per symbol per sweep, fetched only when a position needs
         # it: the entry day not yet checked, or a daily bar holding both levels.
         hourly_books: dict[str, HourlyBars] = {}
@@ -804,7 +893,7 @@ class PaperTradingEngine:
 
     def _record_equity_snapshot(self) -> None:
         account = self.get_account_state()
-        open_positions = self._session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()
+        open_positions = self._open_positions()
 
         mark_value = 0.0
         for position in open_positions:
@@ -820,7 +909,10 @@ class PaperTradingEngine:
             mark_value += position.shares * price if position.direction == "long" else -(position.shares * price)
 
         snapshot = EquitySnapshot(
-            timestamp=self.now(), equity_value=account.current_cash + mark_value, cash_balance=account.current_cash
+            timestamp=self.now(),
+            equity_value=account.current_cash + mark_value,
+            cash_balance=account.current_cash,
+            sleeve_id=account.sleeve_id,
         )
         self._session.add(snapshot)
         self._session.commit()

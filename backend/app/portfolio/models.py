@@ -120,6 +120,10 @@ class TradePlanRecord(SQLModel, table=True):
     # added. Recorded for later backtesting; never part of confidence_score,
     # the direction, the sizing or any decision. Null on older plans.
     shadow_signals: Optional[str] = None
+    # The sleeve (paper account) this plan was made for: the id of a Sleeve row.
+    # Null reads as the core sleeve, so plans from before sleeves existed need no
+    # backfill. Executing the plan opens its position in this sleeve.
+    sleeve_id: Optional[int] = Field(default=None, index=True)
 
 
 class PaperPosition(SQLModel, table=True):
@@ -179,6 +183,9 @@ class PaperPosition(SQLModel, table=True):
     lesson_model: Optional[str] = None
     lesson_at: Optional[datetime] = None
     lesson_error: Optional[str] = None
+    # Which sleeve (paper account) holds this position. Null reads as the core
+    # sleeve (positions from before sleeves existed); see portfolio/sleeves.py.
+    sleeve_id: Optional[int] = Field(default=None, index=True)
 
 
 DeferredEvaluationStatus = Literal["pending", "done", "skipped", "failed"]
@@ -225,6 +232,9 @@ class DeferredEvaluation(SQLModel, table=True):
     # way. Null means "the Settings defaults at redo time".
     account_size: Optional[float] = None
     risk_pct: Optional[float] = None
+    # The sleeve the redo should trade in (null = core), so a plan made for one
+    # sleeve is redone for that sleeve and not for the default one.
+    sleeve_id: Optional[int] = None
 
 
 class EquitySnapshot(SQLModel, table=True):
@@ -232,9 +242,37 @@ class EquitySnapshot(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=utcnow_naive)
     equity_value: float
     cash_balance: float
+    # Which sleeve's curve this point belongs to (null = core, see Sleeve).
+    sleeve_id: Optional[int] = Field(default=None, index=True)
 
 
 class AccountState(SQLModel, table=True):
+    """The cash of ONE sleeve: one row per sleeve. sleeve_id null = core."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     starting_cash: float
     current_cash: float
+    sleeve_id: Optional[int] = Field(default=None, index=True)
+
+
+class Sleeve(SQLModel, table=True):
+    """An isolated paper account for one trading style.
+
+    Each sleeve has its own cash, positions, statistics and equity curve; the
+    strategy settings (risk %, caps, slippage ...) stay shared. The built-in
+    `core` sleeve ("Swing (rules)") is the account the app always had: it is
+    created the first time something needs it and every row that carries no
+    sleeve_id (everything written before sleeves existed) belongs to it.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    key: str = Field(index=True, unique=True)  # url-safe slug, e.g. "core", "ai-committee"
+    name: str
+    style: str  # free-text label of the trading style, e.g. "swing", "momentum"
+    # The starting cash a NEW account for this sleeve is seeded with. The core
+    # sleeve follows Settings -> Paper Account instead (its value here is unused).
+    starting_cash: float
+    enabled: bool = True  # a disabled sleeve opens nothing new; its open positions are still managed
+    color: Optional[str] = None  # chip colour (hex), shown wherever the sleeve is named
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow_naive)

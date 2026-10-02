@@ -15,6 +15,10 @@ import type {
   MarketSession,
   Position,
   PortfolioStats,
+  Sleeve,
+  SleeveCreateRequest,
+  SleeveUpdateRequest,
+  SleeveWithStats,
   ResearchResponse,
   ScanResponse,
   SettingsStatus,
@@ -69,6 +73,7 @@ export const qk = {
   strategyVersions: ['strategy-versions'] as const,
   equityCurve: ['equity-curve'] as const,
   dashboard: ['dashboard'] as const,
+  sleeves: ['sleeves'] as const,
   settings: ['settings'] as const,
   settingsStatus: ['settings-status'] as const,
   authStatus: ['auth-status'] as const,
@@ -192,8 +197,16 @@ export function useStrategyVersions() {
   return useQuery({ queryKey: qk.strategyVersions, queryFn: () => api.get<StrategyHistory>('/api/strategy/versions') });
 }
 
-export function usePositions() {
-  return useQuery({ queryKey: qk.positions, queryFn: () => api.get<Position[]>('/api/portfolio/positions') });
+/** A sleeve key as a query string ("" for core, the default). `all` is accepted by positions/stats only. */
+function sleeveQuery(sleeve?: string | null): string {
+  return sleeve && sleeve !== 'core' ? `?sleeve=${encodeURIComponent(sleeve)}` : '';
+}
+
+export function usePositions(sleeve?: string | null) {
+  return useQuery({
+    queryKey: [...qk.positions, sleeve ?? 'core'],
+    queryFn: () => api.get<Position[]>(`/api/portfolio/positions${sleeveQuery(sleeve)}`),
+  });
 }
 
 export function useOpenPosition() {
@@ -234,15 +247,19 @@ export function useWriteLesson() {
   });
 }
 
-export function usePortfolioStats() {
-  return useQuery({ queryKey: qk.stats, queryFn: () => api.get<PortfolioStats>('/api/portfolio/stats') });
+export function usePortfolioStats(sleeve?: string | null) {
+  return useQuery({
+    queryKey: [...qk.stats, sleeve ?? 'core'],
+    queryFn: () => api.get<PortfolioStats>(`/api/portfolio/stats${sleeveQuery(sleeve)}`),
+  });
 }
 
-export function useResetPortfolio() {
+export function useResetPortfolio(sleeve?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<PortfolioStats>('/api/portfolio/reset'),
+    mutationFn: () => api.post<PortfolioStats>(`/api/portfolio/reset${sleeveQuery(sleeve)}`),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.sleeves });
       queryClient.invalidateQueries({ queryKey: qk.positions });
       queryClient.invalidateQueries({ queryKey: qk.stats });
       queryClient.invalidateQueries({ queryKey: qk.equityCurve });
@@ -252,12 +269,40 @@ export function useResetPortfolio() {
   });
 }
 
-export function useEquityCurve() {
-  return useQuery({ queryKey: qk.equityCurve, queryFn: () => api.get<EquityPoint[]>('/api/portfolio/equity-curve') });
+export function useEquityCurve(sleeve?: string | null) {
+  return useQuery({
+    queryKey: [...qk.equityCurve, sleeve ?? 'core'],
+    queryFn: () => api.get<EquityPoint[]>(`/api/portfolio/equity-curve${sleeveQuery(sleeve)}`),
+  });
 }
 
-export function useDashboardSummary() {
-  return useQuery({ queryKey: qk.dashboard, queryFn: () => api.get<DashboardSummary>('/api/dashboard/summary') });
+export function useDashboardSummary(sleeve?: string | null) {
+  return useQuery({
+    queryKey: [...qk.dashboard, sleeve ?? 'core'],
+    queryFn: () => api.get<DashboardSummary>(`/api/dashboard/summary${sleeveQuery(sleeve)}`),
+  });
+}
+
+/** Every sleeve (paper account) with its live stats. */
+export function useSleeves() {
+  return useQuery({ queryKey: qk.sleeves, queryFn: () => api.get<SleeveWithStats[]>('/api/sleeves') });
+}
+
+export function useCreateSleeve() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: SleeveCreateRequest) => api.post<Sleeve>('/api/sleeves', req),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.sleeves }),
+  });
+}
+
+export function useUpdateSleeve() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, ...req }: SleeveUpdateRequest & { key: string }) =>
+      api.patch<Sleeve>(`/api/sleeves/${encodeURIComponent(key)}`, req),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.sleeves }),
+  });
 }
 
 export function useSettings() {
@@ -668,6 +713,71 @@ export function useRefreshSmartMoneyInsiders() {
   });
 }
 
+// ---- Smart Money: Congress trades ----
+
+import type {
+  CongressClusters,
+  CongressMemberNames,
+  CongressRefreshResponse,
+  CongressStatus,
+  CongressTrades,
+} from './types';
+
+const congressKeys = {
+  all: ['smart-money', 'congress'] as const,
+  status: ['smart-money', 'congress', 'status'] as const,
+  trades: (days: number, side: string, symbol: string, followedOnly: boolean) =>
+    ['smart-money', 'congress', 'trades', days, side, symbol, followedOnly] as const,
+  clusters: (days: number, symbol: string, followedOnly: boolean) =>
+    ['smart-money', 'congress', 'clusters', days, symbol, followedOnly] as const,
+  names: (q: string) => ['smart-money', 'congress', 'names', q] as const,
+};
+
+export function useCongressStatus() {
+  return useQuery({
+    queryKey: congressKeys.status,
+    queryFn: () => api.get<CongressStatus>('/api/smart-money/congress/status'),
+  });
+}
+
+export function useCongressTrades(params: { days: number; side: string; symbol: string; followedOnly: boolean }) {
+  const q = new URLSearchParams({ days: String(params.days), side: params.side });
+  if (params.symbol) q.set('symbol', params.symbol);
+  if (params.followedOnly) q.set('followed_only', 'true');
+  return useQuery({
+    queryKey: congressKeys.trades(params.days, params.side, params.symbol, params.followedOnly),
+    queryFn: () => api.get<CongressTrades>(`/api/smart-money/congress/trades?${q}`),
+  });
+}
+
+export function useCongressClusters(days: number, symbol: string, followedOnly: boolean) {
+  const q = new URLSearchParams({ days: String(days) });
+  if (symbol) q.set('symbol', symbol);
+  if (followedOnly) q.set('followed_only', 'true');
+  return useQuery({
+    queryKey: congressKeys.clusters(days, symbol, followedOnly),
+    queryFn: () => api.get<CongressClusters>(`/api/smart-money/congress/clusters?${q}`),
+  });
+}
+
+/** Member names seen in stored reports, for the "who to follow" search on the Settings page. */
+export function useCongressMemberNames(query: string) {
+  const q = new URLSearchParams({ q: query });
+  return useQuery({
+    queryKey: congressKeys.names(query),
+    queryFn: () => api.get<CongressMemberNames>(`/api/smart-money/congress/member-names?${q}`),
+  });
+}
+
+/** Load the newest House trade reports (a few per call), then refetch every Congress view. */
+export function useRefreshCongress() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<CongressRefreshResponse>('/api/smart-money/congress/refresh'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: congressKeys.all }),
+  });
+}
+
 // ---- Backtest Lab: walk-forward validation ----
 
 import type { BacktestValidation, ValidationOptions, ValidationRequest } from './types';
@@ -858,6 +968,103 @@ export function useSendNote(kind: 'morning' | 'weekly') {
   });
 }
 
+import type {
+  ScreenPreset,
+  ScreenPresetRun,
+  Thesis,
+  ThesisItemRequest,
+  ThesisPillarStatus,
+  ThesisRecheckResponse,
+  ThesisResponse,
+} from './types';
+
+const thesisKey = (positionId: number) => ['thesis', positionId] as const;
+
+/** One position's thesis (null when it has none yet). Read-only: a GET never creates or changes one. */
+export function useThesis(positionId: number) {
+  return useQuery({
+    queryKey: thesisKey(positionId),
+    queryFn: () => api.get<ThesisResponse>(`/api/portfolio/positions/${positionId}/thesis`),
+    staleTime: 60_000,
+  });
+}
+
+/** Write a returned thesis into the cache so the panel updates without another round trip. */
+function useThesisWriter(positionId: number) {
+  const queryClient = useQueryClient();
+  return (thesis: Thesis) => queryClient.setQueryData<ThesisResponse>(thesisKey(positionId), { thesis });
+}
+
+/** Create the thesis if missing and re-check it against fresh data now (rules only, no AI). */
+export function useRecheckThesis(positionId: number) {
+  const write = useThesisWriter(positionId);
+  return useMutation({
+    mutationFn: () => api.post<ThesisRecheckResponse>(`/api/portfolio/positions/${positionId}/thesis/recheck`),
+    onSuccess: (r) => write(r.thesis),
+  });
+}
+
+/** The optional AI paragraph. Spends an AI call, so only ever on a click. */
+export function useReviewThesis(positionId: number) {
+  const write = useThesisWriter(positionId);
+  return useMutation({
+    mutationFn: () => api.post<Thesis>(`/api/portfolio/positions/${positionId}/thesis/review`),
+    onSuccess: write,
+  });
+}
+
+export function useAddThesisNote(positionId: number) {
+  const write = useThesisWriter(positionId);
+  return useMutation({
+    mutationFn: (text: string) => api.post<Thesis>(`/api/portfolio/positions/${positionId}/thesis/notes`, { text }),
+    onSuccess: write,
+  });
+}
+
+export function useAddThesisItem(positionId: number) {
+  const write = useThesisWriter(positionId);
+  return useMutation({
+    mutationFn: (req: ThesisItemRequest) => api.post<Thesis>(`/api/portfolio/positions/${positionId}/thesis/items`, req),
+    onSuccess: write,
+  });
+}
+
+export function useSetThesisPillarStatus(positionId: number) {
+  const write = useThesisWriter(positionId);
+  return useMutation({
+    mutationFn: (v: { id: string; status: ThesisPillarStatus }) =>
+      api.put<Thesis>(`/api/portfolio/positions/${positionId}/thesis/items/${v.id}`, { status: v.status }),
+    onSuccess: write,
+  });
+}
+
+export function useRemoveThesisItem(positionId: number) {
+  const write = useThesisWriter(positionId);
+  return useMutation({
+    mutationFn: (id: string) => api.delete<Thesis>(`/api/portfolio/positions/${positionId}/thesis/items/${id}`),
+    onSuccess: write,
+  });
+}
+
+/** The screen presets (names, criteria, and what each cannot answer). Static, so cached for the session. */
+export function useScreenPresets() {
+  return useQuery({
+    queryKey: ['screen-presets'] as const,
+    queryFn: () => api.get<ScreenPreset[]>('/api/scan/presets'),
+    staleTime: Infinity,
+  });
+}
+
+/** Run one preset over the first `limit` watchlist symbols. Idle until a preset is chosen. */
+export function useRunScreenPreset(name: string | null) {
+  return useQuery({
+    queryKey: ['screen-preset-run', name] as const,
+    queryFn: () => api.get<ScreenPresetRun>(`/api/scan/presets/${name}`),
+    enabled: !!name,
+    staleTime: 5 * 60_000,
+  });
+}
+
 import type { OptionsChainResponse, SavedScreen, ScreenerFieldsResponse, ScreenerRunRequest, ScreenerRunResponse, ScreenerSpec } from './types';
 
 /** One expiration's option chain and its summary (read-only). `expiration` null asks for the nearest one. */
@@ -901,5 +1108,67 @@ export function useDeleteSavedScreen() {
   return useMutation({
     mutationFn: (id: string) => api.delete<{ deleted: string }>(`/api/screener/saved/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['screener', 'saved'] }),
+  });
+}
+
+// ---- Smart Money: fund holdings (13F) and 5% owners (13D/13G) ----
+
+import type {
+  FundChanges,
+  FundHolders,
+  FundsOverview,
+  FundsRefreshResponse,
+  OwnershipFilings,
+} from './types';
+
+const fundKeys = {
+  all: ['smart-money', 'funds'] as const,
+  overview: ['smart-money', 'funds', 'overview'] as const,
+  changes: (cik: string, status: string) => ['smart-money', 'funds', 'changes', cik, status] as const,
+  holders: (symbol: string) => ['smart-money', 'funds', 'holders', symbol] as const,
+  ownership: (days: number, schedule: string, symbol: string) =>
+    ['smart-money', 'funds', 'ownership', days, schedule, symbol] as const,
+};
+
+export function useFundsOverview() {
+  return useQuery({
+    queryKey: fundKeys.overview,
+    queryFn: () => api.get<FundsOverview>('/api/smart-money/funds'),
+  });
+}
+
+export function useFundChanges(cik: string | null, status: string) {
+  const q = new URLSearchParams({ status });
+  return useQuery({
+    queryKey: fundKeys.changes(cik ?? '', status),
+    queryFn: () => api.get<FundChanges>(`/api/smart-money/funds/${encodeURIComponent(cik ?? '')}/changes?${q}`),
+    enabled: !!cik,
+  });
+}
+
+/** Which followed funds hold a symbol at their latest known quarter end. */
+export function useFundHolders(symbol: string) {
+  return useQuery({
+    queryKey: fundKeys.holders(symbol),
+    queryFn: () => api.get<FundHolders>(`/api/smart-money/funds/holders/${encodeURIComponent(symbol)}`),
+    enabled: !!symbol,
+  });
+}
+
+export function useOwnershipFilings(params: { days: number; schedule: string; symbol: string }) {
+  const q = new URLSearchParams({ days: String(params.days), schedule: params.schedule });
+  if (params.symbol) q.set('symbol', params.symbol);
+  return useQuery({
+    queryKey: fundKeys.ownership(params.days, params.schedule, params.symbol),
+    queryFn: () => api.get<OwnershipFilings>(`/api/smart-money/ownership?${q}`),
+  });
+}
+
+/** Load 13F reports and 13D/13G filings from SEC EDGAR, then refetch every fund view. */
+export function useRefreshFunds() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<FundsRefreshResponse>('/api/smart-money/funds/refresh'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: fundKeys.all }),
   });
 }

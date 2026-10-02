@@ -47,6 +47,7 @@ _CHAIN_INFO: dict[str, tuple[str, str]] = {
 _OTHER_SOURCES: tuple[tuple[str, str, str], ...] = (
     (SEC_HEALTH_NAME, "SEC EDGAR (filings)", "Filings: insider trades (Form 4), 8-K events, annual revenue facts. Held to 5 requests a second."),
     ("finra", "FINRA", "Daily short-sale volume files. A day with no file (weekend, holiday) is normal, not an error."),
+    ("house_clerk", "House Clerk (Congress trades)", "Members' stock-trade report index and PDFs. Held to one request a second."),
     ("ecb", "European Central Bank", "Euro-area policy rates, EUR exchange rates and inflation series."),
     ("fred", "FRED (St. Louis Fed)", "US Treasury yields, fed funds, VIX, CPI, unemployment and dollar index series. No key."),
 )

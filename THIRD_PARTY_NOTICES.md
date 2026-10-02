@@ -64,6 +64,7 @@ holder is new.
 
 ## Projects we may copy from
 
+
 The pinned commit is the exact version we read. If you copy from a newer commit, use that commit in
 your row and re-check the project's LICENSE and NOTICE files.
 
@@ -515,3 +516,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+| `backend/app/llm_providers/thesis_review_prompt.py` | anthropics/financial-services@574ed36 | `plugins/vertical-plugins/equity-research/skills/thesis-tracker/SKILL.md` | Apache-2.0 | Kept the scorecard shape (pillar, status, dated log) and the "track disconfirming evidence as hard as confirming" rule as review instructions. Dropped conviction level, position actions and target price; the model gets only stored statuses and dates and must not add facts or advise. |
+| `backend/app/analysis/screen_presets.py` | anthropics/financial-services@574ed36 | `plugins/vertical-plugins/equity-research/skills/idea-generation/SKILL.md` | Apache-2.0 | The five screens (value, growth, quality, short ideas, special situations) became declarative presets with named thresholds; criteria our data cannot answer are listed as unavailable instead of approximated. |

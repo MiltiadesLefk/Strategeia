@@ -22,7 +22,7 @@ def test_empty_state_lists_the_chain_in_order_with_no_numbers():
     for row in body["chain"] + body["others"]:
         assert row["status"] == "unused"
         assert row["calls"] == 0 and row["success_rate"] is None and row["latency_p50_ms"] is None
-    assert {row["name"] for row in body["others"]} == {"sec_filings", "finra", "ecb", "fred"}
+    assert {row["name"] for row in body["others"]} == {"sec_filings", "finra", "ecb", "fred", "house_clerk"}
     assert not next(r for r in body["others"] if r["name"] == "finra")["can_probe"]
 
 

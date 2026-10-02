@@ -1,6 +1,8 @@
 import { Fragment, useState } from 'react';
 import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useSettings, useSettingsStatus } from '../api/hooks';
+import { SleeveSwitcher, SleevesOverview, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { LessonCell, LessonDetailRow } from '../components/TradeLesson';
+import { ThesisBrokenBadge, ThesisPanel } from '../components/ThesisPanel';
 import { StatCard } from '../components/StatCard';
 import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
@@ -98,6 +100,7 @@ function ActivePositionCard({ position }: { position: Position }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <TickerLink symbol={position.symbol} iconSize={30} fontWeight={700} style={{ fontSize: 15 }} />
           <DirectionBadge direction={position.direction} />
+          <ThesisBrokenBadge positionId={position.id} />
           <span className="text-muted" style={{ fontSize: 12 }}>
             {position.shares} shares @ {formatMoney(position.entry_price)}
           </span>
@@ -196,15 +199,17 @@ function ActivePositionCard({ position }: { position: Position }) {
           )}
         </div>
       </div>
+      <ThesisPanel positionId={position.id} />
     </div>
   );
 }
 
 export function PortfolioPage() {
-  const { data: stats, isLoading: statsLoading, dataUpdatedAt: statsUpdatedAt } = usePortfolioStats();
-  const { data: equity } = useEquityCurve();
-  const { data: positions, isLoading: positionsLoading, dataUpdatedAt: positionsUpdatedAt } = usePositions();
-  const { mutate: resetPortfolio, isPending: resetting, error: resetError } = useResetPortfolio();
+  const [sleeve, selectSleeve] = useSelectedSleeve();
+  const { data: stats, isLoading: statsLoading, dataUpdatedAt: statsUpdatedAt } = usePortfolioStats(sleeve);
+  const { data: equity } = useEquityCurve(sleeve);
+  const { data: positions, isLoading: positionsLoading, dataUpdatedAt: positionsUpdatedAt } = usePositions(sleeve);
+  const { mutate: resetPortfolio, isPending: resetting, error: resetError } = useResetPortfolio(sleeve);
   // lesson column: which closed trade's lesson is open, and whether an AI provider can write one
   const [openLessonId, setOpenLessonId] = useState<number | null>(null);
   const lessonAiOnline = useSettingsStatus().data?.ai_online ?? false;
@@ -231,9 +236,11 @@ export function PortfolioPage() {
           </div>
         </div>
         <button className="btn btn-secondary" onClick={handleReset} disabled={resetting}>
-          {resetting ? 'Resetting…' : 'Reset Paper Account'}
+          {resetting ? 'Resetting…' : sleeve === 'core' ? 'Reset Paper Account' : 'Reset this sleeve'}
         </button>
       </div>
+      <SleeveSwitcher selected={sleeve} onSelect={selectSleeve} />
+      <SleevesOverview selected={sleeve} onSelect={selectSleeve} />
       {resetError && <ErrorBanner message={(resetError as ApiError).message} />}
 
       {statsLoading && <LoadingSpinner label="Loading portfolio…" />}
@@ -348,6 +355,9 @@ export function PortfolioPage() {
         )}
       </div>
 
+      <div className="text-muted" style={{ fontSize: 12 }}>
+        Calibration below, and the missed-trades and replay studies, cover the core sleeve only.
+      </div>
       <CalibrationCard />
 
       <PriceAlertsCard />

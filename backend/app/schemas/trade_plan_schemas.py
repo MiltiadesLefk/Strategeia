@@ -11,6 +11,9 @@ class TradePlanGenerateRequest(BaseModel):
     symbol: str
     account_size: float | None = Field(default=None, gt=0)
     risk_pct: float | None = Field(default=None, gt=0, le=100)
+    # Sleeve (paper account) the plan is for, by key; omitted = core. Executing
+    # the plan opens its position in that sleeve.
+    sleeve: str | None = None
 
 
 class ShadowSignalOut(BaseModel):
@@ -103,6 +106,9 @@ class TradePlanResponse(BaseModel):
     # Number of the strategy version (rules + decision-relevant settings) this
     # plan was made under; None for plans from before versioning existed.
     strategy_version: int | None = None
+    # The sleeve (paper account) the plan is for; null/"core" = the original account.
+    sleeve_id: int | None = None
+    sleeve_key: str | None = None
     # Silent signals: what each new, not-yet-scored signal read and the points
     # it would have added. Never counted in confidence_score. None on plans
     # from before they were recorded.

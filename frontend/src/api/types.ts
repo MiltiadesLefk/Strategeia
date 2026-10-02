@@ -314,6 +314,8 @@ export interface Position {
   lesson_at?: string | null;
   /** Why the last attempt failed (short); an earlier lesson, if any, is kept. */
   lesson_error?: string | null;
+  /** Key of the sleeve (paper account) holding the position; "core" for the original account. */
+  sleeve_key?: string | null;
 }
 
 export interface PortfolioStats {
@@ -358,6 +360,38 @@ export interface EquityPoint {
   cash_balance: number;
 }
 
+/** One paper account for one trading style (backend schemas/sleeve_schemas.py). */
+export interface Sleeve {
+  id: number;
+  key: string;
+  name: string;
+  style: string;
+  starting_cash: number;
+  enabled: boolean;
+  color: string | null;
+  notes: string | null;
+  created_at: string;
+  is_core: boolean;
+}
+
+export interface SleeveWithStats extends Sleeve {
+  stats: PortfolioStats;
+}
+
+export interface SleeveCreateRequest {
+  name: string;
+  style: string;
+  starting_cash: number;
+  notes?: string | null;
+}
+
+export interface SleeveUpdateRequest {
+  name?: string;
+  style?: string;
+  enabled?: boolean;
+  notes?: string | null;
+}
+
 export interface DashboardSummary {
   stats: PortfolioStats;
   markets_scanned: number;
@@ -390,6 +424,8 @@ export interface AppSettings {
   finnhub_api_key: string;
   telegram_bot_token: string;
   telegram_chat_id: string;
+  /** Send one Telegram message the first time an open position's thesis is marked broken. */
+  thesis_alerts: boolean;
   scan_universe_size: number;
   news_cards_enabled: boolean;
   news_card_batch_limit: number;
@@ -401,6 +437,10 @@ export interface AppSettings {
   watchers_enabled: boolean;
   watchers_action: WatchersAction;
   watchers_poll_minutes: number;
+  /** CIKs of the funds whose 13F filings are followed; empty = the built-in starter list. */
+  smart_money_followed_funds: string[];
+  smart_money_follow_congress: CongressFollowMode;
+  smart_money_followed_members: string[];
   max_concurrent_positions: number;
   /** Trading days before a stalled position is closed at the close; 0 = no limit. */
   max_holding_days: number;
@@ -441,6 +481,7 @@ export interface SettingsUpdateRequest {
   finnhub_api_key?: string;
   telegram_bot_token?: string;
   telegram_chat_id?: string;
+  thesis_alerts?: boolean;
   scan_universe_size?: number;
   news_cards_enabled?: boolean;
   news_card_batch_limit?: number;
@@ -452,6 +493,9 @@ export interface SettingsUpdateRequest {
   watchers_enabled?: boolean;
   watchers_action?: WatchersAction;
   watchers_poll_minutes?: number;
+  smart_money_followed_funds?: string[];
+  smart_money_follow_congress?: CongressFollowMode;
+  smart_money_followed_members?: string[];
   max_concurrent_positions?: number;
   max_holding_days?: number;
   morning_note_enabled?: boolean;
@@ -1286,6 +1330,119 @@ export interface SmartMoneyRefreshResponse {
   errors: string[];
 }
 
+// ---- Smart Money: Congress trades (GET /api/smart-money/congress/...) ----
+
+export type CongressFollowMode = 'all' | 'list';
+
+export interface CongressTrade {
+  /** null for bonds, funds and private assets: shown, never scored. */
+  symbol: string | null;
+  member: string;
+  state_district: string | null;
+  owner: string;
+  asset: string;
+  asset_type: string | null;
+  ticker: string | null;
+  type: string;
+  side: 'buy' | 'sell' | 'other';
+  amount_low: number | null;
+  /** null for an open-ended top range ("Over $50,000,000"). */
+  amount_high: number | null;
+  amount_text: string;
+  /** Middle of the range: a label, never the real amount. null when open-ended. */
+  range_midpoint: number | null;
+  trade_date: string | null;
+  filed_date: string | null;
+  filing_delay_days: number | null;
+  known_at: string;
+  filing_url: string | null;
+  notes: string;
+}
+
+export interface CongressTrades {
+  days: number;
+  side: string;
+  symbol: string | null;
+  member: string | null;
+  follow_mode: CongressFollowMode;
+  followed_only: boolean;
+  total: number;
+  shown: number;
+  buy_count: number;
+  sell_count: number;
+  stock_buy_count: number;
+  members: number;
+  trades: CongressTrade[];
+}
+
+export interface CongressCluster {
+  symbol: string;
+  start_date: string;
+  end_date: string;
+  member_count: number;
+  trade_count: number;
+  members: string[];
+  total_low: number;
+  total_high: number | null;
+  visible_from: string;
+}
+
+export interface CongressClusters {
+  days: number;
+  follow_mode: CongressFollowMode;
+  followed_only: boolean;
+  clusters: CongressCluster[];
+}
+
+export interface CongressProblemFiling {
+  doc_id: string;
+  member: string;
+  filed_date: string | null;
+  status: 'partial' | 'unreadable';
+  reason: string | null;
+  rows: number;
+  filing_url: string | null;
+}
+
+export interface CongressStatus {
+  has_data: boolean;
+  trade_rows: number;
+  filings: number;
+  members: number;
+  unreadable_filings: number;
+  partial_filings: number;
+  problem_filings: CongressProblemFiling[];
+  oldest_filing: string | null;
+  newest_filing: string | null;
+  last_stored_at: string | null;
+  follow_mode: CongressFollowMode;
+  followed_members: string[];
+  senate_note: string;
+  ingest_command: string;
+}
+
+export interface CongressMemberName {
+  name: string;
+  state_district: string | null;
+  followed: boolean;
+}
+
+export interface CongressMemberNames {
+  names: CongressMemberName[];
+  total: number;
+}
+
+export interface CongressRefreshResponse {
+  year: number;
+  filings_listed: number;
+  filings_ingested: number;
+  filings_remaining: number;
+  rows_created: number;
+  unreadable: number;
+  partial: number;
+  errors: string[];
+}
+
 // ---- Backtest Lab: walk-forward validation (GET /api/backtests/validations...) ----
 
 export interface ValidationKnob {
@@ -1828,6 +1985,132 @@ export interface NoteSendResponse {
   ai_used: boolean;
 }
 
+// ---- Thesis tracker (per open position) --------------------------------------------------
+
+export type ThesisPillarStatus = 'intact' | 'at_risk' | 'broken';
+export type ThesisItemKind = 'pillar' | 'risk' | 'catalyst';
+
+export interface ThesisPillar {
+  id: string;
+  /** What the rules can re-check ("trend", "stop", "weekly", "market"); other keys are not re-checked. */
+  key: string;
+  text: string;
+  status: ThesisPillarStatus;
+  source: string;
+  /** A core pillar breaking sets the thesis-broken warning. */
+  core: boolean;
+  detail: string | null;
+  checked_at: string | null;
+}
+
+export interface ThesisRisk {
+  id: string;
+  text: string;
+  source: string;
+}
+
+export interface ThesisCatalyst {
+  id: string;
+  key: string;
+  text: string;
+  date: string | null;
+  days_until: number | null;
+  source: string;
+}
+
+export interface ThesisLogEntry {
+  at: string;
+  kind: 'note' | 'system';
+  text: string;
+}
+
+export interface Thesis {
+  id: number;
+  position_id: number;
+  trade_plan_id: number | null;
+  symbol: string;
+  direction: string;
+  pillars: ThesisPillar[];
+  risks: ThesisRisk[];
+  catalysts: ThesisCatalyst[];
+  log: ThesisLogEntry[];
+  thesis_broken: boolean;
+  broken_at: string | null;
+  last_checked_at: string | null;
+  review_text: string | null;
+  review_at: string | null;
+  review_provider: string | null;
+  review_model: string | null;
+  review_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** `thesis` is null for a position that has none yet; a read never creates one. */
+export interface ThesisResponse {
+  thesis: Thesis | null;
+}
+
+export interface ThesisRecheckResponse {
+  thesis: Thesis;
+  status: string;
+  changes: string[];
+  note: string;
+}
+
+export interface ThesisItemRequest {
+  kind: ThesisItemKind;
+  text: string;
+  date?: string | null;
+  status?: ThesisPillarStatus | null;
+}
+
+// ---- Screen presets (Market Scan) --------------------------------------------------------
+
+export interface ScreenPresetCriterion {
+  id: string;
+  label: string;
+  required: boolean;
+}
+
+export interface ScreenPreset {
+  name: string;
+  label: string;
+  description: string;
+  criteria: ScreenPresetCriterion[];
+  min_matches: number;
+  /** Criteria from the source screen our data cannot answer, with why. */
+  unavailable: { label: string; reason: string }[];
+}
+
+export interface ScreenPresetCriterionResult {
+  id: string;
+  label: string;
+  /** true met, false not met, null could not be told (data missing). */
+  ok: boolean | null;
+  detail: string;
+}
+
+export interface ScreenPresetMatch {
+  symbol: string;
+  price: number | null;
+  change_pct_24h: number | null;
+  criteria: ScreenPresetCriterionResult[];
+}
+
+export interface ScreenPresetRun {
+  preset: ScreenPreset;
+  matches: ScreenPresetMatch[];
+  universe_size: number;
+  limit: number;
+  checked: number;
+  unjudged: string[];
+  errors: string[];
+  note: string;
+}
+
+// ---- options chain view (mirrors backend/app/schemas/options_schemas.py)
+
 export interface OptionLeg {
   last_price: number | null;
   bid: number | null;
@@ -1876,6 +2159,8 @@ export interface OptionsChainResponse {
   rows: OptionStrikeRow[];
   notes: string[];
 }
+
+// ---- screener (mirrors backend/app/schemas/screener_schemas.py)
 
 export type ScreenerValue = number | string | null;
 
@@ -1940,4 +2225,144 @@ export interface SavedScreen extends ScreenerSpec {
   id: string;
   name: string;
   created_at: string;
+}
+
+// ---- Smart Money: fund holdings (13F) and 5% owners (13D/13G), GET /api/smart-money/funds/... ----
+
+export type FundChangeStatus = 'new' | 'added' | 'trimmed' | 'sold_out' | 'unchanged';
+
+export interface FundSummary {
+  cik: string;
+  name: string;
+  is_starter: boolean;
+  has_data: boolean;
+  latest_period: string | null;
+  latest_filed_at: string | null;
+  latest_form: string | null;
+  quarters_stored: number;
+  holdings_count: number;
+  matched_count: number;
+  total_value: number;
+  value_unit: string | null;
+  latest_is_notice: boolean;
+}
+
+export interface FundsOverview {
+  funds: FundSummary[];
+  using_starter_list: boolean;
+  has_data: boolean;
+  sec_contact_is_placeholder: boolean;
+  ingest_command: string;
+  refresh_cooldown_seconds: number;
+}
+
+export interface FundChange {
+  cusip: string;
+  issuer: string;
+  symbol: string | null;
+  put_call: string | null;
+  share_type: string;
+  status: FundChangeStatus;
+  shares_now: number;
+  shares_before: number;
+  change_pct: number | null;
+  value_now: number;
+  value_before: number;
+  weight_now_pct: number;
+  weight_before_pct: number;
+}
+
+export interface FundPosition {
+  cusip: string;
+  issuer: string;
+  symbol: string | null;
+  put_call: string | null;
+  share_type: string;
+  shares: number;
+  value: number;
+  weight_pct: number;
+}
+
+export interface FundChanges {
+  cik: string;
+  manager: string | null;
+  has_data: boolean;
+  period: string | null;
+  previous_period: string | null;
+  filed_at: string | null;
+  previous_filed_at: string | null;
+  consecutive: boolean;
+  has_comparison: boolean;
+  holdings_count: number;
+  total_value: number;
+  counts: Record<string, number>;
+  status: string;
+  total: number;
+  shown: number;
+  changes: FundChange[];
+  top_holdings: FundPosition[];
+  filing_url: string | null;
+}
+
+export interface FundHolder {
+  cik: string;
+  manager: string | null;
+  period: string | null;
+  filed_at: string;
+  shares: number;
+  value: number;
+  weight_pct: number;
+  previous_shares: number | null;
+  status: FundChangeStatus | 'no_comparison';
+  change_pct: number | null;
+  filing_url: string | null;
+}
+
+export interface FundHolders {
+  symbol: string;
+  funds_stored: number;
+  holders: FundHolder[];
+}
+
+export type OwnershipSchedule = 'all' | '13D' | '13G';
+
+export interface OwnershipFiling {
+  symbol: string | null;
+  accession: string;
+  schedule: '13D' | '13G';
+  form: string;
+  is_amendment: boolean;
+  known_at: string;
+  event_date: string | null;
+  filer_name: string | null;
+  issuer_name: string | null;
+  class_title: string | null;
+  percent: number | null;
+  shares: number | null;
+  rule: string | null;
+  purpose: string | null;
+  person_count: number;
+  filing_url: string | null;
+}
+
+export interface OwnershipFilings {
+  days: number;
+  schedule: string;
+  symbol: string | null;
+  total: number;
+  shown: number;
+  count_13d: number;
+  count_13g: number;
+  filings: OwnershipFiling[];
+  has_data: boolean;
+  refresh_cooldown_seconds: number;
+}
+
+export interface FundsRefreshResponse {
+  funds_processed: number;
+  filings_ingested: number;
+  holdings_created: number;
+  ownership_filings_created: number;
+  legacy_skipped: number;
+  errors: string[];
 }

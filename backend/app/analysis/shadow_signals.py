@@ -116,6 +116,8 @@ def _load_builtin_signals() -> None:
     from app.analysis import fed_event_window  # noqa: F401
     from app.analysis import post_mentions  # noqa: F401
     from app.analysis import news_card_scoring  # noqa: F401
+    from app.analysis import fund_signals  # noqa: F401
+    from app.analysis import congress_scoring  # noqa: F401
 
 
 def _unavailable(name: str, reason: str) -> ShadowSignal:

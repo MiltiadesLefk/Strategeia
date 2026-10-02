@@ -16,6 +16,7 @@ import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels
 import { DataFreshness } from '../components/DataFreshness';
 import { Flash } from '../components/Flash';
 import { InsiderPanel } from '../components/smartmoney/InsiderPanel';
+import { FundHoldersPanel } from '../components/smartmoney/FundHoldersPanel';
 import { isAlwaysOpenSymbol } from '../lib/marketHours';
 import { INTRADAY_FALLBACK_RANGE, INTRADAY_UNAVAILABLE_MESSAGE, isIntradayRange } from '../lib/intraday';
 import type { ApiError } from '../api/client';
@@ -570,7 +571,9 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
               <TradingViewWidget kind="technical-analysis" symbol={data.symbol} height={420} />
             </>
           )}
+
           {tab === 'overview' && !data.symbol.endsWith('-USD') && <InsiderPanel symbol={data.symbol} />}
+          {tab === 'overview' && !data.symbol.endsWith('-USD') && <FundHoldersPanel symbol={data.symbol} />}
         </>
       )}
     </>

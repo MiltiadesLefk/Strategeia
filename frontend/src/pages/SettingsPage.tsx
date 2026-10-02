@@ -8,7 +8,10 @@ import { DataCacheCard } from '../components/DataCacheCard';
 import { DataSourcesCard } from '../components/DataSourcesCard';
 import { WatchersCard } from '../components/WatchersCard';
 import { NotificationsSettingsCard } from '../components/NotificationsSettingsCard';
+import { CongressFollowCard } from '../components/CongressFollowCard';
+import { FundFollowCard } from '../components/FundFollowCard';
 import { NewsCardsSettingsCard } from '../components/NewsCardsSettingsCard';
+import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
 import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
 
@@ -1016,9 +1019,15 @@ export function SettingsPage() {
       </div>
 
       <NotificationsSettingsCard />
+
       <WatchersCard />
 
       <NewsCardsSettingsCard />
+      <ThesisAlertsSettingsCard />
+
+      <CongressFollowCard />
+
+      <FundFollowCard />
 
       <WatchlistCard />
 

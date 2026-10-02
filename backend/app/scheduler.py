@@ -21,7 +21,7 @@ from app.markets import (
     us_holiday_name,
 )
 from app.knowledge.point_in_time import is_simulated
-from app.portfolio.engine import PaperTradingEngine
+from app.services.sleeve_service import mark_all_sleeves
 from app.portfolio.missed_trades import refresh_missed_trades
 from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_auto_scan, run_market_open_redos
@@ -30,6 +30,7 @@ from app.services.morning_note_service import run_morning_note_if_due
 from app.services.price_alert_service import run_price_alert_check
 from app.services.weekly_digest_service import run_weekly_digest_if_due
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
+from app.services.thesis_service import run_thesis_sweep
 from app.watchers.runner import run_due_watchers
 
 logger = logging.getLogger(__name__)
@@ -78,17 +79,9 @@ def _mark_to_market_job() -> None:
         try:
             if not _should_mark_now(session):
                 return
-            PaperTradingEngine(
-                session,
-                data_provider,
-                settings.paper_starting_cash,
-                settings.max_concurrent_positions,
-                slippage_bps=settings.slippage_bps,
-                commission_per_trade=settings.commission_per_trade,
-                max_positions_per_sector=settings.max_positions_per_sector,
-                max_position_pct_of_adv=settings.max_position_pct_of_adv,
-                max_holding_days=settings.max_holding_days,
-            ).mark_to_market()
+            # Every sleeve (each through its own engine), disabled ones included:
+            # switching a sleeve off stops new trades, not the exits of open ones.
+            mark_all_sleeves(session, data_provider, settings)
         except Exception:
             logger.exception("Scheduled mark-to-market tick failed")
 
@@ -181,6 +174,28 @@ WATCHER_TICK_JITTER_SECONDS = 20
 WATCHER_POLL_JITTER_SECONDS = 5.0
 
 
+# Thesis tracker: every few minutes each open position without a thesis gets one made from its
+# plan, and (in the trading session only, when a new bar can exist) every thesis not checked in
+# the last hour is re-checked by rules. It never touches the position itself, and a failure here
+# can never delay the exit sweep because it is a separate job.
+THESIS_SWEEP_INTERVAL_MINUTES = 15
+
+
+def _thesis_sweep_job() -> None:
+    try:
+        settings = load_app_settings()
+        data_provider = get_data_provider(settings)
+        with Session(engine) as session:
+            run_thesis_sweep(session, settings, data_provider, recheck=_should_mark_now(session))
+    except Exception:
+        logger.exception("Scheduled thesis sweep failed")
+
+
+# Price alerts (user-defined and the automatic ones on open positions) are checked on
+# this cadence; the check itself skips symbols whose market is closed, so a tick outside
+# the session costs one database read. It only sends messages and records facts.
+PRICE_ALERT_INTERVAL_MINUTES = 5
+
 
 def _price_alerts_job() -> None:
     try:
@@ -192,6 +207,14 @@ def _price_alerts_job() -> None:
             run_price_alert_check(session, settings, data_provider)
     except Exception:
         logger.exception("Scheduled price alert check failed")
+
+
+# The morning note and the weekly digest are polled every few minutes rather than fired by a
+# fixed cron time: the time is a setting that can change while the app runs, and a note
+# missed because the app was down at 08:45 is still sent when it starts at 08:50. The
+# due-check (services/notification_schedule.py) decides, and a sent record prevents repeats.
+NOTIFICATION_POLL_MINUTES = 5
+
 
 def _notifications_job() -> None:
     try:
@@ -207,6 +230,8 @@ def _notifications_job() -> None:
             run_weekly_digest_if_due(session, settings, data_provider, llm_provider)
     except Exception:
         logger.exception("Scheduled notification tick failed")
+
+
 def _watchers_job() -> None:
     try:
         settings = load_app_settings()

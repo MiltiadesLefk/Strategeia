@@ -13,6 +13,7 @@ from app.api.routers import alerts as price_alerts_router
 from app.api.routers import notes as notes_router
 from app.api.routers import analysis, archive, auth, dashboard, market, portfolio, research, risk, scanner, settings, trade_plans
 from app.api.routers import signals as signals_router
+from app.api.routers import sleeves as sleeves_router
 from app.api.routers import news as news_router
 from app.api.routers import strategy as strategy_router
 from app.api.routers import calibration as calibration_router
@@ -24,9 +25,13 @@ from app.api.routers import backtests as backtests_router
 from app.api.routers import missed_trades as missed_trades_router
 from app.api.routers import replay as replay_router
 from app.api.routers import calendar as calendar_router
+from app.api.routers import screen_presets as screen_presets_router
+from app.api.routers import thesis as thesis_router
 from app.api.routers import watchers as watchers_router
 from app.api.routers import watchlist as watchlist_router
 from app.api.routers import smart_money as smart_money_router
+from app.api.routers import funds as funds_router
+from app.api.routers import congress as congress_router
 from app.config import get_infra_settings
 from app.data_providers.base import AllProvidersFailedError
 from app.backtest.service import recover_on_startup as recover_interrupted_backtests
@@ -35,6 +40,8 @@ from app.scheduler import start_scheduler, stop_scheduler
 from app.watchers.sec_watcher import register_sec_watcher
 from app.watchers.fed_watcher import register_fed_watcher
 from app.watchers.posts_watcher import register_posts_watcher
+from app.watchers.fund_watcher import register_fund_watcher
+from app.watchers.house_watcher import register_house_watcher
 
 
 @asynccontextmanager
@@ -45,6 +52,8 @@ async def lifespan(app: FastAPI):
     register_sec_watcher()  # sec_watcher: the SEC filings watcher (idle until the Watchers switch is on)
     register_fed_watcher()  # fed_watcher: Fed statements and speeches (market-wide, alert-only)
     register_posts_watcher()  # posts_watcher: posts from an unofficial archive feed
+    register_fund_watcher()  # fund_watcher: 13F reports of followed funds and 13D/13G 5% owner filings
+    register_house_watcher()  # house_watcher: House members' stock-trade reports
     start_scheduler()
     yield
     stop_scheduler()
@@ -96,6 +105,7 @@ def all_providers_failed_handler(request: Request, exc: AllProvidersFailedError)
 
 app.include_router(auth.router)
 app.include_router(scanner.router)
+app.include_router(screen_presets_router.router)
 app.include_router(analysis.router)
 app.include_router(research.router)
 app.include_router(calendar_router.router)
@@ -104,6 +114,8 @@ app.include_router(trade_plans.router)
 app.include_router(signals_router.router)
 app.include_router(news_router.router)
 app.include_router(portfolio.router)
+app.include_router(thesis_router.router)
+app.include_router(sleeves_router.router)
 app.include_router(calibration_router.router)
 app.include_router(settings.router)
 app.include_router(dashboard.router)
@@ -121,6 +133,8 @@ app.include_router(backtests_router.router)
 app.include_router(missed_trades_router.router)
 app.include_router(replay_router.router)
 app.include_router(smart_money_router.router)
+app.include_router(funds_router.router)
+app.include_router(congress_router.router)
 app.include_router(terminal_router.router)
 app.include_router(options_router.router)
 app.include_router(screener_router.router)

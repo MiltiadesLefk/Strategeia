@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FinancialDisclosure>
+  <Member>
+    <Prefix />
+    <Last>Abel</Last>
+    <First>William P.</First>
+    <Suffix />
+    <FilingType>C</FilingType>
+    <StateDst>TX31</StateDst>
+    <Year>2025</Year>
+    <FilingDate>10/12/2025</FilingDate>
+    <DocID>10072640</DocID>
+  </Member>
+  <Member>
+    <Prefix>Hon.</Prefix>
+    <Last>Doggett</Last>
+    <First>Lloyd</First>
+    <Suffix />
+    <FilingType>P</FilingType>
+    <StateDst>TX37</StateDst>
+    <Year>2025</Year>
+    <FilingDate>7/7/2025</FilingDate>
+    <DocID>20030618</DocID>
+  </Member>
+  <Member>
+    <Prefix>Hon.</Prefix>
+    <Last>Greene</Last>
+    <First>Marjorie Taylor</First>
+    <Suffix />
+    <FilingType>P</FilingType>
+    <StateDst>GA14</StateDst>
+    <Year>2025</Year>
+    <FilingDate>1/27/2025</FilingDate>
+    <DocID>20026658</DocID>
+  </Member>
+  <Member>
+    <Prefix>Hon.</Prefix>
+    <Last>Kean</Last>
+    <First>Thomas H.</First>
+    <Suffix>Jr</Suffix>
+    <FilingType>P</FilingType>
+    <StateDst>NJ07</StateDst>
+    <Year>2025</Year>
+    <FilingDate>2/19/2025</FilingDate>
+    <DocID>20026802</DocID>
+  </Member>
+  <Member>
+    <Prefix>Hon.</Prefix>
+    <Last>Pelosi</Last>
+    <First>Nancy</First>
+    <Suffix />
+    <FilingType>P</FilingType>
+    <StateDst>CA11</StateDst>
+    <Year>2025</Year>
+    <FilingDate>1/17/2025</FilingDate>
+    <DocID>20026590</DocID>
+  </Member>
+  <Member>
+    <Prefix>Hon.</Prefix>
+    <Last>Rose</Last>
+    <First>John W.</First>
+    <Suffix />
+    <FilingType>P</FilingType>
+    <StateDst>TN06</StateDst>
+    <Year>2025</Year>
+    <FilingDate>7/4/2025</FilingDate>
+    <DocID>20030610</DocID>
+  </Member>
+  <Member>
+    <Prefix />
+    <Last>Wied</Last>
+    <First>Tony</First>
+    <Suffix />
+    <FilingType>P</FilingType>
+    <StateDst>WI08</StateDst>
+    <Year>2025</Year>
+    <FilingDate>2/10/2025</FilingDate>
+    <DocID>8220757</DocID>
+  </Member>
+</FinancialDisclosure>

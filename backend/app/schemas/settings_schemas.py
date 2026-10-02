@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.config import AiOverlayObjectionAction, ResearchMode, WatchersAction, normalize_api_model, normalize_claude_cli_model, normalize_clock_time
 from app.llm_providers.base import LLMTier
 
+# Longest member name accepted in the Congress follow list (real names are well under 60).
+MAX_FOLLOWED_MEMBER_NAME_LENGTH = 80
 
 class SettingsUpdateRequest(BaseModel):
     llm_provider: str | None = None
@@ -38,6 +42,7 @@ class SettingsUpdateRequest(BaseModel):
     research_mode: ResearchMode | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
+    thesis_alerts: bool | None = None
     scan_universe_size: int | None = Field(default=None, gt=0)
     news_cards_enabled: bool | None = None
     news_card_batch_limit: int | None = Field(default=None, ge=1, le=30)
@@ -49,6 +54,11 @@ class SettingsUpdateRequest(BaseModel):
     watchers_enabled: bool | None = None
     watchers_action: WatchersAction | None = None
     watchers_poll_minutes: int | None = Field(default=None, ge=1, le=60)
+    # CIK numbers of the funds whose 13F filings are followed (digits only, at most 50).
+    smart_money_followed_funds: list[str] | None = Field(default=None, max_length=50)
+    # Congress trades: follow every member ("all") or only the listed ones ("list").
+    smart_money_follow_congress: Literal["all", "list"] | None = None
+    smart_money_followed_members: list[str] | None = Field(default=None, max_length=50)
     max_concurrent_positions: int | None = Field(default=None, gt=0)
     # Trading days before a stalled position is closed at the close; 0 = no limit.
     # Capped at 60 (about three months): the exit scan reads 3 months of bars
@@ -66,6 +76,38 @@ class SettingsUpdateRequest(BaseModel):
     @classmethod
     def _validate_morning_note_time_et(cls, value: str | None) -> str | None:
         return None if value is None else normalize_clock_time(value)
+
+    @field_validator("smart_money_followed_members")
+    @classmethod
+    def _validate_smart_money_followed_members(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            text = " ".join(str(raw).split())
+            if not text or len(text) > MAX_FOLLOWED_MEMBER_NAME_LENGTH:
+                raise ValueError(f"member names must be 1 to {MAX_FOLLOWED_MEMBER_NAME_LENGTH} characters")
+            key = text.lower()
+            if key not in seen:
+                seen.add(key)
+                cleaned.append(text)
+        return cleaned
+
+    @field_validator("smart_money_followed_funds")
+    @classmethod
+    def _validate_smart_money_followed_funds(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned: list[str] = []
+        for raw in value:
+            text = str(raw).strip()
+            if not text.isdigit() or len(text) > 10:
+                raise ValueError("fund CIKs must be digits only (at most 10)")
+            text = text.lstrip("0") or "0"
+            if text not in cleaned:
+                cleaned.append(text)
+        return cleaned
 
     @field_validator("claude_cli_model")
     @classmethod

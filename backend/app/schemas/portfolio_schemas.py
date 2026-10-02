@@ -46,6 +46,9 @@ class PositionSchema(BaseModel):
     lesson_model: str | None = None
     lesson_at: UtcDatetime | None = None
     lesson_error: str | None = None
+    # The key of the sleeve (paper account) that holds the position; "core" for
+    # the original account and for positions from before sleeves existed.
+    sleeve_key: str | None = None
 
 
 class OpenPositionRequest(BaseModel):

@@ -88,6 +88,7 @@ def create_db_and_tables() -> None:
     from app.portfolio import alert_models  # noqa: F401 - PriceAlert / NotificationLog
     from app.portfolio import missed_trade_models  # noqa: F401 - MissedTradeOutcome
     from app.portfolio import models  # noqa: F401 - registers tables on SQLModel.metadata
+    from app.portfolio import thesis_models  # noqa: F401 - ThesisRecord
     from app.strategy import models as strategy_models  # noqa: F401 - StrategyVersion
     from app.watchers import models as watcher_models  # noqa: F401 - WatcherState
 

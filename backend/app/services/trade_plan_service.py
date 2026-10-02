@@ -53,9 +53,11 @@ from app.portfolio.engine import (
     MaxPositionsExceededError,
     PaperTradingEngine,
     SectorConcentrationError,
+    SleeveDisabledError,
     StalePlanError,
 )
-from app.portfolio.models import TradePlanRecord
+from app.portfolio.models import Sleeve, TradePlanRecord
+from app.portfolio.sleeves import CORE_SLEEVE_KEY, plan_sleeve_id, read_scope, scope_clause, scope_of
 from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
 from app.services.archive_service import archive_fetched_data
@@ -359,6 +361,7 @@ def _defer_to_market_open(
         trade_plan_id=record.id,
         account_size=account_size,
         risk_pct=risk_pct,
+        sleeve_id=record.sleeve_id,
     )
     note = (
         f"Market closed ({reason}), so this plan was not executed. It will be redone from fresh data "
@@ -434,6 +437,7 @@ def generate_trade_plan(
     source: str = "manual",
     clock: Clock | None = None,
     settings: AppSettings | None = None,
+    sleeve: Sleeve | None = None,
 ) -> TradePlanResponse:
     """Fully evaluates `symbol` (price/volume/technicals + fundamentals +
     news + earnings) and either returns a tradeable plan or an explicit
@@ -448,8 +452,14 @@ def generate_trade_plan(
     `clock` is the paper engine's (tests and, later, the backtester pass a
     simulated one). `settings` is the strategy settings to decide with (default:
     the saved ones); a backtest passes its own copy so a run never reads or
-    changes the real settings file."""
+    changes the real settings file. `sleeve` is the paper account the plan is
+    for (default: the core sleeve): it is recorded on the plan, sizing reads that
+    sleeve's cash, and executing the plan opens the position in it. The analysis
+    and the decision are identical whichever sleeve asks."""
     settings = settings if settings is not None else load_app_settings()
+    in_core = sleeve is None or sleeve.key == CORE_SLEEVE_KEY
+    sleeve_id = plan_sleeve_id(session, sleeve)
+    sleeve_scope = read_scope(session, None) if in_core else scope_of(sleeve)
 
     # 1y, matching analysis_service.get_analysis's fetch exactly — trend/EMA/
     # RSI/support-resistance must come from the same lookback window
@@ -727,7 +737,7 @@ def generate_trade_plan(
     engine = PaperTradingEngine(
         session,
         data_provider,
-        account_size,
+        account_size if in_core else sleeve.starting_cash,
         settings.max_concurrent_positions,
         slippage_bps=settings.slippage_bps,
         commission_per_trade=settings.commission_per_trade,
@@ -735,6 +745,7 @@ def generate_trade_plan(
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         clock=clock,
         max_holding_days=settings.max_holding_days,
+        sleeve=None if in_core else sleeve,
     )
     sizing = calculate_position_size(account_size, risk_pct, entry, stop, engine.available_cash())
     targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
@@ -762,9 +773,11 @@ def generate_trade_plan(
     # plan superseded it rather than piling up duplicate rows in history —
     # the old numbers are stale the moment a fresh one is computed, whether
     # they differ or (as when nothing moved) come out identical.
-    stale_pending = session.exec(
-        select(TradePlanRecord).where(TradePlanRecord.symbol == symbol, TradePlanRecord.status == "pending")
-    ).all()
+    # Only this sleeve's own pending plans: another sleeve's pending plan for the
+    # same symbol is a different account's, and stays.
+    stale_query = select(TradePlanRecord).where(TradePlanRecord.symbol == symbol, TradePlanRecord.status == "pending")
+    stale_query = stale_query.where(scope_clause(TradePlanRecord.sleeve_id, sleeve_scope))
+    stale_pending = session.exec(stale_query).all()
     for stale in stale_pending:
         stale.status = "discarded"
         session.add(stale)
@@ -807,6 +820,7 @@ def generate_trade_plan(
         ai_news_assessment=ai_news_assessment,
         strategy_version=strategy_version,
         shadow_signals=shadow_signals_json,
+        sleeve_id=sleeve_id,
     )
     session.add(record)
     session.commit()
@@ -871,6 +885,7 @@ def generate_trade_plan(
                 DuplicatePositionError,
                 MaxPositionsExceededError,
                 SectorConcentrationError,
+                SleeveDisabledError,
                 StalePlanError,
             ) as exc:
                 logger.warning("Auto-execute skipped for %s: %s", symbol, exc)

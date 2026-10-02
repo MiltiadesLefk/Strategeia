@@ -407,12 +407,15 @@ WatchersAction = Literal["record", "alert", "alert_and_reevaluate"]
 
 CLOCK_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
+
 def normalize_clock_time(value: str) -> str:
     """Trim and validate an "HH:MM" 24-hour time. Raises ValueError otherwise."""
     cleaned = value.strip()
     if not CLOCK_TIME_PATTERN.fullmatch(cleaned):
         raise ValueError("Time must be written HH:MM on a 24-hour clock, for example 08:45")
     return cleaned
+
+
 MASK_BULLET_COUNT = 16
 
 
@@ -597,6 +600,10 @@ class AppSettings(BaseModel):
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # Thesis tracker: send one Telegram message the first time an open position's thesis is
+    # marked broken (its core trend pillar no longer holds). The warning itself is always shown
+    # on the Portfolio page; this only controls the message. It never closes anything.
+    thesis_alerts: bool = True
 
     scan_universe_size: int = 50
 
@@ -647,6 +654,17 @@ class AppSettings(BaseModel):
     watchers_action: WatchersAction = "alert_and_reevaluate"
     watchers_poll_minutes: int = 5
 
+    # Large funds (SEC CIK numbers, digits only) whose quarterly 13F holdings the
+    # Smart Money page and the fund watcher follow. Empty means "use the built-in
+    # starter list" (data_providers/sec_13f.py STARTER_FUNDS).
+    smart_money_followed_funds: list[str] = []
+
+    # Whose Congress trades the Smart Money page and the House watcher follow:
+    # "all" = every member of the House; "list" = only the members named in
+    # smart_money_followed_members (names as the House Clerk prints them, at most 50).
+    smart_money_follow_congress: Literal["all", "list"] = "all"
+    smart_money_followed_members: list[str] = []
+
     # Portfolio-level risk, as opposed to the per-trade risk default_risk_pct
     # already covers. Five 1%-risk positions is only "5% at risk" if the five
     # are independent — five semis on the same tape is one 5% bet. max_positions
@@ -689,6 +707,7 @@ class AppSettings(BaseModel):
     @classmethod
     def _validate_morning_note_time_et(cls, value):
         return normalize_clock_time(value) if isinstance(value, str) else value
+
     def redacted(self) -> dict:
         """Copy safe to return over the API — secrets collapsed to a masked
         hint (e.g. "••••ab12") so the UI can show *that* a key is set and

@@ -147,7 +147,17 @@ def _reset_in_process_cooldowns(monkeypatch):
 
     clear_feed_cache()
     monkeypatch.setattr("app.api.routers.smart_money._last_insider_refresh_monotonic", None)
+    monkeypatch.setattr("app.api.routers.funds._last_funds_refresh_monotonic", None)
+    # The reverse ticker map of the 13D/13G reader (data_providers/sec_13dg.py).
+    from app.data_providers.sec_13dg import reset_cik_ticker_cache
+
+    reset_cik_ticker_cache()
+    monkeypatch.setattr("app.api.routers.congress._last_congress_refresh_monotonic", None)
+    from app.data_providers.house_disclosures import clear_index_cache
+
+    clear_index_cache()
     monkeypatch.setattr("app.api.routers.portfolio._last_lesson_request_monotonic", {})
+    monkeypatch.setattr("app.api.routers.thesis._last_thesis_review_monotonic", {})
     monkeypatch.setattr("app.api.routers.watchers._last_watcher_run_monotonic", {})
     monkeypatch.setattr("app.api.routers.notes._last_note_send_monotonic", {})
     from app.services.market_terminal_service import reset_terminal_cache

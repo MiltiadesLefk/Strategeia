@@ -20,6 +20,7 @@ from sqlmodel import Session, select
 
 from app.markets import is_always_on, is_market_open_for, next_us_open, to_market_time, us_session_bounds
 from app.portfolio.models import DeferredEvaluation
+from app.portfolio.sleeves import non_core_sleeve_id
 
 # The redo runs this long after the open (09:45 ET on a normal day), not on
 # the bell. The point of waiting was to decide on the new session's prices,
@@ -70,8 +71,11 @@ def queue_market_open_redo(
     trade_plan_id: int | None = None,
     account_size: float | None = None,
     risk_pct: float | None = None,
+    sleeve_id: int | None = None,
 ) -> DeferredEvaluation:
-    """Queue (or refresh) the redo for `symbol`. One pending row per symbol:
+    """Queue (or refresh) the redo for `symbol`. One pending row per symbol
+    per sleeve (`sleeve_id`; None = core: two sleeves each waiting on the same
+    symbol are two redos, each trading in its own account):
     a second off-hours request — Generate clicked twice on a Sunday, or the
     16:15 scan after a manual plan — points the existing row at the newest
     plan and sizing instead of queuing a duplicate evaluation. The first
@@ -79,8 +83,13 @@ def queue_market_open_redo(
     (a row left overdue while the app was down still waits for the next
     open, same as the new request would)."""
     due_at = redo_due_at(now)
+    sleeve_id = non_core_sleeve_id(session, sleeve_id)
     existing = session.exec(
-        select(DeferredEvaluation).where(DeferredEvaluation.symbol == symbol, DeferredEvaluation.status == PENDING)
+        select(DeferredEvaluation).where(
+            DeferredEvaluation.symbol == symbol,
+            DeferredEvaluation.status == PENDING,
+            DeferredEvaluation.sleeve_id.is_(None) if sleeve_id is None else DeferredEvaluation.sleeve_id == sleeve_id,
+        )
     ).first()
     if existing is not None:
         if trade_plan_id is not None:
@@ -100,6 +109,7 @@ def queue_market_open_redo(
             trade_plan_id=trade_plan_id,
             account_size=account_size,
             risk_pct=risk_pct,
+            sleeve_id=sleeve_id,
         )
     session.add(deferral)
     session.commit()

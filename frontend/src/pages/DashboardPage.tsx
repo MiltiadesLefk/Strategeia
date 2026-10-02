@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { SleeveSwitcher, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { useDashboardSummary, useEquityCurve, useAnalysis } from '../api/hooks';
 import { StatCard } from '../components/StatCard';
 import { SignalBadge, TrendBadge } from '../components/Badge';
@@ -59,8 +60,9 @@ function TopPickChart({ symbol }: { symbol: string }) {
 }
 
 export function DashboardPage() {
-  const { data, isLoading, error, dataUpdatedAt, isFetching } = useDashboardSummary();
-  const { data: equity } = useEquityCurve();
+  const [sleeve, selectSleeve] = useSelectedSleeve();
+  const { data, isLoading, error, dataUpdatedAt, isFetching } = useDashboardSummary(sleeve);
+  const { data: equity } = useEquityCurve(sleeve);
 
   if (isLoading) return <LoadingSpinner label="Loading dashboard…" />;
   if (error) return <ErrorBanner message={(error as ApiError).message} />;
@@ -90,6 +92,8 @@ export function DashboardPage() {
           <DataFreshness updatedAt={dataUpdatedAt} isFetching={isFetching} />
         </div>
       </div>
+
+      <SleeveSwitcher selected={sleeve} onSelect={selectSleeve} />
 
       {/* Two tiers, because these are not peers. Account performance leads;
           win rate / expectancy / exposure follow at normal weight. The

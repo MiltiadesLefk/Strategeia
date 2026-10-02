@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_auth
@@ -10,7 +10,8 @@ from app.analysis.shadow_signals import shadow_signals_from_json
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
-from app.portfolio.models import TradePlanRecord
+from app.portfolio.models import Sleeve, TradePlanRecord
+from app.portfolio.sleeves import CORE_SLEEVE_KEY, SleeveError, get_sleeve
 from app.schemas.trade_plan_schemas import TradePlanGenerateRequest, TradePlanResponse
 from app.services.deferred_evaluation_service import pending_redo_for_plan, pending_redo_times
 from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, clamp_points, generate_trade_plan
@@ -26,16 +27,26 @@ def generate(
     settings: AppSettings = Depends(get_app_settings),
     session: Session = Depends(get_session),
 ) -> TradePlanResponse:
-    account_size = req.account_size if req.account_size is not None else settings.paper_starting_cash
+    try:
+        sleeve = get_sleeve(session, req.sleeve)
+    except SleeveError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    default_size = settings.paper_starting_cash if sleeve.key == CORE_SLEEVE_KEY else sleeve.starting_cash
+    account_size = req.account_size if req.account_size is not None else default_size
     risk_pct = req.risk_pct if req.risk_pct is not None else settings.default_risk_pct
-    return generate_trade_plan(req.symbol.upper(), account_size, risk_pct, data_provider, llm_provider, session)
+    response = generate_trade_plan(
+        req.symbol.upper(), account_size, risk_pct, data_provider, llm_provider, session, sleeve=sleeve
+    )
+    response.sleeve_key = sleeve.key
+    return response
 
 
 @router.get("", response_model=list[TradePlanResponse])
 def list_trade_plans(session: Session = Depends(get_session)) -> list[TradePlanResponse]:
     records = session.exec(select(TradePlanRecord).order_by(TradePlanRecord.created_at.desc())).all()
     redo_times = pending_redo_times(session)
-    return [trade_plan_to_response(r, redo_at=redo_times.get(r.id)) for r in records]
+    keys = _sleeve_keys(session)
+    return [trade_plan_to_response(r, redo_at=redo_times.get(r.id), sleeve_keys=keys) for r in records]
 
 
 @router.get("/{plan_id}", response_model=TradePlanResponse)
@@ -44,10 +55,20 @@ def get_trade_plan(plan_id: int, session: Session = Depends(get_session)) -> Tra
     if record is None:
         return TradePlanResponse(symbol="", direction=None, reason="Trade plan not found")
     redo = pending_redo_for_plan(session, record.id)
-    return trade_plan_to_response(record, redo_at=redo.due_at if redo else None)
+    return trade_plan_to_response(record, redo_at=redo.due_at if redo else None, sleeve_keys=_sleeve_keys(session))
 
 
-def trade_plan_to_response(record: TradePlanRecord, *, redo_at: datetime | None = None) -> TradePlanResponse:
+def _sleeve_keys(session: Session) -> dict[int | None, str]:
+    """sleeve_id -> key for labelling plans; a plan with no sleeve is core's."""
+    keys: dict[int | None, str] = {None: CORE_SLEEVE_KEY}
+    for sleeve in session.exec(select(Sleeve)).all():
+        keys[sleeve.id] = sleeve.key
+    return keys
+
+
+def trade_plan_to_response(
+    record: TradePlanRecord, *, redo_at: datetime | None = None, sleeve_keys: dict[int | None, str] | None = None
+) -> TradePlanResponse:
     """`redo_at` comes from the off-hours queue, not the row itself; callers
     that never show an Execute button (the Dashboard) can leave it out."""
     # No-trade records (status="no_trade") have no entry/tp1/suggested_shares
@@ -112,5 +133,7 @@ def trade_plan_to_response(record: TradePlanRecord, *, redo_at: datetime | None 
         ai_opinion_text=record.ai_opinion_text,
         ai_news_assessment=record.ai_news_assessment,
         strategy_version=record.strategy_version,
+        sleeve_id=record.sleeve_id,
+        sleeve_key=(sleeve_keys or {}).get(record.sleeve_id, CORE_SLEEVE_KEY if record.sleeve_id is None else None),
         shadow_signals=shadow_signals_from_json(record.shadow_signals),
     )

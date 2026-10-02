@@ -58,6 +58,22 @@ from app.knowledge import (
     record_fact,
     source_time_to_utc,
 )
+from app.knowledge.congress_trades import (
+    congress_clusters_as_of,
+    congress_filings_as_of,
+    congress_member_summaries_as_of,
+    congress_trades_as_of,
+    has_congress_data,
+    known_members_as_of,
+    net_buyers_as_of,
+)
+from app.knowledge.fund_holdings import (
+    fund_changes_as_of,
+    fund_filings_as_of,
+    fund_holders_of_symbol,
+    fund_positions_as_of,
+    ownership_filings_as_of,
+)
 from app.knowledge.insider_trades import insider_activity_as_of, insider_clusters_as_of, insider_trades_as_of
 from app.knowledge.point_in_time import SEC_EDGAR_TZ
 from app.knowledge.store import fact_stats, latest_known
@@ -434,7 +450,61 @@ def seed_facts(session: Session, rng: random.Random) -> None:
         for n in range(10):
             at = FACT_START + timedelta(days=rng.uniform(0, FACT_SPAN_DAYS))
             _add(session, FactKind.FUNDAMENTALS_SNAPSHOT, symbol, f"f{n}", at, {"pe": rng.uniform(5, 40), "n": n})
+        for n in range(40):  # congress_ rows: filed some days after the trade
+            at = FACT_START + timedelta(days=rng.uniform(0, FACT_SPAN_DAYS))
+            traded = (at - timedelta(days=rng.randint(2, 40))).date()
+            member = rng.choice(["Ann Member", "Bob Member", "Cy Member"])
+            _add(
+                session, FactKind.CONGRESS_TRADE, symbol, f"c{n}", at,
+                {"doc_id": f"d-{symbol}-{n}", "row_index": 0, "member": member, "member_key": member.lower(),
+                 "owner": "self", "asset_type": "ST", "ticker": symbol, "type": "purchase", "side": rng.choice(["buy", "buy", "sell"]),
+                 "amount_low": 1001, "amount_high": 15000, "amount_text": "$1,001 - $15,000",
+                 "trade_date": traded.isoformat(), "filed_date": at.date().isoformat()},
+                effective_at=datetime.combine(traded, time()),
+            )
+    for n in range(40):
+        at = FACT_START + timedelta(days=rng.uniform(0, FACT_SPAN_DAYS))
+        member = rng.choice(["Ann Member", "Bob Member", "Cy Member"])
+        _add(
+            session, "congress_filing", None, f"cf{n}", at,
+            {"doc_id": f"f-{n}", "member": member, "state_district": "TX01", "filed_date": at.date().isoformat(),
+             "status": rng.choice(["ok", "ok", "unreadable"]), "rows": 1},
+        )
+    seed_fund_facts(session, rng)
     session.commit()
+
+
+def seed_fund_facts(session: Session, rng: random.Random) -> None:
+    """One fund filing six quarters of 13F holdings (a filing and one row per symbol each), and 5% owner filings."""
+    for q in range(6):
+        period = date(2025, 3, 31) + timedelta(days=91 * q)
+        accepted = datetime.combine(period + timedelta(days=rng.randint(30, 45)), time(rng.randint(0, 23), rng.randint(0, 59), 7))
+        accession = f"0111-{q}"
+        _add(
+            session, FactKind.FUND_FILING, None, accession, accepted,
+            {"cik": "111", "manager": "Fund One", "accession": accession, "form": "13F-HR", "period": period.isoformat(),
+             "filing_date": accepted.date().isoformat(), "is_amendment": False, "is_notice": False, "holdings_count": len(SYMBOLS),
+             "matched_count": len(SYMBOLS), "total_value": 1e6, "value_unit": "dollars"},
+            effective_at=datetime.combine(period, time()), basis="source",
+        )
+        for symbol in SYMBOLS:
+            shares = rng.randint(1000, 90000)
+            _add(
+                session, FactKind.FUND_HOLDING, symbol, f"{accession}-{symbol}", accepted,
+                {"cik": "111", "manager": "Fund One", "accession": accession, "period": period.isoformat(), "cusip": f"CUSIP{symbol}",
+                 "issuer": symbol, "symbol": symbol, "put_call": None, "share_type": "SH", "shares": shares, "value": shares * 50.0},
+                effective_at=datetime.combine(period, time()), basis="source",
+            )
+    for symbol in SYMBOLS:
+        for n in range(15):
+            at = FACT_START + timedelta(days=rng.uniform(0, FACT_SPAN_DAYS))
+            _add(
+                session, FactKind.OWNERSHIP_FILING, symbol, f"{symbol}{n}", at,
+                {"accession": f"0222-{symbol}-{n}", "form": rng.choice(["SCHEDULE 13D", "SCHEDULE 13G"]), "schedule": rng.choice(["13D", "13G"]),
+                 "is_amendment": False, "filing_date": at.date().isoformat(), "filer_name": "Holder", "percent": rng.uniform(5, 15),
+                 "shares": rng.randint(1000, 9000), "persons": [{"name": "Holder"}]},
+                basis="source",
+            )
 
 
 def scramble(value: Any, rng: random.Random) -> Any:
@@ -505,6 +575,18 @@ READERS: list[Reader] = [
     Reader(revenue_history_as_of, lambda s, sym, t: revenue_history_as_of(s, sym, t)),
     Reader(has_8k_data, lambda s, sym, t: has_8k_data(s, sym, t)),
     Reader(filings_8k_as_of, lambda s, sym, t: filings_8k_as_of(s, sym, t, 90)),
+    Reader(congress_trades_as_of, lambda s, sym, t: congress_trades_as_of(s, sym, t, 60)),
+    Reader(congress_clusters_as_of, lambda s, sym, t: congress_clusters_as_of(s, sym, t, 120)),
+    Reader(net_buyers_as_of, lambda s, sym, t: net_buyers_as_of(s, sym, t, 60)),
+    Reader(congress_filings_as_of, lambda s, sym, t: congress_filings_as_of(s, t, 120)),
+    Reader(congress_member_summaries_as_of, lambda s, sym, t: congress_member_summaries_as_of(s, t, 120)),
+    Reader(known_members_as_of, lambda s, sym, t: known_members_as_of(s, t)),
+    Reader(has_congress_data, lambda s, sym, t: has_congress_data(s, t)),
+    Reader(fund_filings_as_of, lambda s, sym, t: fund_filings_as_of(s, None, t)),
+    Reader(fund_positions_as_of, lambda s, sym, t: fund_positions_as_of(s, "111", t)),
+    Reader(fund_changes_as_of, lambda s, sym, t: fund_changes_as_of(s, "111", t)),
+    Reader(fund_holders_of_symbol, lambda s, sym, t: fund_holders_of_symbol(s, sym, t)),
+    Reader(ownership_filings_as_of, lambda s, sym, t: ownership_filings_as_of(s, sym, t, 60)),
     Reader(archived_news, lambda s, sym, t: archived_news(s, sym, t)),
     Reader(latest_fundamentals_snapshot, lambda s, sym, t: latest_fundamentals_snapshot(s, sym, t)),
 ]

@@ -6,6 +6,7 @@ import { TickerLink } from '../components/TickerLink';
 import { Sparkline } from '../components/Sparkline';
 import { DataFreshness } from '../components/DataFreshness';
 import { Flash } from '../components/Flash';
+import { PresetMatchChips, ScreenPresetBar, useActivePreset } from '../components/ScreenPresetBar';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatPct } from '../components/common';
 import type { ApiError } from '../api/client';
 import type { ScanResult } from '../api/types';
@@ -48,9 +49,11 @@ function StarButton({ active, onClick }: { active: boolean; onClick: () => void 
 export function MarketScanPage() {
   const [symbolsFilter, setSymbolsFilter] = useState<string | undefined>(undefined);
   const [tab, setTab] = useState<Tab>('top');
+  const [screenPreset, setScreenPreset] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>(() => loadWatchlist());
   const { data: universe } = useUniverse();
   const { data, isLoading, error, refetch, isFetching, dataUpdatedAt } = useScan(symbolsFilter);
+  const { run: presetRun, matchBySymbol: presetMatches } = useActivePreset(screenPreset);
   const { mutate: runAutoScanNow, isPending: autoTrading, data: autoTradeResult, error: autoTradeError } = useRunAutoScanNow();
 
   useEffect(() => {
@@ -64,10 +67,12 @@ export function MarketScanPage() {
   const rows: ScanResult[] = useMemo(() => {
     if (!data) return [];
     const sorted = data.results.slice().sort((a, b) => b.score - a.score);
+    // An active screen replaces the tab filter: it picks from every scanned symbol, not just one tab's.
+    if (screenPreset) return presetRun.data ? sorted.filter((r) => presetMatches.has(r.symbol)) : [];
     if (tab === 'top') return sorted.filter((r) => r.signal !== 'no_signal');
     if (tab === 'watchlist') return sorted.filter((r) => watchlist.includes(r.symbol));
     return sorted;
-  }, [data, tab, watchlist]);
+  }, [data, tab, watchlist, screenPreset, presetRun.data, presetMatches]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -154,6 +159,14 @@ export function MarketScanPage() {
         ))}
       </div>
 
+      <ScreenPresetBar
+        selected={screenPreset}
+        onSelect={setScreenPreset}
+        run={presetRun.data}
+        isLoading={presetRun.isFetching}
+        error={presetRun.error}
+      />
+
       {isLoading && <LoadingSpinner label="Scanning markets…" />}
       {error && <ErrorBanner message={(error as ApiError).message} />}
 
@@ -167,7 +180,11 @@ export function MarketScanPage() {
           )}
           {rows.length === 0 ? (
             <EmptyState>
-              {tab === 'watchlist' ? 'No symbols pinned yet — click the star on any row to add one.' : 'No symbols match this view.'}
+              {screenPreset
+                ? presetRun.isFetching
+                  ? 'Screening…'
+                  : `No scanned symbol matches this screen among the ${presetRun.data?.checked ?? 0} checked.`
+                : tab === 'watchlist' ? 'No symbols pinned yet — click the star on any row to add one.' : 'No symbols match this view.'}
             </EmptyState>
           ) : (
             <table>
@@ -182,6 +199,7 @@ export function MarketScanPage() {
                   <th>Score</th>
                   <th>AI Signal</th>
                   <th>Chart</th>
+                  {screenPreset && <th>Matched criteria</th>}
                   <th />
                 </tr>
               </thead>
@@ -211,6 +229,7 @@ export function MarketScanPage() {
                     <td>
                       <Sparkline values={r.sparkline} />
                     </td>
+                    {screenPreset && <td>{presetMatches.get(r.symbol) && <PresetMatchChips match={presetMatches.get(r.symbol)!} />}</td>}
                     <td>
                       <Link to={`/analysis?symbol=${r.symbol}`} className="text-muted" style={{ fontSize: 13 }}>
                         Analyze →

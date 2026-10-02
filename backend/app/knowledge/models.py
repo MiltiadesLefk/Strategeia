@@ -36,12 +36,13 @@ class FactKind:
     FUNDAMENTALS_SNAPSHOT = "fundamentals_snapshot"  # QM-1: one fetch of overview/financials
     INSIDER_TRADE = "insider_trade"  # SG-1 / WA-2: one Form 4 transaction, known at SEC acceptance
     SEC_FILING_8K = "sec_filing_8k"  # SG-6: an 8-K with its item codes
-    OWNERSHIP_FILING = "ownership_filing"  # SM-5: Schedule 13D/13G
+    OWNERSHIP_FILING = "ownership_filing"  # Schedule 13D/13G, known at filing acceptance
     FINRA_SHORT_VOLUME = "finra_short_volume"  # SG-5: one symbol's row of a daily file
     FED_SPEECH = "fed_speech"  # SG-7: speech/statement, market-wide (symbol None)
     POST = "post"  # SG-4: a social post, market-wide unless it names a company
     CONGRESS_TRADE = "congress_trade"  # SG-2: known at the REPORT date, trade date is effective_at
-    FUND_HOLDING = "fund_holding"  # SG-3 / SM-3: a 13F line, known at filing acceptance
+    FUND_HOLDING = "fund_holding"  # one security in a 13F, known at filing acceptance
+    FUND_FILING = "fund_filing"  # one 13F filing (manager, quarter, totals), known at acceptance; its rows are fund_holding facts
     WATCHER_EVENT = "watcher_event"  # an event a watcher reported (watchers/runner.py); symbol None = market-wide
     FUNDAMENTALS_REVENUE = "fundamentals_revenue"  # one annual revenue value from one 10-K, known at its filing date
     EARNINGS_REPORT = "earnings_report"  # one reported quarter (EPS estimate/actual), known at the end of the report day
