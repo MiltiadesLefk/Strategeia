@@ -52,6 +52,10 @@ class StooqProvider:
         if not text or text.startswith("No data") or "Exceeded the daily hits limit" in text:
             raise DataProviderError(f"stooq returned no data for {symbol}")
 
+        if text.lstrip()[:15].lower().startswith(("<!doctype", "<html")):
+            # Stooq now answers with a JavaScript browser check instead of the CSV.
+            raise DataProviderError(f"stooq blocked the request for {symbol} (browser check page, not CSV)")
+
         df = pd.read_csv(io.StringIO(text))
         if df.empty or "Date" not in df.columns:
             raise DataProviderError(f"stooq returned unparseable data for {symbol}")
