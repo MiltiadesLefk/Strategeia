@@ -698,6 +698,17 @@ class AppSettings(BaseModel):
     # bar to count days.
     max_holding_days: int = 20
 
+    # Kill switches and drift alarms: a sleeve that trips one stops OPENING new
+    # positions (open ones are managed as usual, nothing is closed) and a Telegram
+    # alert is sent; you lift the pause by hand. Off until switched on.
+    kill_switch_enabled: bool = False
+    # Pause a sleeve when its equity is this many percent below its peak (0 = off).
+    kill_switch_drawdown_pct: float = 15.0
+    # Pause the core sleeve when the spread of its live trade results (R) differs
+    # from the latest finished backtest by this population-stability value (0 = off).
+    # 0.25 is the usual "act on it" level.
+    kill_switch_drift_psi: float = 0.25
+
     # Notifications (Telegram): a morning note on trading days, a Friday weekly
     # digest, and price alerts. All of them only ever send a message and record a
     # dated fact: none of them can open, change or close a position. The morning

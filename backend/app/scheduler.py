@@ -29,6 +29,8 @@ from app.services.health_monitor import check_and_alert
 from app.services.morning_note_service import run_morning_note_if_due
 from app.services.price_alert_service import run_price_alert_check
 from app.services.weekly_digest_service import run_weekly_digest_if_due
+from app.services.kill_switch_service import evaluate_kill_switches
+from app.services.telegram_service import notify as telegram_notify
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
 from app.services.thesis_service import run_thesis_sweep
 from app.watchers.runner import run_due_watchers
@@ -232,6 +234,28 @@ def _notifications_job() -> None:
         logger.exception("Scheduled notification tick failed")
 
 
+# How often the kill switches look at the stored equity curve and trade results. The check
+# reads the database only (no market data), and does nothing while the feature is off.
+KILL_SWITCH_INTERVAL_MINUTES = 10
+
+
+def _kill_switch_job() -> None:
+    try:
+        if is_simulated():
+            return
+        settings = load_app_settings()
+        if not settings.kill_switch_enabled:
+            return
+        with Session(engine) as session:
+            evaluate_kill_switches(
+                session,
+                settings,
+                lambda text: telegram_notify(settings.telegram_bot_token, settings.telegram_chat_id, text),
+            )
+    except Exception:
+        logger.exception("Scheduled kill switch check failed")
+
+
 def _watchers_job() -> None:
     try:
         settings = load_app_settings()
@@ -323,6 +347,14 @@ def start_scheduler() -> BackgroundScheduler:
         "interval",
         minutes=THESIS_SWEEP_INTERVAL_MINUTES,
         id="thesis_sweep",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _kill_switch_job,
+        "interval",
+        minutes=KILL_SWITCH_INTERVAL_MINUTES,
+        id="kill_switch",
         max_instances=1,
         coalesce=True,
     )

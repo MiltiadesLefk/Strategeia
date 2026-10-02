@@ -39,6 +39,7 @@ from app.portfolio.intraday import (
     levels_touched,
     market_day_of,
 )
+from app.portfolio.kill_switch_models import active_pause
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, Sleeve, TradePlanRecord
 from app.portfolio.sleeves import (
     SleeveScope,
@@ -162,6 +163,11 @@ class SleeveDisabledError(Exception):
     """Raised when a position is opened in a sleeve that was switched off. A
     disabled sleeve takes no new trades, but its open positions are still
     managed (marked, stopped out, closed) until they are gone."""
+
+
+class SleevePausedError(SleeveDisabledError):
+    """Raised when a kill switch has paused the sleeve. A subclass of the disabled
+    error so every caller that already handles that one handles this too."""
 
 
 class PaperTradingEngine:
@@ -313,6 +319,12 @@ class PaperTradingEngine:
                 f"The '{sleeve.name}' sleeve is disabled, so it opens no new positions (its open ones are still managed)."
             )
         sleeve_id = sleeve.id
+        pause = active_pause(self._session, sleeve.key)
+        if pause is not None:
+            raise SleevePausedError(
+                f"The '{sleeve.name}' sleeve is paused ({pause.reason}: {pause.detail}), so it opens no new "
+                "positions (its open ones are still managed). Resume it from the Sleeves page."
+            )
 
         account = self.get_account_state()
 

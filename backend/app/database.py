@@ -87,6 +87,7 @@ def create_db_and_tables() -> None:
     from app.committee import models as committee_models  # noqa: F401 - CommitteeRun
     from app.knowledge import models as knowledge_models  # noqa: F401 - KnownFact (plan.md F-4)
     from app.portfolio import alert_models  # noqa: F401 - PriceAlert / NotificationLog
+    from app.portfolio import kill_switch_models  # noqa: F401 - SleevePause
     from app.portfolio import missed_trade_models  # noqa: F401 - MissedTradeOutcome
     from app.portfolio import models  # noqa: F401 - registers tables on SQLModel.metadata
     from app.portfolio import thesis_models  # noqa: F401 - ThesisRecord

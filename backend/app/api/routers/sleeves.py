@@ -25,6 +25,8 @@ from app.schemas.sleeve_schemas import (
     SleeveUpdateRequest,
     SleeveWithStatsSchema,
 )
+from app.schemas.kill_switch_schemas import SleevePauseSchema
+from app.services.kill_switch_service import list_pauses, resume_sleeve
 from app.services.sleeve_service import build_sleeve_engine
 
 router = APIRouter(prefix="/api/sleeves", tags=["sleeves"], dependencies=[Depends(require_auth)])
@@ -89,3 +91,20 @@ def delete(sleeve_ref: str, session: Session = Depends(get_session)) -> None:
         delete_sleeve(session, get_sleeve(session, sleeve_ref))
     except SleeveError as exc:
         raise _http(exc) from exc
+
+
+@router.get("/pauses/history", response_model=list[SleevePauseSchema])
+def pauses(session: Session = Depends(get_session)) -> list[SleevePauseSchema]:
+    """Every pause a kill switch or drift alarm placed, newest first. Unresolved ones are in force."""
+    return [SleevePauseSchema(**p.model_dump()) for p in list_pauses(session)]
+
+
+@router.post("/{sleeve_ref}/resume", status_code=204)
+def resume(sleeve_ref: str, session: Session = Depends(get_session)) -> None:
+    """Lifts a sleeve's pause so it can open positions again. Nothing else changes."""
+    try:
+        sleeve = get_sleeve(session, sleeve_ref)
+    except SleeveError as exc:
+        raise _http(exc) from exc
+    if not resume_sleeve(session, sleeve.key):
+        raise HTTPException(status_code=404, detail="This sleeve is not paused.")

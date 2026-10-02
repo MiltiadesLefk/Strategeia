@@ -70,6 +70,9 @@ class SettingsUpdateRequest(BaseModel):
     # Capped at 60 (about three months): the exit scan reads 3 months of bars
     # and has to see the entry bar to count days from it.
     max_holding_days: int | None = Field(default=None, ge=0, le=60)
+    kill_switch_enabled: bool | None = None
+    kill_switch_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
+    kill_switch_drift_psi: float | None = Field(default=None, ge=0, le=5)
     # Notifications: morning note, weekly digest, price alerts on open positions.
     morning_note_enabled: bool | None = None
     morning_note_time_et: str | None = None
