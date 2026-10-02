@@ -174,6 +174,10 @@ def _reset_in_process_cooldowns(monkeypatch):
     from app.backtest.service import reset_backtest_manager
 
     reset_backtest_manager()
+    # The committee's one-run-at-a-time job manager is process-wide too.
+    from app.committee.service import reset_committee_manager
+
+    reset_committee_manager()
     # Same reasoning, different shape: app.auth.login_attempts is one
     # shared LoginAttemptTracker instance for the process (see its
     # docstring), so a lockout one test triggers on purpose would otherwise

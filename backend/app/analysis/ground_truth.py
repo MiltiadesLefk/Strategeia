@@ -217,11 +217,15 @@ def _levels(values: tuple[float, ...]) -> str:
     return ", ".join(_money(v) for v in values) if values else NOT_AVAILABLE
 
 
-def render_ground_truth(snapshot: GroundTruthSnapshot, *, include_instruction: bool = True) -> str:
+def render_ground_truth(
+    snapshot: GroundTruthSnapshot, *, include_instruction: bool = True, include_rule_verdict: bool = True
+) -> str:
     """The delimited GROUND TRUTH block. Units and rounding are fixed (prices
     2 decimals, percentages 1, RSI whole, volume ratio 1) so the same facts
     read the same in every prompt. Reused by every AI feature that discusses a
-    symbol."""
+    symbol. `include_rule_verdict=False` leaves out the rule-based verdict, its
+    points and the strategy version, for a reader (the AI Committee) that must
+    form its view without being shown what the rules concluded."""
     s = snapshot
     if s.volume_ratio is not None:
         volume = f"{s.volume_ratio:.1f}x"
@@ -270,11 +274,12 @@ def render_ground_truth(snapshot: GroundTruthSnapshot, *, include_instruction: b
             if s.expected_move_pct is not None
             else f"Options-implied move to the nearest expiration: {NOT_AVAILABLE}"
         ),
-        f"Rule-based verdict (context only): {verdict}",
     ]
-    if s.score_breakdown:
+    if include_rule_verdict:
+        lines.append(f"Rule-based verdict (context only): {verdict}")
+    if include_rule_verdict and s.score_breakdown:
         lines.append("Rule-based points by dimension: " + ", ".join(f"{name} {points:+d}" for name, points in s.score_breakdown))
-    if s.strategy_version is not None:
+    if include_rule_verdict and s.strategy_version is not None:
         lines.append(f"Strategy version: {s.strategy_version}")
     lines.append(GROUND_TRUTH_END)
     block = "\n".join(lines)

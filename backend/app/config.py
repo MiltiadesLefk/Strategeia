@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -604,6 +604,13 @@ class AppSettings(BaseModel):
     # marked broken (its core trend pillar no longer holds). The warning itself is always shown
     # on the Portfolio page; this only controls the message. It never closes anything.
     thesis_alerts: bool = True
+
+    # AI Committee (an opinion layer only: it never opens, sizes or stops a trade). The most AI
+    # calls one run may make, and how many rounds the bull/bear and risk debates may run. The
+    # debate cap is hard: whatever is set here, no debate runs more than three rounds.
+    committee_max_llm_calls: int = Field(default=14, ge=6, le=40)
+    committee_debate_rounds: int = Field(default=1, ge=1, le=3)
+    committee_risk_rounds: int = Field(default=1, ge=1, le=3)
 
     scan_universe_size: int = 50
 

@@ -426,6 +426,10 @@ export interface AppSettings {
   telegram_chat_id: string;
   /** Send one Telegram message the first time an open position's thesis is marked broken. */
   thesis_alerts: boolean;
+  /** AI Committee: most AI calls one run may make, and the debate round caps (never above 3). */
+  committee_max_llm_calls: number;
+  committee_debate_rounds: number;
+  committee_risk_rounds: number;
   scan_universe_size: number;
   news_cards_enabled: boolean;
   news_card_batch_limit: number;
@@ -482,6 +486,9 @@ export interface SettingsUpdateRequest {
   telegram_bot_token?: string;
   telegram_chat_id?: string;
   thesis_alerts?: boolean;
+  committee_max_llm_calls?: number;
+  committee_debate_rounds?: number;
+  committee_risk_rounds?: number;
   scan_universe_size?: number;
   news_cards_enabled?: boolean;
   news_card_batch_limit?: number;

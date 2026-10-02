@@ -29,6 +29,8 @@ from app.api.routers import replay as replay_router
 from app.api.routers import calendar as calendar_router
 from app.api.routers import screen_presets as screen_presets_router
 from app.api.routers import thesis as thesis_router
+from app.api.routers import committee as committee_router
+from app.committee.service import recover_on_startup as recover_interrupted_committee_runs
 from app.api.routers import watchers as watchers_router
 from app.api.routers import watchlist as watchlist_router
 from app.api.routers import smart_money as smart_money_router
@@ -51,6 +53,7 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()
     # A backtest left running by a previous process can never finish: mark it failed.
     recover_interrupted_backtests()
+    recover_interrupted_committee_runs()
     register_sec_watcher()  # sec_watcher: the SEC filings watcher (idle until the Watchers switch is on)
     register_fed_watcher()  # fed_watcher: Fed statements and speeches (market-wide, alert-only)
     register_posts_watcher()  # posts_watcher: posts from an unofficial archive feed
@@ -117,6 +120,7 @@ app.include_router(signals_router.router)
 app.include_router(news_router.router)
 app.include_router(portfolio.router)
 app.include_router(thesis_router.router)
+app.include_router(committee_router.router)
 app.include_router(sleeves_router.router)
 app.include_router(calibration_router.router)
 app.include_router(settings.router)

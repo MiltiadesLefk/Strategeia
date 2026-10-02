@@ -84,6 +84,7 @@ def _relax_not_null_constraints() -> None:
 def create_db_and_tables() -> None:
     from app.backtest import models as backtest_models  # noqa: F401 - BacktestRun / BacktestTrade / BacktestEquityPoint
     from app.backtest import validation_models  # noqa: F401 - BacktestValidation (walk_forward validation)
+    from app.committee import models as committee_models  # noqa: F401 - CommitteeRun
     from app.knowledge import models as knowledge_models  # noqa: F401 - KnownFact (plan.md F-4)
     from app.portfolio import alert_models  # noqa: F401 - PriceAlert / NotificationLog
     from app.portfolio import missed_trade_models  # noqa: F401 - MissedTradeOutcome
