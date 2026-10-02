@@ -15,8 +15,8 @@ client = TestClient(app)
 def test_empty_state_lists_the_chain_in_order_with_no_numbers():
     body = client.get("/api/data-sources").json()
     names = [row["name"] for row in body["chain"]]
-    assert "yfinance" in names and "nasdaq" in names and "stooq" in names
-    assert names.index("yfinance") < names.index("nasdaq") < names.index("stooq")
+    assert "yfinance" in names and "nasdaq" in names and "stockanalysis" in names
+    assert names.index("yfinance") < names.index("nasdaq") < names.index("stockanalysis")
     assert [row["position"] for row in body["chain"]] == list(range(1, len(names) + 1))
     assert body["window_size"] == health.WINDOW_SIZE
     for row in body["chain"] + body["others"]:

@@ -511,6 +511,8 @@ class AppSettings(BaseModel):
         return decision or routine
 
     finnhub_enabled: bool = False
+    # Stooq blocks scripted requests (browser check page); off unless re-enabled.
+    stooq_enabled: bool = False
     finnhub_api_key: str = ""
 
     # Master switch, opt-in and off by default: when on, generate_trade_plan

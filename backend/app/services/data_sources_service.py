@@ -39,6 +39,7 @@ _CHAIN_INFO: dict[str, tuple[str, str]] = {
     "finnhub": ("Finnhub", "Quotes and company data, only when you set a free API key. Tried first when on."),
     "yfinance": ("Yahoo Finance (yfinance)", "Main source: prices, quotes, fundamentals, news, earnings, options. Free, no key, unofficial."),
     "nasdaq": ("Nasdaq", "Fallback: quotes, daily candles and company overview from an independent operator."),
+    "stockanalysis": ("StockAnalysis", "Fallback for daily price bars of stocks and ETFs only. Free, no key, unofficial."),
     "stooq": ("Stooq", "Fallback for daily price bars only."),
     "sec_edgar": ("SEC EDGAR (insider trades)", "Last in the chain; answers only insider-trade (Form 4) questions."),
 }
@@ -175,7 +176,7 @@ def _probe_chain_provider(name: str, settings: AppSettings) -> str:
     providers = {getattr(p, "name", type(p).__name__): p for p in get_data_provider(settings)._providers}
     provider = providers[name]
     # Providers that only serve price bars are probed with bars.
-    if name == "stooq":
+    if name in ("stooq", "stockanalysis"):
         method_name, args = "get_ohlcv", (PROBE_SYMBOL, "1mo", "1d")
     else:
         method_name, args = "get_quote", (PROBE_SYMBOL,)

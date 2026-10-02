@@ -6,6 +6,7 @@ from app.data_providers.composite_provider import CompositeDataProvider
 from app.data_providers.finnhub_provider import FinnhubProvider
 from app.data_providers.nasdaq_provider import NasdaqProvider
 from app.data_providers.sec_edgar_provider import SecEdgarProvider
+from app.data_providers.stockanalysis_provider import StockAnalysisProvider
 from app.data_providers.stooq_provider import StooqProvider
 from app.data_providers.yfinance_provider import YFinanceProvider
 
@@ -26,7 +27,9 @@ def get_data_provider(settings: AppSettings) -> CompositeDataProvider:
     operator — so it fails independently of Yahoo, which is the only property
     that makes a fallback worth having.
 
-    Stooq remains last: OHLCV-only, but a third independent source costs
+    StockAnalysis (daily bars only) takes Stooq's old third slot: Stooq now
+    answers scripts with a JavaScript browser check instead of CSV, so it is
+    skipped unless `stooq_enabled` is set. A third independent source costs
     nothing and covers the case where both of the others are down.
     """
     providers: list[DataProvider] = []
@@ -34,7 +37,9 @@ def get_data_provider(settings: AppSettings) -> CompositeDataProvider:
         providers.append(FinnhubProvider(settings.finnhub_api_key))
     providers.append(YFinanceProvider())
     providers.append(NasdaqProvider())
-    providers.append(StooqProvider())
+    providers.append(StockAnalysisProvider())
+    if settings.stooq_enabled:
+        providers.append(StooqProvider())
     # Last, and only ever reached for get_insider_activity: every other method
     # raises NotImplementedError here, so it costs nothing on the hot path.
     providers.append(SecEdgarProvider())
