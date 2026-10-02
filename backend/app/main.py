@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routers import terminal as terminal_router
 from app.api.routers import options as options_router
+from app.api.routers import valuation as valuation_router
 from app.api.routers import screener as screener_router
 from app.api.routers import alerts as price_alerts_router
 from app.api.routers import notes as notes_router
@@ -137,6 +138,7 @@ app.include_router(funds_router.router)
 app.include_router(congress_router.router)
 app.include_router(terminal_router.router)
 app.include_router(options_router.router)
+app.include_router(valuation_router.router)
 app.include_router(screener_router.router)
 app.include_router(price_alerts_router.router)
 app.include_router(notes_router.router)

@@ -23,6 +23,7 @@ import type { ApiError } from '../api/client';
 import type { NewsCardOut, ResearchResponse } from '../api/types';
 import { OptionsPanel } from '../components/options/OptionsPanel';
 import { TradingViewWidget } from '../components/TradingViewWidget';
+import { ValuationPanel } from '../components/valuation/ValuationPanel';
 import { EarningsPreviewPanel } from '../components/EarningsPreviewPanel';
 
 const TABS = [
@@ -32,6 +33,7 @@ const TABS = [
   { value: 'news', label: 'News' },
   { value: 'catalysts', label: 'Catalysts' },
   { value: 'options', label: 'Options' },
+  { value: 'valuation', label: 'Valuation' },
   { value: 'tradingview', label: 'TradingView' },
 ];
 
@@ -564,6 +566,8 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
           )}
 
           {tab === 'options' && <OptionsPanel symbol={data.symbol} />}
+
+          {tab === 'valuation' && <ValuationPanel symbol={data.symbol} />}
 
           {tab === 'tradingview' && (
             <>

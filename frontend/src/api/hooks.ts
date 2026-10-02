@@ -1172,3 +1172,23 @@ export function useRefreshFunds() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: fundKeys.all }),
   });
 }
+
+import type { ValuationInputs, ValuationResponse } from './types';
+
+/** Valuation tab: a discounted-earnings estimate and peer multiples (read-only, informational). */
+export function useValuation(symbol: string | null, inputs: ValuationInputs) {
+  const q = new URLSearchParams();
+  if (inputs.growth !== undefined) q.set('growth', String(inputs.growth));
+  if (inputs.margin !== undefined) q.set('margin', String(inputs.margin));
+  q.set('discount', String(inputs.discount));
+  q.set('terminal', String(inputs.terminal));
+  q.set('years', String(inputs.years));
+  if (inputs.explain) q.set('explain', 'true');
+  return useQuery({
+    queryKey: ['valuation', symbol ?? '', q.toString()] as const,
+    queryFn: () => api.get<ValuationResponse>(`/api/valuation/${encodeURIComponent(symbol ?? '')}?${q.toString()}`),
+    enabled: !!symbol,
+    staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+}

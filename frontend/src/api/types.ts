@@ -2366,3 +2366,81 @@ export interface FundsRefreshResponse {
   legacy_skipped: number;
   errors: string[];
 }
+
+export interface DcfAssumptions {
+  growth_pct: number;
+  net_margin_pct: number;
+  discount_rate_pct: number;
+  terminal_growth_pct: number;
+  years: number;
+  growth_default_pct: number | null;
+  margin_default_pct: number | null;
+  growth_source: string;
+  margin_source: string;
+}
+export interface DcfYear {
+  year: number;
+  revenue: number;
+  earnings: number;
+  present_value: number;
+}
+export interface SensitivityCell {
+  discount_rate_pct: number;
+  terminal_growth_pct: number;
+  value_per_share: number | null;
+}
+export interface DcfResult {
+  assumptions: DcfAssumptions;
+  projection: DcfYear[];
+  terminal_value: number;
+  terminal_present_value: number;
+  equity_value: number;
+  shares: number | null;
+  value_per_share: number | null;
+  price: number | null;
+  upside_pct: number | null;
+  terminal_share_pct: number;
+  sensitivity: SensitivityCell[];
+}
+export interface PeerRow {
+  symbol: string;
+  name: string;
+  market_cap: number | null;
+  pe_ratio: number | null;
+  price_to_sales: number | null;
+}
+export interface MultipleSummary {
+  name: string;
+  subject: number | null;
+  median: number | null;
+  low: number | null;
+  high: number | null;
+  count: number;
+  implied_price: number | null;
+}
+export interface CompsResult {
+  sector: string | null;
+  peers: PeerRow[];
+  multiples: MultipleSummary[];
+  reason: string | null;
+}
+export interface ValuationResponse {
+  symbol: string;
+  name: string;
+  available: boolean;
+  reason: string | null;
+  price: number | null;
+  dcf: DcfResult | null;
+  comps: CompsResult | null;
+  notes: string[];
+  summary: string | null;
+  summary_source: 'ai' | 'rules' | null;
+}
+export interface ValuationInputs {
+  growth?: number;
+  margin?: number;
+  discount: number;
+  terminal: number;
+  years: number;
+  explain: boolean;
+}
