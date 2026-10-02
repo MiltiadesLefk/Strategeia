@@ -85,6 +85,7 @@ def create_db_and_tables() -> None:
     from app.backtest import models as backtest_models  # noqa: F401 - BacktestRun / BacktestTrade / BacktestEquityPoint
     from app.backtest import validation_models  # noqa: F401 - BacktestValidation (walk_forward validation)
     from app.committee import models as committee_models  # noqa: F401 - CommitteeRun
+    from app.ml import models as ml_models  # noqa: F401 - MlModel / MlPrediction (Forecast Lab)
     from app.knowledge import models as knowledge_models  # noqa: F401 - KnownFact (plan.md F-4)
     from app.portfolio import alert_models  # noqa: F401 - PriceAlert / NotificationLog
     from app.portfolio import kill_switch_models  # noqa: F401 - SleevePause

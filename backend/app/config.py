@@ -711,6 +711,14 @@ class AppSettings(BaseModel):
     # 0.25 is the usual "act on it" level.
     kill_switch_drift_psi: float = 0.25
 
+    # ML style (Forecast Lab): when on, a sleeve whose style is "ml" asks the active
+    # trained model for an expected R before opening. The model can only STOP a trade
+    # the rules already approved (expected R below the limit); it never picks direction,
+    # entry, stop or size. Off until switched on; nothing trains on its own.
+    ml_style_enabled: bool = False
+    # A trade in an "ml" sleeve is stopped when the model's expected R is below this.
+    ml_min_expected_r: float = 0.0
+
     # Notifications (Telegram): a morning note on trading days, a Friday weekly
     # digest, and price alerts. All of them only ever send a message and record a
     # dated fact: none of them can open, change or close a position. The morning

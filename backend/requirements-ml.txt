@@ -1,5 +1,5 @@
-# Optional, heavy: only for scripts/kronos_experiment.py (not the app, not Docker).
-# Install on top of the normal requirements:
+# Optional, heavy: Kronos experiment (scripts/kronos_experiment.py) and the Forecast Lab (see the bottom).
+# Not the app core, not Docker.
 #   .venv/Scripts/pip install -r requirements.txt -r requirements-ml.txt
 # Kronos (MIT) also needs git on PATH: the script shallow-clones its source on first run.
 # On a machine without a GPU, install the CPU build of torch first:
@@ -9,3 +9,9 @@ einops==0.8.1
 huggingface_hub==0.33.1
 safetensors==0.6.2
 tqdm==4.67.1
+
+# Forecast Lab (the ML trading style). Optional: the app runs without these and shows
+# "ML extras not installed". Not in requirements.txt, so Docker does not install them.
+lightgbm>=4.3.0
+shap>=0.45.0
+scikit-learn>=1.4.0

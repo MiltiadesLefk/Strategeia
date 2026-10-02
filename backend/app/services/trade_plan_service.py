@@ -56,6 +56,7 @@ from app.portfolio.engine import (
     SleeveDisabledError,
     StalePlanError,
 )
+from app.ml.service import ml_opinion_for_plan, ml_stop_reason, record_ml_opinion
 from app.portfolio.models import Sleeve, TradePlanRecord
 from app.portfolio.sleeves import CORE_SLEEVE_KEY, plan_sleeve_id, read_scope, scope_clause, scope_of
 from app.risk.position_sizing import calculate_position_size, derive_targets
@@ -630,7 +631,33 @@ def generate_trade_plan(
         evaluate_shadow_signals(ShadowContext(symbol=symbol, direction=provisional_direction, session=session))
     )
 
-    if chart.trend == "Neutral" or overlay_vetoes_trade or confidence_score < settings.min_confidence_for_trade:
+    # ML style (Forecast Lab): only for an "ml" sleeve, only for a trade the rules
+    # already approve, and it can only STOP it. Direction, entry, stop and size are
+    # never read from it. None when the style is not in play.
+    ml_opinion = None
+    if chart.trend != "Neutral" and not overlay_vetoes_trade and confidence_score >= settings.min_confidence_for_trade:
+        ml_opinion = ml_opinion_for_plan(
+            session,
+            settings,
+            sleeve,
+            scores={
+                "technical_score": scan_result.score,
+                "fundamental_score": fundamental_score,
+                "news_score": news_score,
+                "market_confirmation_score": market_confirmation_score,
+                "vix_regime_score": vix_regime_score,
+                "options_score": options_score,
+                "insider_score": insider_score,
+                "expected_move_score": expected_move_score,
+                "earnings_surprise_score": earnings_surprise_score,
+                "macro_event_score": macro_event_score,
+            },
+            confidence_points=clamp_points(combined_score),
+            direction=provisional_direction,
+        )
+    ml_stops_trade = ml_opinion is not None and ml_opinion.stops_trade
+
+    if chart.trend == "Neutral" or overlay_vetoes_trade or ml_stops_trade or confidence_score < settings.min_confidence_for_trade:
         if chart.trend == "Neutral":
             reason = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
         elif overlay_vetoes_trade:
@@ -653,6 +680,8 @@ def generate_trade_plan(
                 "Trade vetoed for %s: overlay opposes rule-based %s (verdict=%s, stance=%s)",
                 symbol, provisional_direction, ai_trade_verdict, ai_opinion_stance,
             )
+        elif ml_stops_trade:
+            reason = ml_stop_reason(ml_opinion, provisional_direction)
         else:
             reason = (
                 f"Confidence too low ({confidence_score}%, needs {settings.min_confidence_for_trade}%+) "
@@ -691,6 +720,7 @@ def generate_trade_plan(
         session.add(record)
         session.commit()
         session.refresh(record)
+        record_ml_opinion(session, record.id, ml_opinion)
         return TradePlanResponse(
             id=record.id,
             symbol=symbol,
@@ -824,6 +854,8 @@ def generate_trade_plan(
     )
     session.add(record)
     session.commit()
+    session.refresh(record)
+    record_ml_opinion(session, record.id, ml_opinion)
     session.refresh(record)
 
     auto_execute_note = ""

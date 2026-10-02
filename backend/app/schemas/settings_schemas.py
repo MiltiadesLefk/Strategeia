@@ -73,6 +73,8 @@ class SettingsUpdateRequest(BaseModel):
     kill_switch_enabled: bool | None = None
     kill_switch_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
     kill_switch_drift_psi: float | None = Field(default=None, ge=0, le=5)
+    ml_style_enabled: bool | None = None
+    ml_min_expected_r: float | None = Field(default=None, ge=-2, le=3)
     # Notifications: morning note, weekly digest, price alerts on open positions.
     morning_note_enabled: bool | None = None
     morning_note_time_et: str | None = None

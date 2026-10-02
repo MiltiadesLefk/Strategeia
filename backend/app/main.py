@@ -16,6 +16,7 @@ from app.api.routers import notes as notes_router
 from app.api.routers import analysis, archive, auth, dashboard, market, portfolio, research, risk, scanner, settings, trade_plans
 from app.api.routers import signals as signals_router
 from app.api.routers import sleeves as sleeves_router
+from app.api.routers import forecast_lab as forecast_lab_router
 from app.api.routers import news as news_router
 from app.api.routers import strategy as strategy_router
 from app.api.routers import calibration as calibration_router
@@ -124,6 +125,7 @@ app.include_router(portfolio.router)
 app.include_router(thesis_router.router)
 app.include_router(committee_router.router)
 app.include_router(sleeves_router.router)
+app.include_router(forecast_lab_router.router)
 app.include_router(calibration_router.router)
 app.include_router(settings.router)
 app.include_router(dashboard.router)

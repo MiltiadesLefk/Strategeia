@@ -179,6 +179,9 @@ def build_snapshot(settings: AppSettings) -> dict[str, Any]:
             "llm_model": None if settings.llm_provider == "none" else normalize(decision_model),
             **_collect_constants(OVERLAY_RULE_CONSTANTS),
         }
+    if settings.ml_style_enabled:
+        # Only while on, so an install that never uses it keeps its fingerprint.
+        snapshot["ml"] = {"ml_min_expected_r": normalize(values["ml_min_expected_r"])}
     return snapshot
 
 
@@ -234,7 +237,7 @@ def describe_changes(old: dict[str, Any] | None, new: dict[str, Any]) -> list[st
     if old is None:
         return []
     lines: list[str] = []
-    for group in ("settings", "overlay", "rules"):
+    for group in ("settings", "overlay", "ml", "rules"):
         before = old.get(group) or {}
         after = new.get(group) or {}
         if group == "overlay" and before and not after:
