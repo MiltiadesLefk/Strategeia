@@ -1192,3 +1192,19 @@ export function useValuation(symbol: string | null, inputs: ValuationInputs) {
     placeholderData: (prev) => prev,
   });
 }
+
+import type { LibraryResponse } from './types';
+
+/** Library tab: one ticker's dated history (read-only; kind '' = all kinds, q = text search). */
+export function useLibrary(symbol: string | null, kind: string, q: string) {
+  const params = new URLSearchParams();
+  if (kind) params.set('kind', kind);
+  if (q.trim()) params.set('q', q.trim());
+  return useQuery({
+    queryKey: ['library', symbol ?? '', params.toString()] as const,
+    queryFn: () => api.get<LibraryResponse>(`/api/library/${encodeURIComponent(symbol ?? '')}?${params.toString()}`),
+    enabled: !!symbol,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
+}

@@ -74,6 +74,7 @@ from app.knowledge.fund_holdings import (
     fund_positions_as_of,
     ownership_filings_as_of,
 )
+from app.knowledge.research_library import grounded_context, library_entries_as_of
 from app.knowledge.insider_trades import insider_activity_as_of, insider_clusters_as_of, insider_trades_as_of
 from app.knowledge.point_in_time import SEC_EDGAR_TZ
 from app.knowledge.store import fact_stats, latest_known
@@ -589,6 +590,8 @@ READERS: list[Reader] = [
     Reader(ownership_filings_as_of, lambda s, sym, t: ownership_filings_as_of(s, sym, t, 60)),
     Reader(archived_news, lambda s, sym, t: archived_news(s, sym, t)),
     Reader(latest_fundamentals_snapshot, lambda s, sym, t: latest_fundamentals_snapshot(s, sym, t)),
+    Reader(library_entries_as_of, lambda s, sym, t: library_entries_as_of(s, sym, t)),
+    Reader(grounded_context, lambda s, sym, t: grounded_context(s, sym, as_of=t)),
 ]
 
 

@@ -2444,3 +2444,20 @@ export interface ValuationInputs {
   years: number;
   explain: boolean;
 }
+
+export interface LibraryEntry {
+  kind: string;
+  kind_label: string;
+  known_at: string;
+  title: string;
+  summary: string;
+  source: string;
+  url: string | null;
+}
+export interface LibraryResponse {
+  symbol: string;
+  counts: Record<string, number>;
+  total: number;
+  entries: LibraryEntry[];
+  note: string;
+}
