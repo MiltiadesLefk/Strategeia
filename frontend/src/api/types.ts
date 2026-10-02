@@ -440,6 +440,9 @@ export interface AppSettings {
   kill_switch_enabled: boolean;
   kill_switch_drawdown_pct: number;
   kill_switch_drift_psi: number;
+  /** ML style (Forecast Lab): off by default; the model can only stop a trade in an "ml" sleeve. */
+  ml_style_enabled: boolean;
+  ml_min_expected_r: number;
   scan_universe_size: number;
   news_cards_enabled: boolean;
   news_card_batch_limit: number;
@@ -505,6 +508,8 @@ export interface SettingsUpdateRequest {
   kill_switch_enabled?: boolean;
   kill_switch_drawdown_pct?: number;
   kill_switch_drift_psi?: number;
+  ml_style_enabled?: boolean;
+  ml_min_expected_r?: number;
   scan_universe_size?: number;
   news_cards_enabled?: boolean;
   news_card_batch_limit?: number;

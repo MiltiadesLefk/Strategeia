@@ -280,6 +280,6 @@ def test_ml_sleeve_is_created_once_and_train_activate_roundtrip(client, session)
     assert trained.json()["active"] is False and trained.json()["importance"]
     assert client.post(f"/api/forecast-lab/models/{mid}/activate").json()["active"] is True
     assert client.get("/api/forecast-lab/status").json()["active_model"]["id"] == mid
-    assert client.post("/api/forecast-lab/models/deactivate").status_code == 204
+    assert client.post("/api/forecast-lab/models/deactivate").status_code == 200
     assert client.get("/api/forecast-lab/predictions").json() == []
-    assert client.delete(f"/api/forecast-lab/models/{mid}").status_code == 204
+    assert client.delete(f"/api/forecast-lab/models/{mid}").status_code == 200

@@ -26,6 +26,7 @@ const loaders = {
   '/terminal': () => import('./pages/MarketTerminalPage').then((m) => ({ default: m.MarketTerminalPage })),
   '/committee': () => import('./pages/CommitteePage').then((m) => ({ default: m.CommitteePage })),
   '/backtests': () => import('./pages/BacktestsPage').then((m) => ({ default: m.BacktestsPage })),
+  '/forecast-lab': () => import('./pages/ForecastLabPage').then((m) => ({ default: m.ForecastLabPage })),
   '/settings': () => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 } satisfies Record<string, () => Promise<{ default: ComponentType }>>;
 
@@ -42,7 +43,8 @@ export const SmartMoneyPage = lazy(loaders['/smart-money']);
 export const MarketTerminalPage = lazy(loaders['/terminal']);
 export const CommitteePage = lazy(loaders['/committee']);
 export const BacktestsPage = lazy(loaders['/backtests']);
-export const SettingsPage = lazy(loaders['/settings']);
+export const ForecastLabPage = lazy(loaders['/forecast-lab']);
+export const SettingsPage =lazy(loaders['/settings']);
 
 const started = new Set<string>();
 

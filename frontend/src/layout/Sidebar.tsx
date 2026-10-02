@@ -22,6 +22,7 @@ const ICONS = {
   calendar: 'M4 5h16v15H4V5Zm0 5h16M8 3v4m8-4v4',
   plans: 'M9 2h6l3 3v17H6V5l3-3Zm0 0v4h6V2M9 12h6M9 16h6',
   portfolio: 'M3 8h18v12H3V8Zm4 0V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M3 12h18',
+  forecast: 'M3 20h18M6 16V9m4 7V5m4 11v-6m4 6V8',
   backtest: 'M3 3v18h18M7 14l3-3 3 2 5-6M7 18h2m3 0h2m3 0h2',
   committee: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 2c-2.7 0-5 1.3-5 3v3h10v-3c0-1.7-2.3-3-5-3Zm8 0c-.4 0-.8 0-1.2.1 1.2.8 2.2 1.8 2.2 2.9v3h6v-3c0-1.7-2.3-3-5-3Z',
   terminal: 'M3 3h7v7H3V3Zm11 0h7v4h-7V3ZM3 14h7v7H3v-7Zm11-3h7v10h-7V11Z',
@@ -42,6 +43,7 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof 
   { to: '/smart-money', label: 'Smart Money', icon: 'smartMoney' },
   { to: '/committee', label: 'AI Committee', icon: 'committee' },
   { to: '/backtests', label: 'Backtest Lab', icon: 'backtest' },
+  { to: '/forecast-lab', label: 'Forecast Lab', icon: 'forecast' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ];
 

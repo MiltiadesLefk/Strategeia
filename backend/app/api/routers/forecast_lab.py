@@ -131,18 +131,20 @@ def activate(model_id: int, session: Session = Depends(get_session)) -> Forecast
     return _detail(m)
 
 
-@router.post("/models/deactivate", status_code=204)
-def deactivate(session: Session = Depends(get_session)) -> None:
+@router.post("/models/deactivate")
+def deactivate(session: Session = Depends(get_session)) -> dict:
     set_active(session, None)
+    return {"ok": True}
 
 
-@router.delete("/models/{model_id}", status_code=204)
-def delete_model(model_id: int, session: Session = Depends(get_session)) -> None:
+@router.delete("/models/{model_id}")
+def delete_model(model_id: int, session: Session = Depends(get_session)) -> dict:
     m = session.get(MlModel, model_id)
     if m is None:
         raise HTTPException(404, "Model not found")
     session.delete(m)
     session.commit()
+    return {"ok": True}
 
 
 @router.post("/sleeve", response_model=SleeveSchema, status_code=201)

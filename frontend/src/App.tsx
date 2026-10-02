@@ -4,6 +4,7 @@ import { DashboardLayout } from './layout/DashboardLayout';
 import {
   AnalysisPage,
   BacktestsPage,
+  ForecastLabPage,
   CalendarPage,
   CommitteePage,
   DashboardPage,
@@ -41,7 +42,8 @@ export default function App() {
           <Route path="smart-money" element={<SmartMoneyPage />} />
           <Route path="committee" element={<CommitteePage />} />
           <Route path="backtests" element={<BacktestsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="forecast-lab" element={<ForecastLabPage />} />
+          <Route path="settings"element={<SettingsPage />} />
         </Route>
       </Routes>
     </AuthGate>
