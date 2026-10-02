@@ -29,6 +29,7 @@
 23. [Notifications: morning note, weekly digest and price alerts](#23-notifications-morning-note-weekly-digest-and-price-alerts)
 24. [Sleeves: one paper account per trading style](#24-sleeves-one-paper-account-per-trading-style)
 25. [AI Committee](#25-ai-committee)
+26. [Forecast Lab: the ML style](#26-forecast-lab-the-ml-style)
 
 ---
 
@@ -2683,3 +2684,16 @@ The "routine" and "decision" models are the ones set in Settings (a blank decisi
 | Drift | `kill_switch_drift_psi` (default 0.25, 0 = off) | Core sleeve only. Compares the spread of live trade results (in R) with the latest finished backtest (PSI; below 0.10 stable, above 0.25 act). Needs 20 trades on each side. |
 
 `GET /api/sleeves/pauses/history` lists every pause. There is no Settings or Sleeves screen for these yet; use the API.
+
+## 26. Forecast Lab: the ML style
+
+The **Forecast Lab** page (`/forecast-lab`) trains a small LightGBM model on the closed trades of finished backtests and uses it as an **opinion that can only stop a trade**, in its own sleeve (style `ml`). Off by default (`ml_style_enabled`); nothing trains by itself.
+
+- **Needs extras.** `pip install -r backend/requirements-ml.txt` (lightgbm, shap, scikit-learn; not in `requirements.txt`, so Docker does not install them). Without them the app runs normally and the page and `GET /api/forecast-lab/status` say "ML extras not installed".
+- **Training** is the Train button (`POST /api/forecast-lab/models/train` with finished run ids). It reads stored `BacktestTrade` rows only, needs at least 100 closed trades, and saves a model without activating it. The label is the trade's realized R; the features are the plan's score components, confidence points and direction (`app/ml/features.py`).
+- **No look-ahead.** Chronological train / validation / test windows by entry date; a row whose exit came after the next window began is dropped. The pick between a few small settings and early stopping use the validation window only; the test window is used once. Every metric shows n and a 95% bootstrap interval; under 20 test trades the verdict is "not enough data".
+- **SHAP.** Global importance (mean absolute SHAP on the test window) is stored with the model; every opinion stores its top drivers.
+- **Use.** Only for plans of an `ml` sleeve, only when the style is on and a model is active, only after the rules approved the trade: expected R below `ml_min_expected_r` (default 0) turns it into a no-trade with the drivers in the reason. Direction, entry, stop and size are never read from the model; any failure means no opinion. Opinions are kept in `MlPrediction` and listed under Recent opinions.
+- **Caveats.** Backtests are price-only, so fundamentals, news and options points were never seen in training; results are optimistic (survivors, daily bars).
+- **API.** `GET /api/forecast-lab/status`, `GET /models`, `GET /models/{id}`, `POST /models/train`, `POST /models/{id}/activate`, `POST /models/deactivate`, `DELETE /models/{id}`, `POST /sleeve` (creates the ML sleeve once), `GET /predictions`.
+
