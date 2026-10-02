@@ -5,6 +5,7 @@ import {
   AnalysisPage,
   BacktestsPage,
   CalendarPage,
+  CommitteePage,
   DashboardPage,
   MarketScanPage,
   MarketTerminalPage,
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="portfolio" element={<PortfolioPage />} />
           <Route path="terminal" element={<MarketTerminalPage />} />
           <Route path="smart-money" element={<SmartMoneyPage />} />
+          <Route path="committee" element={<CommitteePage />} />
           <Route path="backtests" element={<BacktestsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>

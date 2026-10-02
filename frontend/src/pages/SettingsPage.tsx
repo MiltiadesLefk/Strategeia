@@ -11,6 +11,7 @@ import { NotificationsSettingsCard } from '../components/NotificationsSettingsCa
 import { CongressFollowCard } from '../components/CongressFollowCard';
 import { FundFollowCard } from '../components/FundFollowCard';
 import { NewsCardsSettingsCard } from '../components/NewsCardsSettingsCard';
+import { CommitteeSettingsCard } from '../components/CommitteeSettingsCard';
 import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
 import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
@@ -1024,6 +1025,7 @@ export function SettingsPage() {
 
       <NewsCardsSettingsCard />
       <ThesisAlertsSettingsCard />
+      <CommitteeSettingsCard />
 
       <CongressFollowCard />
 

@@ -2468,3 +2468,44 @@ export interface LibraryResponse {
   entries: LibraryEntry[];
   note: string;
 }
+
+export interface CommitteeStep {
+  key: string;
+  role: 'analyst' | 'debate' | 'manager' | 'trader' | 'risk' | 'final';
+  title: string;
+  tier: 'routine' | 'decision';
+  round: number;
+  status: 'pending' | 'running' | 'done' | 'skipped' | 'failed';
+  text: string;
+  error: string | null;
+  note: string | null;
+  model: string | null;
+  sources: string[];
+  /** Figures the model quoted that are not in the data it was given (a warning only). */
+  ungrounded: string[];
+  started_at: string | null;
+  finished_at: string | null;
+}
+export interface CommitteeRunSummary {
+  id: number;
+  symbol: string;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  created_at: string;
+  finished_at: string | null;
+  rating: 'Buy' | 'Overweight' | 'Hold' | 'Underweight' | 'Sell' | null;
+  llm_calls_used: number;
+  llm_calls_max: number;
+}
+export interface CommitteeRun extends CommitteeRunSummary {
+  steps: CommitteeStep[];
+  rating_summary: string | null;
+  rating_key_risks: string | null;
+  rating_conviction: 'low' | 'medium' | 'high' | null;
+  rating_parse: 'structured' | 'lenient' | 'failed' | null;
+  debate_rounds: number;
+  risk_rounds: number;
+  provider: string | null;
+  web_search: boolean;
+  error: string | null;
+  note: string;
+}

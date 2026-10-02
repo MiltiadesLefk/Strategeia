@@ -1208,3 +1208,42 @@ export function useLibrary(symbol: string | null, kind: string, q: string) {
     placeholderData: (prev) => prev,
   });
 }
+
+import type { CommitteeRun, CommitteeRunSummary } from './types';
+
+const committeeKeys = {
+  list: ['committee', 'runs'] as const,
+  run: (id: number) => ['committee', 'run', id] as const,
+};
+const COMMITTEE_POLL_MS = 1_500;
+const committeeActive = (status: string | undefined) => status === 'queued' || status === 'running';
+
+/** Saved committee runs, newest first; polls while one is going. */
+export function useCommitteeRuns() {
+  return useQuery({
+    queryKey: committeeKeys.list,
+    queryFn: () => api.get<{ runs: CommitteeRunSummary[] }>('/api/committee/runs?limit=50').then((r) => r.runs),
+    refetchInterval: (query) => (query.state.data?.some((r) => committeeActive(r.status)) ? COMMITTEE_POLL_MS * 2 : false),
+  });
+}
+
+/** One run with every report written so far. Polling is the live view: each report appears as it is written. */
+export function useCommitteeRun(id: number | null) {
+  return useQuery({
+    queryKey: committeeKeys.run(id ?? 0),
+    queryFn: () => api.get<CommitteeRun>(`/api/committee/runs/${id}`),
+    enabled: id !== null,
+    refetchInterval: (query) => (committeeActive(query.state.data?.status) ? COMMITTEE_POLL_MS : false),
+  });
+}
+
+export function useStartCommitteeRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (symbol: string) => api.post<CommitteeRun>('/api/committee/runs', { symbol }),
+    onSuccess: (run) => {
+      queryClient.setQueryData(committeeKeys.run(run.id), run);
+      queryClient.invalidateQueries({ queryKey: committeeKeys.list });
+    },
+  });
+}
