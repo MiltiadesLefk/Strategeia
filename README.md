@@ -147,6 +147,25 @@ scoring, the paper-trading engine (open → mark-to-market → close, with real 
 on realized P&L/R), data-provider fallback behavior, the LLM provider abstraction, and
 the auth/login/lockout behavior above.
 
+## Optional: Kronos forecast experiment (outside the app)
+
+`scripts/kronos_experiment.py` compares forecasts from [Kronos](https://github.com/shiyu-coder/Kronos)
+(a pretrained candlestick model; code MIT, and the `NeoQuasar/Kronos-small` model card also says MIT) with
+what prices really did, on about 20 symbols, against simple baselines. It is a standalone experiment: the
+app does not import it and nothing in the app changes. It needs PyTorch, so its packages live in
+`backend/requirements-ml.txt`, not `requirements.txt` (Docker never installs them).
+
+```powershell
+cd backend
+.venv\Scripts\pip install -r requirements-ml.txt
+.venv\Scripts\python ..\scripts\kronos_experiment.py --dry-run    # prices and plan only, no model
+.venv\Scripts\python ..\scripts\kronos_experiment.py --symbols AAPL,MSFT --dates 4 --paths 4   # small first run
+```
+
+The first real run clones Kronos into `backend/runtime/kronos_src` and downloads the model weights from
+Hugging Face, and a full run is slow on a CPU. Results (a CSV and a text summary) go to
+`backend/runtime/kronos_experiment/`. Past-date results are evidence only, not a trading rule.
+
 ## Project layout
 
 ```

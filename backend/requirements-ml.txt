@@ -1,0 +1,11 @@
+# Optional, heavy: only for scripts/kronos_experiment.py (not the app, not Docker).
+# Install on top of the normal requirements:
+#   .venv/Scripts/pip install -r requirements.txt -r requirements-ml.txt
+# Kronos (MIT) also needs git on PATH: the script shallow-clones its source on first run.
+# On a machine without a GPU, install the CPU build of torch first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0
+einops==0.8.1
+huggingface_hub==0.33.1
+safetensors==0.6.2
+tqdm==4.67.1

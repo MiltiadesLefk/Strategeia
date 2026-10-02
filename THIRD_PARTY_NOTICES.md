@@ -125,6 +125,7 @@ carry. Re-check if you move to a newer commit.
 | Yahoo Finance data, through the `yfinance` library | Installed from PyPI (`backend/requirements.txt`), not copied. It is the main market-data source. | `yfinance` is Apache-2.0. The data itself is Yahoo's and falls under Yahoo's terms. |
 | Elbstream Stock Logo API | `frontend/src/components/CompanyIcon.tsx` loads stock logos from `api.elbstream.com/logos/symbol/<TICKER>`. | The free tier requires a visible credit. The sidebar footer shows "Logos by Elbstream", linking to elbstream.com/logos (`frontend/src/layout/Sidebar.tsx`). |
 | `spothq/cryptocurrency-icons` | `CompanyIcon.tsx` loads icons for crypto symbols (`<COIN>-USD`) from jsDelivr (`cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color`). | CC0-1.0, a public-domain dedication (checked on GitHub, 2026-09-28). No credit required. |
+| Kronos (`shiyu-coder/Kronos`) and its `NeoQuasar/Kronos-small` / `Kronos-Tokenizer-base` weights | Only `scripts/kronos_experiment.py`, an optional experiment outside the app: it shallow-clones the Kronos source at run time and downloads the weights from Hugging Face. Nothing is copied into this repo; PyTorch and friends are in `backend/requirements-ml.txt`. | Code: MIT (Copyright (c) 2025 ShiYu). Model cards on Hugging Face list `license: mit` (checked 2026-10-02). |
 
 Other Python and npm packages are installed as normal dependencies, not copied; each keeps its own
 license inside its package, so they aren't listed here.
