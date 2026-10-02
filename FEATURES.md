@@ -1067,7 +1067,7 @@ For each kind of data, the app asks the first source that offers it. If that fai
 | 1 (only when enabled) | **Finnhub** | Free key | Quotes, company profile, news, earnings dates and estimates |
 | 2 | **Yahoo Finance** (`yfinance`) | No | Everything except insider trades: daily, weekly and intraday prices; quotes; company info; financials; news; earnings dates, estimates and history; options |
 | 3 | **Nasdaq** | No | Quotes, daily prices and company info, when Yahoo fails |
-| 4 | **Stooq** | No | Daily prices only; the last fallback |
+| 4 | **StockAnalysis** | No | Daily prices of stocks and ETFs only (unofficial endpoint); the last price fallback. Stooq now serves scripts a browser-check page, so it is skipped unless `stooq_enabled` is set |
 | 5 | **SEC EDGAR** | No (it needs a contact label; see §14) | **Insider trades** (Form 4): the last 90 days, up to 12 filings per stock for the live check; years of dated history through the backfill (§11, "What the app knew, and when") |
 
 **Other sources:**
@@ -1314,7 +1314,7 @@ companies mentioned, a one-line summary and whether the headline is mainly about
 - **Switched on in Settings** (News cards card; off by default because it spends AI calls). **Label now** on
   the News tab, or `POST /api/news/label/{symbol}` (20-second cooldown per symbol), runs one labelling pass.
 
-**FINRA short-sale volume (a silent signal, §5 "Silent signals").** FINRA posts one free file per
+**FINRA short-sale volume (a silent signal, §5 "Silent signals").** The Analysis page's Overview tab shows a "Short volume (FINRA)" card for the symbol (recent vs baseline ratio, last 10 days) with a Refresh button. FINRA posts one free file per
 trading day listing, for every US stock, how much of that day's volume was a short sale. The app
 downloads those files for your watchlist symbols only (`backend/app/data_providers/finra_provider.py`),
 keeps each downloaded file under `runtime/finra/` (a posted file never changes, so it is fetched once),
@@ -2675,7 +2675,7 @@ The "routine" and "decision" models are the ones set in Settings (a blank decisi
 
 **Limits.** Runs for several symbols at once, "top of a scan" runs, a stop button, a trade made from the rating, and use of the research library as context are not built. The rating is not backtested and says nothing about how right the committee is: treat it as reading material.
 
-**Kill switches and drift alarms.** Off until `Kill switches` is switched on in Settings. Every 10 minutes the app checks each sleeve, and if one trips a switch it is **paused**: it opens no new positions, a Telegram message is sent, and nothing is closed (open positions keep being managed by their stops and targets). A pause never lifts itself; resume with `POST /api/sleeves/{key}/resume`. Two switches:
+**Kill switches and drift alarms.** Off until `Kill switches` is switched on in Settings. Every 10 minutes the app checks each sleeve, and if one trips a switch it is **paused**: it opens no new positions, a Telegram message is sent, and nothing is closed (open positions keep being managed by their stops and targets). A pause never lifts itself; resume with the **Resume** button on the Portfolio page (it appears under the sleeve tabs with the reason; a "Pause history" card lists every pause) or `POST /api/sleeves/{key}/resume`. The two limits are edited in Settings > Kill switches. Two switches:
 
 | Switch | Setting | Meaning |
 |---|---|---|
