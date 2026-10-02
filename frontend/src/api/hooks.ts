@@ -184,7 +184,8 @@ export function useTradePlans() {
 export function useGenerateTradePlan() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (symbol: string) => api.post<TradePlan>('/api/trade-plans/generate', { symbol }),
+    mutationFn: ({ symbol, sleeve }: { symbol: string; sleeve?: string }) =>
+      api.post<TradePlan>('/api/trade-plans/generate', { symbol, ...(sleeve && sleeve !== 'core' ? { sleeve } : {}) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.tradePlans });
       // A plan generated under changed settings creates a new strategy version.

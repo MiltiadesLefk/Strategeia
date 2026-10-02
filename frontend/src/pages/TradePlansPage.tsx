@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { SilentSignals } from '../components/SilentSignals';
 import { useSearchParams } from 'react-router-dom';
 import { useAnalysis, useGenerateTradePlan, useMarketSession, useOpenPosition, useTradePlans } from '../api/hooks';
+import { SleeveSwitcher, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { DirectionBadge, TradePlanStatusBadge } from '../components/Badge';
 import { PipelineSteps } from '../components/PipelineSteps';
@@ -528,15 +529,17 @@ export function TradePlansPage() {
   const [params, setParams] = useSearchParams();
   const symbol = params.get('symbol');
   const [statusFilter, setStatusFilter] = useState('active');
+  const [sleeve, selectSleeve] = useSelectedSleeve();
   const { mutate: generate, data: latest, isPending, error: generateError } = useGenerateTradePlan();
   const { data: history, isLoading: historyLoading } = useTradePlans();
 
   const filteredHistory = useMemo(() => {
     if (!history) return [];
-    if (statusFilter === 'all') return history;
-    if (statusFilter === 'active') return history.filter((p) => p.status === 'pending' || p.status === 'executed');
-    return history.filter((p) => p.status === statusFilter);
-  }, [history, statusFilter]);
+    const inSleeve = history.filter((p) => (p.sleeve_key || 'core') === sleeve);
+    if (statusFilter === 'all') return inSleeve;
+    if (statusFilter === 'active') return inSleeve.filter((p) => p.status === 'pending' || p.status === 'executed');
+    return inSleeve.filter((p) => p.status === statusFilter);
+  }, [history, statusFilter, sleeve]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -547,7 +550,7 @@ export function TradePlansPage() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => symbol && generate(symbol)}
+            onClick={() => symbol && generate({ symbol, sleeve })}
             disabled={isPending || !symbol}
             title={symbol ? undefined : 'Choose a company first'}
           >
@@ -555,6 +558,8 @@ export function TradePlansPage() {
           </button>
         </div>
       </div>
+
+      <SleeveSwitcher selected={sleeve} onSelect={selectSleeve} />
 
       {generateError && <ErrorBanner message={(generateError as ApiError).message} />}
       {latest && (
