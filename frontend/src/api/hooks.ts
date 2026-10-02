@@ -807,3 +807,53 @@ export function useCollectPressReleases() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['news-cards'] }),
   });
 }
+
+import type {
+  NotePreviewResponse,
+  NoteSendResponse,
+  PriceAlertCreateRequest,
+  PriceAlertDeleteResponse,
+  PriceAlertListResponse,
+  PriceAlert as PriceAlertRow,
+} from './types';
+
+/** The price alerts you set (newest first), with the active count and the cap. Read-only. */
+export function usePriceAlerts() {
+  return useQuery({
+    queryKey: ['price-alerts'] as const,
+    queryFn: () => api.get<PriceAlertListResponse>('/api/alerts'),
+    staleTime: 30_000,
+  });
+}
+
+/** Save an alert. It only ever sends a message: nothing is traded or changed. */
+export function useCreatePriceAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: PriceAlertCreateRequest) => api.post<PriceAlertRow>('/api/alerts', req),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['price-alerts'] }),
+  });
+}
+
+/** Cancel an active alert, or remove one that already triggered or was cancelled. */
+export function useDeletePriceAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<PriceAlertDeleteResponse>(`/api/alerts/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['price-alerts'] }),
+  });
+}
+
+/** The morning note or weekly digest as it would be sent now. Nothing is sent or stored; ai=true spends one AI call. */
+export function usePreviewNote(kind: 'morning' | 'weekly') {
+  return useMutation({
+    mutationFn: (ai: boolean) => api.post<NotePreviewResponse>(`/api/notes/${kind}/preview?ai=${ai}`),
+  });
+}
+
+/** Send the morning note or weekly digest to Telegram now. */
+export function useSendNote(kind: 'morning' | 'weekly') {
+  return useMutation({
+    mutationFn: () => api.post<NoteSendResponse>(`/api/notes/${kind}/send`),
+  });
+}

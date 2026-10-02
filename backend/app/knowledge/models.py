@@ -45,7 +45,8 @@ class FactKind:
     WATCHER_EVENT = "watcher_event"  # an event a watcher reported (watchers/runner.py); symbol None = market-wide
     FUNDAMENTALS_REVENUE = "fundamentals_revenue"  # one annual revenue value from one 10-K, known at its filing date
     EARNINGS_REPORT = "earnings_report"  # one reported quarter (EPS estimate/actual), known at the end of the report day
-    NEWS_CARD = "news_card"  # an AI label for one archived headline (event type, sentiment, materiality); known at LABELLING time, not publish time
+    PRICE_ALERT = "price_alert"  # a price alert that fired (price_alert_service); known when it fired
+    NEWS_CARD = "news_card" # an AI label for one archived headline (event type, sentiment, materiality); known at LABELLING time, not publish time
 
 
 class KnownFact(SQLModel, table=True):

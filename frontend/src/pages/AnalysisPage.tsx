@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { qk, useAnalysis, useArchive, useNewsCards, useResearch, useUniverse } from '../api/hooks';
 import { NewsCardChips, NewsCardsPanel } from '../components/NewsCardChips';
 import { CompanyDropdown } from '../components/CompanyDropdown';
+import { AlertMeButton } from '../components/PriceAlertsPanel';
 import { RangeTabs } from '../components/RangeTabs';
 import { Tabs } from '../components/Tabs';
 import { TrendBadge } from '../components/Badge';
@@ -583,6 +584,7 @@ export function AnalysisPage() {
               Generate Trade Plan →
             </Link>
           )}
+          {symbol && <AlertMeButton symbol={symbol} />}
         </div>
       </div>
 

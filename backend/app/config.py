@@ -405,6 +405,14 @@ ResearchMode = Literal["our_data_only", "allow_web_search"]
 WatchersAction = Literal["record", "alert", "alert_and_reevaluate"]
 
 
+CLOCK_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+def normalize_clock_time(value: str) -> str:
+    """Trim and validate an "HH:MM" 24-hour time. Raises ValueError otherwise."""
+    cleaned = value.strip()
+    if not CLOCK_TIME_PATTERN.fullmatch(cleaned):
+        raise ValueError("Time must be written HH:MM on a 24-hour clock, for example 08:45")
+    return cleaned
 MASK_BULLET_COUNT = 16
 
 
@@ -659,6 +667,28 @@ class AppSettings(BaseModel):
     # bar to count days.
     max_holding_days: int = 20
 
+    # Notifications (Telegram): a morning note on trading days, a Friday weekly
+    # digest, and price alerts. All of them only ever send a message and record a
+    # dated fact: none of them can open, change or close a position. The morning
+    # note and the digest are off until you switch them on; they need Telegram
+    # configured to be delivered (the preview buttons in Settings work without it).
+    morning_note_enabled: bool = False
+    # When the morning note goes out, as "HH:MM" New York time (24 hour clock).
+    morning_note_time_et: str = "08:45"
+    weekly_digest_enabled: bool = False
+    # Alerts on OPEN paper positions that are close to their stop or first target.
+    # On by default: with no Telegram configured it only records the event.
+    price_alert_positions_enabled: bool = True
+    # "Close to" means within this many ATRs of the stop (the average daily range, so
+    # the same setting means the same thing for a calm stock and a wild one)...
+    price_alert_stop_atr: float = 1.0
+    # ...and within this percentage of the price of the first target.
+    price_alert_tp1_pct: float = 1.0
+
+    @field_validator("morning_note_time_et", mode="before")
+    @classmethod
+    def _validate_morning_note_time_et(cls, value):
+        return normalize_clock_time(value) if isinstance(value, str) else value
     def redacted(self) -> dict:
         """Copy safe to return over the API — secrets collapsed to a masked
         hint (e.g. "••••ab12") so the UI can show *that* a key is set and

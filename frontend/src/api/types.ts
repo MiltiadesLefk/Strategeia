@@ -404,6 +404,16 @@ export interface AppSettings {
   max_concurrent_positions: number;
   /** Trading days before a stalled position is closed at the close; 0 = no limit. */
   max_holding_days: number;
+  /** Notifications (Telegram): morning note, weekly digest, alerts on open positions. */
+  morning_note_enabled: boolean;
+  /** "HH:MM", New York time. */
+  morning_note_time_et: string;
+  weekly_digest_enabled: boolean;
+  price_alert_positions_enabled: boolean;
+  /** "Close to the stop" = within this many ATRs. */
+  price_alert_stop_atr: number;
+  /** "Close to the first target" = within this percentage of the price. */
+  price_alert_tp1_pct: number;
   ai_trading_overlay_enabled: boolean;
   ai_overlay_scores_confidence: boolean;
   ai_overlay_objection_action: AiOverlayObjectionAction;
@@ -444,6 +454,12 @@ export interface SettingsUpdateRequest {
   watchers_poll_minutes?: number;
   max_concurrent_positions?: number;
   max_holding_days?: number;
+  morning_note_enabled?: boolean;
+  morning_note_time_et?: string;
+  weekly_digest_enabled?: boolean;
+  price_alert_positions_enabled?: boolean;
+  price_alert_stop_atr?: number;
+  price_alert_tp1_pct?: number;
   ai_trading_overlay_enabled?: boolean;
   ai_overlay_scores_confidence?: boolean;
   ai_overlay_objection_action?: AiOverlayObjectionAction;
@@ -1751,4 +1767,63 @@ export interface NewsCollectResponse {
   already_saved: number;
   skipped_reason: string | null;
   failures: string[];
+}
+
+export type PriceAlertCondition = 'price_above' | 'price_below' | 'day_move_pct' | 'near_stop' | 'near_tp1';
+export type PriceAlertUnit = 'pct' | 'atr';
+
+export interface PriceAlert {
+  id: number;
+  symbol: string;
+  condition: PriceAlertCondition;
+  threshold: number;
+  unit: PriceAlertUnit | null;
+  status: 'active' | 'triggered' | 'cancelled';
+  repeat: boolean;
+  cooldown_minutes: number;
+  note: string | null;
+  created_at: string;
+  triggered_at: string | null;
+  last_triggered_at: string | null;
+  trigger_count: number;
+  last_value: number | null;
+  cancelled_at: string | null;
+}
+
+export interface PriceAlertListResponse {
+  alerts: PriceAlert[];
+  active_count: number;
+  max_active: number;
+}
+
+export interface PriceAlertCreateRequest {
+  symbol: string;
+  condition: PriceAlertCondition;
+  threshold: number;
+  unit?: PriceAlertUnit | null;
+  repeat?: boolean;
+  cooldown_minutes?: number;
+  note?: string | null;
+}
+
+export interface PriceAlertDeleteResponse {
+  id: number;
+  result: 'cancelled' | 'deleted';
+}
+
+export interface NotePreviewResponse {
+  text: string;
+  ai_used: boolean;
+  ai_provider: string | null;
+  unavailable: string[];
+  generated_at: string;
+  /** How many Telegram messages the note takes. */
+  parts: number;
+}
+
+export interface NoteSendResponse {
+  ok: boolean;
+  message: string;
+  parts_sent: number;
+  ai_used: boolean;
 }

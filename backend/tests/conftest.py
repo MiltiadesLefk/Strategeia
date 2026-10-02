@@ -149,6 +149,7 @@ def _reset_in_process_cooldowns(monkeypatch):
     monkeypatch.setattr("app.api.routers.smart_money._last_insider_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.portfolio._last_lesson_request_monotonic", {})
     monkeypatch.setattr("app.api.routers.watchers._last_watcher_run_monotonic", {})
+    monkeypatch.setattr("app.api.routers.notes._last_note_send_monotonic", {})
     from app.services.market_terminal_service import reset_terminal_cache
 
     reset_terminal_cache()

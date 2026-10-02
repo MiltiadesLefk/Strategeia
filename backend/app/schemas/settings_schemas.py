@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.config import AiOverlayObjectionAction, ResearchMode, WatchersAction, normalize_api_model, normalize_claude_cli_model
+from app.config import AiOverlayObjectionAction, ResearchMode, WatchersAction, normalize_api_model, normalize_claude_cli_model, normalize_clock_time
 from app.llm_providers.base import LLMTier
 
 
@@ -54,6 +54,18 @@ class SettingsUpdateRequest(BaseModel):
     # Capped at 60 (about three months): the exit scan reads 3 months of bars
     # and has to see the entry bar to count days from it.
     max_holding_days: int | None = Field(default=None, ge=0, le=60)
+    # Notifications: morning note, weekly digest, price alerts on open positions.
+    morning_note_enabled: bool | None = None
+    morning_note_time_et: str | None = None
+    weekly_digest_enabled: bool | None = None
+    price_alert_positions_enabled: bool | None = None
+    price_alert_stop_atr: float | None = Field(default=None, gt=0, le=10)
+    price_alert_tp1_pct: float | None = Field(default=None, gt=0, le=20)
+
+    @field_validator("morning_note_time_et")
+    @classmethod
+    def _validate_morning_note_time_et(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_clock_time(value)
 
     @field_validator("claude_cli_model")
     @classmethod

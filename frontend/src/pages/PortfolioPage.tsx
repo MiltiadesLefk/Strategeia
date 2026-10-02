@@ -7,6 +7,7 @@ import { TickerLink } from '../components/TickerLink';
 import { TradeExcursionsCard } from '../components/TradeExcursionsCard';
 import { formatAdverseR } from '../lib/excursion';
 import { CalibrationCard } from '../components/CalibrationCard';
+import { PriceAlertsCard } from '../components/PriceAlertsPanel';
 import { EquityCurveChart } from '../components/chart/EquityCurveChart';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR, formatRelativeTime, sampleSizeNote } from '../components/common';
@@ -348,6 +349,8 @@ export function PortfolioPage() {
       </div>
 
       <CalibrationCard />
+
+      <PriceAlertsCard />
     </div>
   );
 }

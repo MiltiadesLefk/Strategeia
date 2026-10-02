@@ -7,6 +7,7 @@ import { decisionModelInvalid } from '../lib/decisionModel';
 import { DataCacheCard } from '../components/DataCacheCard';
 import { DataSourcesCard } from '../components/DataSourcesCard';
 import { WatchersCard } from '../components/WatchersCard';
+import { NotificationsSettingsCard } from '../components/NotificationsSettingsCard';
 import { NewsCardsSettingsCard } from '../components/NewsCardsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
 import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
@@ -1014,6 +1015,7 @@ export function SettingsPage() {
         </div>
       </div>
 
+      <NotificationsSettingsCard />
       <WatchersCard />
 
       <NewsCardsSettingsCard />

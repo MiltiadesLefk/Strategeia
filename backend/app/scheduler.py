@@ -26,6 +26,9 @@ from app.portfolio.missed_trades import refresh_missed_trades
 from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_auto_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
+from app.services.morning_note_service import run_morning_note_if_due
+from app.services.price_alert_service import run_price_alert_check
+from app.services.weekly_digest_service import run_weekly_digest_if_due
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
 from app.watchers.runner import run_due_watchers
 
@@ -178,6 +181,32 @@ WATCHER_TICK_JITTER_SECONDS = 20
 WATCHER_POLL_JITTER_SECONDS = 5.0
 
 
+
+def _price_alerts_job() -> None:
+    try:
+        if is_simulated():
+            return
+        settings = load_app_settings()
+        data_provider = get_data_provider(settings)
+        with Session(engine) as session:
+            run_price_alert_check(session, settings, data_provider)
+    except Exception:
+        logger.exception("Scheduled price alert check failed")
+
+def _notifications_job() -> None:
+    try:
+        if is_simulated():
+            return
+        settings = load_app_settings()
+        if not (settings.morning_note_enabled or settings.weekly_digest_enabled):
+            return  # cheap exit before building providers or opening the database
+        data_provider = get_data_provider(settings)
+        llm_provider = get_llm_provider(settings)
+        with Session(engine) as session:
+            run_morning_note_if_due(session, settings, data_provider, llm_provider)
+            run_weekly_digest_if_due(session, settings, data_provider, llm_provider)
+    except Exception:
+        logger.exception("Scheduled notification tick failed")
 def _watchers_job() -> None:
     try:
         settings = load_app_settings()
@@ -245,6 +274,30 @@ def start_scheduler() -> BackgroundScheduler:
         minutes=settings.watchers_poll_minutes,
         jitter=WATCHER_TICK_JITTER_SECONDS,
         id="watchers",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _price_alerts_job,
+        "interval",
+        minutes=PRICE_ALERT_INTERVAL_MINUTES,
+        id="price_alerts",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _notifications_job,
+        "interval",
+        minutes=NOTIFICATION_POLL_MINUTES,
+        id="notifications",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _thesis_sweep_job,
+        "interval",
+        minutes=THESIS_SWEEP_INTERVAL_MINUTES,
+        id="thesis_sweep",
         max_instances=1,
         coalesce=True,
     )
