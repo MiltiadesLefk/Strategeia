@@ -17,6 +17,7 @@ function Icon({ path }: { path: string }) {
 const ICONS = {
   dashboard: 'M3 13h8V3H3v10Zm10 8h8V3h-8v18ZM3 21h8v-6H3v6Z',
   scan: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35',
+  screener: 'M3 5h18l-7 8v6l-4 2v-8L3 5Z',
   analysis: 'M3 3v18h18M7 15l4-5 3 3 5-7',
   calendar: 'M4 5h16v15H4V5Zm0 5h16M8 3v4m8-4v4',
   plans: 'M9 2h6l3 3v17H6V5l3-3Zm0 0v4h6V2M9 12h6M9 16h6',
@@ -31,6 +32,7 @@ const ICONS = {
 const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof ICONS }[] = [
   { to: '/', label: 'Dashboard', end: true, icon: 'dashboard' },
   { to: '/scan', label: 'Market Scan', icon: 'scan' },
+  { to: '/screener', label: 'Screener', icon: 'screener' },
   { to: '/analysis', label: 'Analysis', icon: 'analysis' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/trade-plans', label: 'Trade Plans', icon: 'plans' },

@@ -16,6 +16,7 @@ from app.data_providers.base import (
     InsiderActivity,
     FinancialsData,
     NewsItem,
+    OptionsChain,
     OptionsSummary,
     QuoteData,
 )
@@ -112,6 +113,14 @@ class CompositeDataProvider:
             return self._try_each("get_earnings_history", symbol, limit=limit)
         except AllProvidersFailedError:
             return []
+
+    def get_options_chain(self, symbol: str, expiration: str | None = None) -> OptionsChain | None:
+        # Same "absence is not an error" shape as get_options_summary: crypto
+        # and many smaller names have no listed options at all.
+        try:
+            return self._try_each("get_options_chain", symbol, expiration)
+        except AllProvidersFailedError:
+            return None
 
     def get_options_summary(self, symbol: str) -> OptionsSummary | None:
         # Common/expected absence (crypto has no options chain at all, many

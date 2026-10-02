@@ -446,6 +446,11 @@ class BacktestDataProvider:
         handler = self._handler("options_summary")
         return handler(symbol, self._moment()) if handler is not None else None
 
+    def get_options_chain(self, symbol: str, expiration: str | None = None):
+        # A full chain is a live snapshot with no dated history behind it, so a
+        # simulated moment can never be served one.
+        return None
+
     def get_insider_activity(self, symbol: str) -> InsiderActivity | None:
         handler = self._handler("insider_activity")
         return handler(symbol, self._moment()) if handler is not None else None

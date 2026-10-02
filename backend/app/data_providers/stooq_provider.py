@@ -94,6 +94,9 @@ class StooqProvider:
     def get_options_summary(self, symbol: str) -> OptionsSummary:
         raise NotImplementedError("stooq provider does not support options data")
 
+    def get_options_chain(self, symbol: str, expiration: str | None = None):
+        raise NotImplementedError("stooq provider does not support options data")
+
     def get_insider_activity(self, symbol: str):
         raise NotImplementedError("stooq provider does not implement get_insider_activity")
 

@@ -20,6 +20,8 @@ import { isAlwaysOpenSymbol } from '../lib/marketHours';
 import { INTRADAY_FALLBACK_RANGE, INTRADAY_UNAVAILABLE_MESSAGE, isIntradayRange } from '../lib/intraday';
 import type { ApiError } from '../api/client';
 import type { NewsCardOut, ResearchResponse } from '../api/types';
+import { OptionsPanel } from '../components/options/OptionsPanel';
+import { TradingViewWidget } from '../components/TradingViewWidget';
 import { EarningsPreviewPanel } from '../components/EarningsPreviewPanel';
 
 const TABS = [
@@ -28,6 +30,8 @@ const TABS = [
   { value: 'earnings', label: 'Earnings' },
   { value: 'news', label: 'News' },
   { value: 'catalysts', label: 'Catalysts' },
+  { value: 'options', label: 'Options' },
+  { value: 'tradingview', label: 'TradingView' },
 ];
 
 // High-volatility-around-earnings threshold — earnings within 2 weeks
@@ -558,6 +562,14 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
             </div>
           )}
 
+          {tab === 'options' && <OptionsPanel symbol={data.symbol} />}
+
+          {tab === 'tradingview' && (
+            <>
+              <TradingViewWidget kind="symbol-overview" symbol={data.symbol} height={460} />
+              <TradingViewWidget kind="technical-analysis" symbol={data.symbol} height={420} />
+            </>
+          )}
           {tab === 'overview' && !data.symbol.endsWith('-USD') && <InsiderPanel symbol={data.symbol} />}
         </>
       )}

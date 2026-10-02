@@ -17,6 +17,7 @@ import { lazy, type ComponentType } from 'react';
 const loaders = {
   '/': () => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
   '/scan': () => import('./pages/MarketScanPage').then((m) => ({ default: m.MarketScanPage })),
+  '/screener': () => import('./pages/ScreenerPage').then((m) => ({ default: m.ScreenerPage })),
   '/analysis': () => import('./pages/AnalysisPage').then((m) => ({ default: m.AnalysisPage })),
   '/trade-plans': () => import('./pages/TradePlansPage').then((m) => ({ default: m.TradePlansPage })),
   '/calendar': () => import('./pages/CalendarPage').then((m) => ({ default: m.CalendarPage })),
@@ -31,6 +32,7 @@ export type PagePath = keyof typeof loaders;
 
 export const DashboardPage = lazy(loaders['/']);
 export const MarketScanPage = lazy(loaders['/scan']);
+export const ScreenerPage = lazy(loaders['/screener']);
 export const AnalysisPage = lazy(loaders['/analysis']);
 export const TradePlansPage = lazy(loaders['/trade-plans']);
 export const CalendarPage = lazy(loaders['/calendar']);

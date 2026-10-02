@@ -857,3 +857,49 @@ export function useSendNote(kind: 'morning' | 'weekly') {
     mutationFn: () => api.post<NoteSendResponse>(`/api/notes/${kind}/send`),
   });
 }
+
+import type { OptionsChainResponse, SavedScreen, ScreenerFieldsResponse, ScreenerRunRequest, ScreenerRunResponse, ScreenerSpec } from './types';
+
+/** One expiration's option chain and its summary (read-only). `expiration` null asks for the nearest one. */
+export function useOptionsChain(symbol: string | null, expiration: string | null) {
+  return useQuery({
+    queryKey: ['options-chain', symbol ?? '', expiration ?? ''] as const,
+    queryFn: () => api.get<OptionsChainResponse>(`/api/options/${encodeURIComponent(symbol ?? '')}${expiration ? `?expiration=${expiration}` : ''}`),
+    enabled: !!symbol,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useScreenerFields() {
+  return useQuery({
+    queryKey: ['screener', 'fields'] as const,
+    queryFn: () => api.get<ScreenerFieldsResponse>('/api/screener/fields'),
+    staleTime: Infinity,
+  });
+}
+
+/** Runs a screen. A mutation, not a query: it is read-only on the server, but a run reads up to a few
+ * hundred symbols, so it only ever happens on a click, never on mount or window focus. */
+export function useRunScreen() {
+  return useMutation({ mutationFn: (body: ScreenerRunRequest) => api.post<ScreenerRunResponse>('/api/screener/run', body) });
+}
+
+export function useSavedScreens() {
+  return useQuery({ queryKey: ['screener', 'saved'] as const, queryFn: () => api.get<SavedScreen[]>('/api/screener/saved') });
+}
+
+export function useSaveScreen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ScreenerSpec & { name: string }) => api.post<SavedScreen>('/api/screener/saved', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['screener', 'saved'] }),
+  });
+}
+
+export function useDeleteSavedScreen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: string }>(`/api/screener/saved/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['screener', 'saved'] }),
+  });
+}

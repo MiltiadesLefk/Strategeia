@@ -270,6 +270,9 @@ class NasdaqProvider:
     def get_options_summary(self, symbol: str) -> OptionsSummary:
         raise NotImplementedError("nasdaq provider does not implement get_options_summary")
 
+    def get_options_chain(self, symbol: str, expiration: str | None = None):
+        raise NotImplementedError("nasdaq provider does not implement get_options_chain")
+
     def get_insider_activity(self, symbol: str):
         raise NotImplementedError("nasdaq provider does not implement get_insider_activity")
 

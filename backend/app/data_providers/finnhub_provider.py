@@ -165,6 +165,9 @@ class FinnhubProvider:
     def get_options_summary(self, symbol: str) -> OptionsSummary:
         raise NotImplementedError("finnhub free tier does not expose options chain data")
 
+    def get_options_chain(self, symbol: str, expiration: str | None = None):
+        raise NotImplementedError("finnhub free tier does not expose options chain data")
+
     def get_insider_activity(self, symbol: str):
         raise NotImplementedError("finnhub provider does not implement get_insider_activity")
 

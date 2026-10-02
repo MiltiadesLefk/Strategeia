@@ -13,6 +13,8 @@ from app.data_providers.base import (
     FinancialsData,
     FinancialYear,
     NewsItem,
+    OptionContract,
+    OptionsChain,
     OptionsSummary,
     QuoteData,
 )
@@ -40,6 +42,44 @@ OPTIONS_TTL = 30 * 60
 # on free data (thin/stale prints at the bid-ask floor) — skip ahead to the
 # first expiration at least this many days out.
 OPTIONS_MIN_DAYS_TO_EXPIRATION = 7
+
+
+def _float_or_none(value: object) -> float | None:
+    """A float, or None for anything blank, NaN or non-numeric. Option quotes
+    arrive with many empty cells; an empty cell must stay empty."""
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return None if pd.isna(number) else number
+
+
+def option_contracts_from_frame(frame: pd.DataFrame | None) -> list[OptionContract]:
+    """yfinance's calls/puts frame -> contracts, sorted by strike. Rows without a
+    usable strike are dropped; every other blank stays None."""
+    if frame is None or frame.empty or "strike" not in frame.columns:
+        return []
+    contracts: list[OptionContract] = []
+    for row in frame.to_dict("records"):
+        strike = _float_or_none(row.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        itm = row.get("inTheMoney")
+        contracts.append(
+            OptionContract(
+                strike=strike,
+                last_price=_float_or_none(row.get("lastPrice")),
+                bid=_float_or_none(row.get("bid")),
+                ask=_float_or_none(row.get("ask")),
+                volume=_float_or_none(row.get("volume")),
+                open_interest=_float_or_none(row.get("openInterest")),
+                implied_volatility=_float_or_none(row.get("impliedVolatility")),
+                in_the_money=bool(itm) if itm is not None and not pd.isna(itm) else None,
+                contract_symbol=str(row["contractSymbol"]) if row.get("contractSymbol") else None,
+            )
+        )
+    contracts.sort(key=lambda c: c.strike)
+    return contracts
 
 
 class YFinanceProvider:
@@ -262,6 +302,33 @@ class YFinanceProvider:
         return OptionsSummary(
             symbol=symbol, expiration=expiration, put_call_volume_ratio=put_call_ratio, atm_implied_volatility=atm_iv
         )
+
+    @cached(OPTIONS_TTL)
+    def get_options_chain(self, symbol: str, expiration: str | None = None) -> OptionsChain:
+        """Every call and put for one expiration (the nearest one when none is
+        named), plus the list of expirations. Raises DataProviderError when the
+        symbol has no listed options or the named expiration is not on offer."""
+        try:
+            ticker = yf.Ticker(symbol)
+            expirations = list(ticker.options)
+        except Exception as exc:
+            raise DataProviderError(f"yfinance get_options_chain({symbol}) failed: {exc}") from exc
+        if not expirations:
+            raise DataProviderError(f"yfinance has no options chain for {symbol}")
+        chosen = expiration or expirations[0]
+        if chosen not in expirations:
+            raise DataProviderError(f"yfinance lists no {chosen} expiration for {symbol}")
+        try:
+            chain = ticker.option_chain(chosen)
+            calls = option_contracts_from_frame(chain.calls)
+            puts = option_contracts_from_frame(chain.puts)
+        except Exception as exc:
+            raise DataProviderError(f"yfinance option_chain({symbol}, {chosen}) failed: {exc}") from exc
+        try:
+            spot = _float_or_none(ticker.fast_info["lastPrice"])
+        except Exception:
+            spot = None  # best effort: the service falls back to a quote
+        return OptionsChain(symbol=symbol, expiration=chosen, expirations=expirations, spot=spot, calls=calls, puts=puts)
 
     def get_insider_activity(self, symbol: str):
         raise NotImplementedError("yfinance provider does not implement get_insider_activity")

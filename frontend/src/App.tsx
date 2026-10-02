@@ -9,6 +9,7 @@ import {
   MarketScanPage,
   MarketTerminalPage,
   PortfolioPage,
+  ScreenerPage,
   SettingsPage,
   SmartMoneyPage,
   TradePlansPage,
@@ -29,6 +30,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="scan" element={<MarketScanPage />} />
+          <Route path="screener" element={<ScreenerPage />} />
           <Route path="analysis" element={<AnalysisPage />} />
           <Route path="research" element={<ResearchRedirect />} />
           <Route path="trade-plans" element={<TradePlansPage />} />

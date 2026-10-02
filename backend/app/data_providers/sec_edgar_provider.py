@@ -232,5 +232,8 @@ class SecEdgarProvider:
     def get_options_summary(self, symbol: str) -> OptionsSummary:
         raise NotImplementedError("sec_edgar provides insider filings only")
 
+    def get_options_chain(self, symbol: str, expiration: str | None = None):
+        raise NotImplementedError("sec_edgar provides insider filings only")
+
     def get_earnings_history(self, symbol: str, limit: int = 12):
         raise NotImplementedError("sec_edgar provider does not implement get_earnings_history")

@@ -1,3 +1,4 @@
+import { TradingViewWidget } from '../components/TradingViewWidget';
 import { MacroPanel } from '../components/terminal/MacroPanel';
 import { MarketRecap } from '../components/terminal/MarketRecap';
 import { SectorHeatmap } from '../components/terminal/SectorHeatmap';
@@ -11,6 +12,7 @@ export function MarketTerminalPage() {
           A read-only overview: how sectors moved, the macro backdrop, and a recap. Everything is computed from daily bars; nothing here places a trade.
         </div>
       </div>
+      <TradingViewWidget kind="ticker-tape" height={90} compact />
       <MarketRecap />
       <SectorHeatmap />
       <MacroPanel />

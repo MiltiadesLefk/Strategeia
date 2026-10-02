@@ -236,6 +236,7 @@ def _register_rest() -> None:
         "get_earnings_estimate": lambda p: p.get_earnings_estimate("AAA"),
         "get_earnings_history": lambda p: p.get_earnings_history("AAA"),
         "get_options_summary": lambda p: p.get_options_summary("AAA"),
+        "get_options_chain": lambda p: p.get_options_chain("AAA"),
         "get_insider_activity": lambda p: p.get_insider_activity("AAA"),
     }.items():
         ASKED_BY_THE_REST[name] = call

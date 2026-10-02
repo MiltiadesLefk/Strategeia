@@ -1827,3 +1827,117 @@ export interface NoteSendResponse {
   parts_sent: number;
   ai_used: boolean;
 }
+
+export interface OptionLeg {
+  last_price: number | null;
+  bid: number | null;
+  ask: number | null;
+  volume: number | null;
+  open_interest: number | null;
+  implied_volatility: number | null;
+  in_the_money: boolean | null;
+  contract_symbol: string | null;
+}
+
+export interface OptionStrikeRow {
+  strike: number;
+  is_atm: boolean;
+  call: OptionLeg | null;
+  put: OptionLeg | null;
+}
+
+export interface OptionsSummaryOut {
+  call_volume: number;
+  put_volume: number;
+  put_call_volume_ratio: number | null;
+  call_open_interest: number;
+  put_open_interest: number;
+  put_call_oi_ratio: number | null;
+  atm_strike: number | null;
+  atm_implied_volatility: number | null;
+  expected_move_pct: number | null;
+  expected_move_dollars: number | null;
+  max_pain_strike: number | null;
+  iv_skew_points: number | null;
+  iv_skew_label: 'puts richer' | 'calls richer' | 'balanced' | null;
+}
+
+export interface OptionsChainResponse {
+  symbol: string;
+  available: boolean;
+  reason: string | null;
+  expiration: string | null;
+  expirations: string[];
+  days_to_expiration: number | null;
+  spot: number | null;
+  strikes_total: number;
+  strikes_shown: number;
+  summary: OptionsSummaryOut | null;
+  rows: OptionStrikeRow[];
+  notes: string[];
+}
+
+export type ScreenerValue = number | string | null;
+
+export interface ScreenerFilter {
+  field: string;
+  op: string;
+  value: number | string | null;
+  value2?: number | null;
+}
+
+export interface ScreenerSpec {
+  filters: ScreenerFilter[];
+  sort_field: string | null;
+  sort_dir: 'asc' | 'desc';
+  limit: number;
+  columns: string[];
+}
+
+export interface ScreenerRunRequest extends ScreenerSpec {
+  symbols?: string[] | null;
+  scan_cap: number;
+}
+
+export interface ScreenerField {
+  name: string;
+  label: string;
+  kind: 'number' | 'text';
+  unit: string;
+  source: string;
+  description: string;
+  operators: string[];
+  costly: boolean;
+}
+
+export interface ScreenerFieldsResponse {
+  fields: ScreenerField[];
+  max_filters: number;
+  max_symbols: number;
+  default_scan_cap: number;
+}
+
+export interface ScreenerRow {
+  symbol: string;
+  name: string;
+  as_of: string | null;
+  values: Record<string, ScreenerValue>;
+}
+
+export interface ScreenerRunResponse {
+  rows: ScreenerRow[];
+  scanned: number;
+  universe_size: number;
+  matched: number;
+  skipped_missing_data: number;
+  missing: string[];
+  columns: string[];
+  sort_field: string | null;
+  sort_dir: 'asc' | 'desc';
+}
+
+export interface SavedScreen extends ScreenerSpec {
+  id: string;
+  name: string;
+  created_at: string;
+}

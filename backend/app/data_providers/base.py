@@ -102,6 +102,38 @@ class OptionsSummary:
 
 
 @dataclass
+class OptionContract:
+    """One listed option, exactly the fields the source quotes and nothing
+    derived. Any field the source left blank is None (never zero): a missing
+    bid is not a bid of 0. No Greeks: the free source does not supply them, and
+    estimating them here would be inventing numbers."""
+
+    strike: float
+    last_price: float | None
+    bid: float | None
+    ask: float | None
+    volume: float | None
+    open_interest: float | None
+    implied_volatility: float | None
+    in_the_money: bool | None
+    contract_symbol: str | None = None
+
+
+@dataclass
+class OptionsChain:
+    """Every call and put for ONE expiration, plus the list of expirations the
+    source offers. `spot` is the underlying's last price when the source could
+    supply it (None otherwise; the service then falls back to a quote)."""
+
+    symbol: str
+    expiration: str
+    expirations: list[str]
+    spot: float | None
+    calls: list[OptionContract]
+    puts: list[OptionContract]
+
+
+@dataclass
 class InsiderActivity:
     """Aggregated Form 4 insider transactions over a recent window.
 
@@ -144,5 +176,7 @@ class DataProvider(Protocol):
     def get_earnings_history(self, symbol: str, limit: int = 12) -> list[EarningsHistoryEntry]: ...
 
     def get_options_summary(self, symbol: str) -> OptionsSummary: ...
+
+    def get_options_chain(self, symbol: str, expiration: str | None = None) -> OptionsChain: ...
 
     def get_insider_activity(self, symbol: str) -> InsiderActivity | None: ...
