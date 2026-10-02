@@ -15,6 +15,7 @@ import { AiNoteCard, ErrorBanner, EmptyState, LoadingSpinner, formatMoney, forma
 import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
 import { DataFreshness } from '../components/DataFreshness';
 import { Flash } from '../components/Flash';
+import { FinraPanel } from '../components/FinraPanel';
 import { InsiderPanel } from '../components/smartmoney/InsiderPanel';
 import { FundHoldersPanel } from '../components/smartmoney/FundHoldersPanel';
 import { isAlwaysOpenSymbol } from '../lib/marketHours';
@@ -581,6 +582,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
 
           {tab === 'overview' && !data.symbol.endsWith('-USD') && <InsiderPanel symbol={data.symbol} />}
           {tab === 'overview' && !data.symbol.endsWith('-USD') && <FundHoldersPanel symbol={data.symbol} />}
+          {tab === 'overview' && !data.symbol.endsWith('-USD') && <FinraPanel symbol={data.symbol} />}
         </>
       )}
     </>

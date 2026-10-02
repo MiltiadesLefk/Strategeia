@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useCreateSleeve, useSleeves } from '../api/hooks';
+import { useCreateSleeve, useResumeSleeve, useSleevePauses, useSleeves } from '../api/hooks';
 import type { ApiError } from '../api/client';
 import { ErrorBanner, formatMoney, formatNumber, formatPct, formatR } from './common';
 
@@ -30,7 +30,9 @@ export function SleeveChip({ color, name }: { color: string | null | undefined; 
 export function SleeveSwitcher({ selected, onSelect }: { selected: string; onSelect: (key: string) => void }) {
   const { data: sleeves } = useSleeves();
   const [creating, setCreating] = useState(false);
+  const { data: pauses } = useSleevePauses();
   if (!sleeves) return null;
+  const paused = new Set((pauses ?? []).filter((p) => !p.resolved_at).map((p) => p.sleeve_key));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }} role="tablist" aria-label="Sleeve">
@@ -46,12 +48,14 @@ export function SleeveSwitcher({ selected, onSelect }: { selected: string; onSel
           >
             <SleeveChip color={s.color} name={s.name} />
             {!s.enabled && <span className="text-muted"> · off</span>}
+            {paused.has(s.key) && <span className="text-red"> · paused</span>}
           </button>
         ))}
         <button type="button" className="btn btn-secondary" onClick={() => setCreating((v) => !v)}>
           {creating ? 'Cancel' : '+ New sleeve'}
         </button>
       </div>
+      <SleevePauseNotice sleeveKey={selected} />
       {creating && <CreateSleeveForm onDone={(key) => { setCreating(false); if (key) onSelect(key); }} />}
     </div>
   );
@@ -127,6 +131,55 @@ export function SleevesOverview({ selected, onSelect }: { selected: string; onSe
               <td className="tabular-nums">{s.stats.total_trades ? `${formatNumber(s.stats.win_rate, 0)}%` : '—'}</td>
               <td className="tabular-nums">{formatR(s.stats.avg_rr)}</td>
               <td className="tabular-nums">{s.stats.total_trades}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Why the selected sleeve is paused, with a Resume button. Nothing shows when it is not paused. */
+function SleevePauseNotice({ sleeveKey }: { sleeveKey: string }) {
+  const { data: pauses } = useSleevePauses();
+  const resume = useResumeSleeve();
+  const active = (pauses ?? []).find((p) => p.sleeve_key === sleeveKey && !p.resolved_at);
+  if (!active) return null;
+  return (
+    <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }} data-testid="sleeve-paused">
+      <div style={{ flex: 1, minWidth: 240, fontSize: 13 }}>
+        <strong className="text-red">Paused ({active.reason})</strong> since {new Date(active.paused_at).toLocaleString()}:{' '}
+        {active.detail}. It opens no new positions; open positions are still managed.
+      </div>
+      <button type="button" className="btn btn-primary" disabled={resume.isPending} onClick={() => resume.mutate(sleeveKey)}>
+        {resume.isPending ? 'Resuming…' : 'Resume'}
+      </button>
+      {resume.error && <ErrorBanner message={(resume.error as ApiError).message} />}
+    </div>
+  );
+}
+
+/** Every pause a kill switch or drift alarm has placed, newest first. */
+export function PauseHistoryCard() {
+  const { data: pauses } = useSleevePauses();
+  const { data: sleeves } = useSleeves();
+  if (!pauses || pauses.length === 0) return null;
+  const nameOf = (key: string) => sleeves?.find((s) => s.key === key)?.name ?? key;
+  return (
+    <div className="card" data-testid="pause-history">
+      <h3 style={{ fontSize: 15, marginBottom: 8 }}>Pause history</h3>
+      <table>
+        <thead>
+          <tr><th>Sleeve</th><th>Reason</th><th>Paused</th><th>Resumed</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          {pauses.map((p) => (
+            <tr key={p.id}>
+              <td>{nameOf(p.sleeve_key)}</td>
+              <td>{p.reason}</td>
+              <td className="tabular-nums">{new Date(p.paused_at).toLocaleString()}</td>
+              <td className="tabular-nums">{p.resolved_at ? new Date(p.resolved_at).toLocaleString() : <span className="text-red">in force</span>}</td>
+              <td style={{ fontSize: 12 }}>{p.detail}</td>
             </tr>
           ))}
         </tbody>

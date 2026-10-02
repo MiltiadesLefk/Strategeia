@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useSettings, useSettingsStatus } from '../api/hooks';
-import { SleeveSwitcher, SleevesOverview, useSelectedSleeve } from '../components/SleeveSwitcher';
+import { PauseHistoryCard, SleeveSwitcher, SleevesOverview, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { LessonCell, LessonDetailRow } from '../components/TradeLesson';
 import { ThesisBrokenBadge, ThesisPanel } from '../components/ThesisPanel';
 import { StatCard } from '../components/StatCard';
@@ -241,6 +241,7 @@ export function PortfolioPage() {
       </div>
       <SleeveSwitcher selected={sleeve} onSelect={selectSleeve} />
       <SleevesOverview selected={sleeve} onSelect={selectSleeve} />
+      <PauseHistoryCard />
       {resetError && <ErrorBanner message={(resetError as ApiError).message} />}
 
       {statsLoading && <LoadingSpinner label="Loading portfolio…" />}

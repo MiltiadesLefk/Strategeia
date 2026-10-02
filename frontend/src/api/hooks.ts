@@ -45,7 +45,7 @@ import type {
   SmartMoneyStatus,
 } from './types';
 import type { HeatmapResponse, MacroResponse, RecapResponse, TerminalWindow } from './types';
-import type { FinraRefreshResponse, FinraSymbolResponse, WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
+import type { SleevePause, FinraRefreshResponse, FinraSymbolResponse, WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
 import type {
   BacktestBaseline,
   BacktestBenchmarks,
@@ -302,6 +302,23 @@ export function useUpdateSleeve() {
   return useMutation({
     mutationFn: ({ key, ...req }: SleeveUpdateRequest & { key: string }) =>
       api.patch<Sleeve>(`/api/sleeves/${encodeURIComponent(key)}`, req),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.sleeves }),
+  });
+}
+
+/** Every kill-switch pause, newest first; the ones with no resolved_at are in force. */
+export function useSleevePauses() {
+  return useQuery({
+    queryKey: [...qk.sleeves, 'pauses'],
+    queryFn: () => api.get<SleevePause[]>('/api/sleeves/pauses/history'),
+  });
+}
+
+/** Lifts a sleeve's pause so it can open positions again. */
+export function useResumeSleeve() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => api.post<void>(`/api/sleeves/${encodeURIComponent(key)}/resume`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.sleeves }),
   });
 }

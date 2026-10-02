@@ -436,6 +436,10 @@ export interface AppSettings {
   onboarding_risk_tolerance: string;
   onboarding_time_horizon: string;
   onboarding_experience: string;
+  /** Kill switches: pause a sleeve's new positions after a drawdown or when live results drift from the backtest. */
+  kill_switch_enabled: boolean;
+  kill_switch_drawdown_pct: number;
+  kill_switch_drift_psi: number;
   scan_universe_size: number;
   news_cards_enabled: boolean;
   news_card_batch_limit: number;
@@ -498,6 +502,9 @@ export interface SettingsUpdateRequest {
   onboarding_risk_tolerance?: string;
   onboarding_time_horizon?: string;
   onboarding_experience?: string;
+  kill_switch_enabled?: boolean;
+  kill_switch_drawdown_pct?: number;
+  kill_switch_drift_psi?: number;
   scan_universe_size?: number;
   news_cards_enabled?: boolean;
   news_card_batch_limit?: number;
@@ -2559,4 +2566,15 @@ export interface OnboardingSuggestion {
   style_description: string;
   risk_pct: number;
   reasons: string[];
+}
+
+/** One pause a kill switch or drift alarm placed on a sleeve; resolved_at null means it is in force. */
+export interface SleevePause {
+  id: number;
+  sleeve_key: string;
+  reason: string;
+  detail: string;
+  paused_at: string;
+  resolved_at: string | null;
+  alert_sent: boolean;
 }
