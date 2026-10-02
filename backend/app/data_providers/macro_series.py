@@ -91,9 +91,9 @@ CATALOGUE: tuple[SeriesInfo, ...] = (
     ),
     SeriesInfo(
         "ECB_HICP", "Euro-area inflation (HICP, annual rate)", "% year on year", _ECB, "monthly",
-        "Headline euro-area consumer inflation. The ECB froze this older dataset in early 2026 and moved to a "
-        "new one, so its newest point may be old: always check the last observation date.",
-        "ICP", "M.U2.N.000000.4.ANR",
+        "Headline euro-area consumer inflation, from the ECB's current HICP dataset (the older ICP dataset "
+        "stopped at 2025-12).",
+        "HICP", "M.U2.N.000000.4D0.ANR",
     ),
 )
 
