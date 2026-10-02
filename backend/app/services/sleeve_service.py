@@ -40,6 +40,7 @@ def build_sleeve_engine(
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         clock=clock,
         max_holding_days=settings.max_holding_days,
+        liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
         sleeve=None if is_core else sleeve,
     )
 

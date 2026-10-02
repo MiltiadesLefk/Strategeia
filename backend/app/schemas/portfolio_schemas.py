@@ -40,6 +40,9 @@ class PositionSchema(BaseModel):
     # How the exit was placed in time: see PaperPosition.exit_resolution / entry_day_check.
     exit_resolution: str | None = None
     entry_day_check: str | None = None
+    # Total slippage (bps) the entry / exit market fill paid; set only while liquidity-aware slippage is on.
+    entry_slippage_bps: float | None = None
+    exit_slippage_bps: float | None = None
     # The AI-written lesson for a closed trade (see services/lesson_service.py).
     lesson_text: str | None = None
     lesson_provider: str | None = None

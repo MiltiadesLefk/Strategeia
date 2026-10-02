@@ -133,6 +133,7 @@ def _build_engine(session: Session, provider: BacktestDataProvider, settings: Ap
         max_positions_per_sector=settings.max_positions_per_sector,
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         max_holding_days=settings.max_holding_days,
+        liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
         clock=current_as_of,
         intraday_exits=False,
     )

@@ -461,6 +461,10 @@ export interface AppSettings {
   max_concurrent_positions: number;
   /** Trading days before a stalled position is closed at the close; 0 = no limit. */
   max_holding_days: number;
+  /** Opt-in: market fills pay extra bps that grow with order size vs average daily volume. */
+  liquidity_slippage_enabled: boolean;
+  /** Extra bps at 100% of average daily volume (square-root law, capped at 100 bps). */
+  liquidity_slippage_coefficient: number;
   /** Notifications (Telegram): morning note, weekly digest, alerts on open positions. */
   morning_note_enabled: boolean;
   /** "HH:MM", New York time. */
@@ -526,6 +530,8 @@ export interface SettingsUpdateRequest {
   smart_money_followed_members?: string[];
   max_concurrent_positions?: number;
   max_holding_days?: number;
+  liquidity_slippage_enabled?: boolean;
+  liquidity_slippage_coefficient?: number;
   morning_note_enabled?: boolean;
   morning_note_time_et?: string;
   weekly_digest_enabled?: boolean;

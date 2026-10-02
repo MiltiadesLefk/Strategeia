@@ -182,6 +182,11 @@ def build_snapshot(settings: AppSettings) -> dict[str, Any]:
     if settings.ml_style_enabled:
         # Only while on, so an install that never uses it keeps its fingerprint.
         snapshot["ml"] = {"ml_min_expected_r": normalize(values["ml_min_expected_r"])}
+    if settings.liquidity_slippage_enabled:
+        # Only while on, so an install that never uses it keeps its fingerprint.
+        snapshot["liquidity_slippage"] = {
+            "liquidity_slippage_coefficient": normalize(values["liquidity_slippage_coefficient"])
+        }
     return snapshot
 
 

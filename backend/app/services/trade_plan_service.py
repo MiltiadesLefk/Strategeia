@@ -775,6 +775,7 @@ def generate_trade_plan(
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         clock=clock,
         max_holding_days=settings.max_holding_days,
+        liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
         sleeve=None if in_core else sleeve,
     )
     sizing = calculate_position_size(account_size, risk_pct, entry, stop, engine.available_cash())

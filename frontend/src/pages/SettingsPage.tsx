@@ -167,6 +167,8 @@ export function SettingsPage() {
   const [minConfidence, setMinConfidence] = useState(30);
   const [markToMarketMinutes, setMarkToMarketMinutes] = useState(15);
   const [maxHoldingDays, setMaxHoldingDays] = useState(20);
+  const [liquiditySlippage, setLiquiditySlippage] = useState(false);
+  const [liquidityCoefficient, setLiquidityCoefficient] = useState(100);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
   const [aiOverlayScores, setAiOverlayScores] = useState(true);
   const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
@@ -238,6 +240,8 @@ export function SettingsPage() {
     setMinConfidence(settings.min_confidence_for_trade);
     setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
     setMaxHoldingDays(settings.max_holding_days);
+    setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
+    setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
@@ -361,6 +365,8 @@ export function SettingsPage() {
         min_confidence_for_trade: minConfidence,
         mark_to_market_interval_minutes: markToMarketMinutes,
         max_holding_days: maxHoldingDays,
+        liquidity_slippage_enabled: liquiditySlippage,
+        liquidity_slippage_coefficient: liquidityCoefficient,
       },
       { onSuccess: () => flashSaved('account') },
     );
@@ -434,6 +440,8 @@ export function SettingsPage() {
     setMinConfidence(settings.min_confidence_for_trade);
     setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
     setMaxHoldingDays(settings.max_holding_days);
+    setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
+    setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
   }
 
   function resetAutomation() {
@@ -951,6 +959,37 @@ export function SettingsPage() {
             labelled 1-4 weeks, so the default 20 (four weeks) is the end of that horizon; a position that stalls
             past it ties up one of your slots and a sector cap. 0 turns the limit off. Applies to positions that
             are already open, so lowering it can close stalled ones at the next check.
+          </div>
+        </div>
+        <div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            Liquidity-Aware Slippage
+            <OnOffBadge on={liquiditySlippage} />
+          </label>
+          <select
+            value={liquiditySlippage ? 'enabled' : 'disabled'}
+            onChange={(e) => setLiquiditySlippage(e.target.value === 'enabled')}
+          >
+            <option value="disabled">Disabled — flat slippage only</option>
+            <option value="enabled">Enabled — bigger orders vs daily volume pay more</option>
+          </select>
+          {liquiditySlippage && (
+            <input
+              type="number"
+              value={liquidityCoefficient}
+              min={0}
+              max={1000}
+              step={10}
+              onChange={(e) => setLiquidityCoefficient(Number(e.target.value))}
+              style={{ marginTop: 6 }}
+            />
+          )}
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Off by default, so existing results don't change. When on, every market fill (entries, stop and time
+            exits; never take-profit limits) pays extra basis points on top of the flat slippage:
+            coefficient x sqrt(shares / 20-day average volume), capped at 100 bps. The number above is the extra bps
+            an order the size of a full day's volume would pay; at 1% of daily volume the default 100 costs 10 bps.
+            Backtests use the same model.
           </div>
         </div>
         <div>

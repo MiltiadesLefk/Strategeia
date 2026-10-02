@@ -700,6 +700,14 @@ class AppSettings(BaseModel):
     # bar to count days.
     max_holding_days: int = 20
 
+    # Liquidity-aware slippage (opt-in, off = the flat slippage_bps only, results
+    # unchanged): market fills pay extra bps that grow with the order's size
+    # relative to the symbol's 20-day average daily volume. The coefficient is the
+    # extra bps at 100% of ADV (square-root law, capped; see
+    # portfolio/liquidity_slippage.py). Part of the strategy fingerprint while on.
+    liquidity_slippage_enabled: bool = False
+    liquidity_slippage_coefficient: float = 100.0
+
     # Kill switches and drift alarms: a sleeve that trips one stops OPENING new
     # positions (open ones are managed as usual, nothing is closed) and a Telegram
     # alert is sent; you lift the pause by hand. Off until switched on.

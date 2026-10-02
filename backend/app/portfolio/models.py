@@ -171,6 +171,10 @@ class PaperPosition(SQLModel, table=True):
     # hour by hour: "hourly" once every hour is covered, "daily_only" when the hourly
     # history could not reach back to that day. None = not checked yet.
     entry_day_check: Optional[str] = None
+    # Total slippage in bps the entry / exit market fill paid (flat + liquidity part),
+    # recorded only while the liquidity-aware slippage setting is on; None otherwise.
+    entry_slippage_bps: Optional[float] = None
+    exit_slippage_bps: Optional[float] = None
     # The after-the-fact lesson an AI wrote for this closed trade (see
     # services/lesson_service.py): 2-4 sentences, plain text. Null until one is
     # written, and ALSO null when the AI could not write one: no template stands

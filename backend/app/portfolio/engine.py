@@ -40,6 +40,7 @@ from app.portfolio.intraday import (
     market_day_of,
 )
 from app.portfolio.kill_switch_models import active_pause
+from app.portfolio.liquidity_slippage import impact_bps
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, Sleeve, TradePlanRecord
 from app.portfolio.sleeves import (
     SleeveScope,
@@ -73,6 +74,9 @@ class ExitFound:
     hourly: pd.DataFrame | None = None
     # Daily bars to count before `hourly` (0 for an entry-day exit).
     daily_before: int = 0
+    # Total slippage in bps the market fill paid (flat + liquidity); None when the
+    # liquidity model is off or the exit was a limit fill.
+    slippage_bps: float | None = None
 
 
 def default_clock() -> datetime:
@@ -195,6 +199,7 @@ class PaperTradingEngine:
         max_holding_days: int | None = None,
         intraday_exits: bool = True,
         sleeve: Sleeve | None = None,
+        liquidity_slippage_coefficient: float | None = None,
     ):
         self._session = session
         # Only plain values are kept (not the ORM object, whose attributes expire
@@ -205,6 +210,10 @@ class PaperTradingEngine:
         self._starting_cash = starting_cash
         self._max_concurrent_positions = max_concurrent_positions
         self._slippage_bps = slippage_bps
+        # None / 0 = off: slippage is the flat slippage_bps only (see liquidity_slippage.py).
+        self._liquidity_coefficient = (
+            liquidity_slippage_coefficient if liquidity_slippage_coefficient and liquidity_slippage_coefficient > 0 else None
+        )
         self._commission_per_trade = commission_per_trade
         self._max_positions_per_sector = max_positions_per_sector
         self._max_position_pct_of_adv = max_position_pct_of_adv
@@ -274,15 +283,36 @@ class PaperTradingEngine:
 
     # ----------------------------------------------------------------- fills
 
-    def _slip(self, price: float, *, buying: bool) -> float:
+    def _market_bps(self, symbol: str, shares: float) -> float:
+        """Total slippage in bps for a market fill of `shares`: the flat
+        slippage_bps plus, when the liquidity model is on, the size-vs-ADV extra."""
+        extra = 0.0
+        if self._liquidity_coefficient is not None:
+            try:
+                adv = self._data_provider.get_quote(symbol).avg_volume_20d
+            except AllProvidersFailedError:
+                adv = None
+            extra = impact_bps(shares, adv, self._liquidity_coefficient)
+        return max(self._slippage_bps, 0.0) + extra
+
+    def _exit_bps(self, position: PaperPosition, *, market: bool = True) -> float | None:
+        """The bps to record for an exit; None when the model is off or the fill was a limit."""
+        if self._liquidity_coefficient is None or not market:
+            return None
+        return self._market_bps(position.symbol, position.shares)
+
+    def _slip(self, price: float, *, buying: bool, symbol: str | None = None, shares: float | None = None) -> float:
         """Market-order fills cross the spread and move with the book; this
         nudges the fill against the account by slippage_bps. Applied to
         entries and to stop exits (both market orders) — never to a
         take-profit, which is a resting limit order that fills at its price
         or better by construction."""
-        if self._slippage_bps <= 0:
+        bps = self._slippage_bps
+        if symbol is not None and shares is not None and self._liquidity_coefficient is not None:
+            bps = self._market_bps(symbol, shares)
+        if bps <= 0:
             return price
-        factor = self._slippage_bps / 10_000.0
+        factor = bps / 10_000.0
         return price * (1 + factor) if buying else price * (1 - factor)
 
     @staticmethod
@@ -371,6 +401,18 @@ class PaperTradingEngine:
 
         shares = self._cap_by_liquidity(trade_plan.symbol, shares)
 
+        entry_slippage_bps = None
+        if self._liquidity_coefficient is not None and shares > 0:
+            # Size is known only now, so the size-dependent part is added to the
+            # fill here. A higher fill price can break the cash check: re-size.
+            flat = max(self._slippage_bps, 0.0)
+            extra = self._market_bps(trade_plan.symbol, shares) - flat
+            entry_slippage_bps = flat + extra
+            factor = extra / 10_000.0
+            entry_price = entry_price * (1 + factor) if trade_plan.direction == "long" else entry_price * (1 - factor)
+            if shares * entry_price > available and entry_price > 0:
+                shares = math.floor(available / entry_price)
+
         if shares <= 0:
             raise InsufficientCashError(
                 f"Account can't afford 1 share of {trade_plan.symbol} at ${entry_price:.2f} "
@@ -397,6 +439,7 @@ class PaperTradingEngine:
             fees_paid=self._commission_per_trade,
             opened_at=now,
             sleeve_id=sleeve_id,
+            entry_slippage_bps=entry_slippage_bps,
         )
         trade_plan.status = "executed"
 
@@ -495,6 +538,7 @@ class PaperTradingEngine:
         held_bars: pd.DataFrame | None = None,
         last_bar: LastBar = "complete",
         resolution: str | None = None,
+        slippage_bps: float | None = None,
     ) -> PaperPosition:
         """`held_bars` / `last_bar` are the bars the position was open for (after the
         entry bar, up to the exit bar) and how the last one relates to the exit, for
@@ -529,6 +573,7 @@ class PaperTradingEngine:
         position.close_price = close_price
         position.close_reason = reason
         position.exit_resolution = resolution
+        position.exit_slippage_bps = slippage_bps
         position.realized_pnl = realized_pnl
         position.realized_r = realized_r
         position.fees_paid = fees
@@ -691,16 +736,20 @@ class PaperTradingEngine:
                                 number,
                                 hourly=located.hourly,
                                 daily_before=number - 1,
+                                slippage_bps=self._exit_bps(position, market=located.reason == "stop_hit"),
                             )
                         resolution = RESOLUTION_DAILY_AMBIGUOUS
                 if stop_touched:
                     fill = self._exit_fill_price(position.direction, bar_open, position.stop_loss, is_stop=True)
-                    return ExitFound(self._slip(fill, buying=not is_long), "stop_hit", resolution, number)
+                    fill = self._slip(fill, buying=not is_long, symbol=position.symbol, shares=position.shares)
+                    return ExitFound(fill, "stop_hit", resolution, number, slippage_bps=self._exit_bps(position))
                 fill = self._exit_fill_price(position.direction, bar_open, position.tp1, is_stop=False)
                 return ExitFound(fill, "tp1_hit", resolution, number)
             if holding_limit is not None and number >= holding_limit and self._bar_is_final(position.symbol, bar):
-                fill = self._slip(float(bar["close"]), buying=position.direction == "short")
-                return ExitFound(fill, "time_exit", RESOLUTION_DAILY, number)
+                fill = self._slip(
+                    float(bar["close"]), buying=position.direction == "short", symbol=position.symbol, shares=position.shares
+                )
+                return ExitFound(fill, "time_exit", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
         return None
 
     def _hourly_fill(self, position: PaperPosition, hour_open: float, reason: str) -> float:
@@ -709,7 +758,9 @@ class PaperTradingEngine:
         is_stop = reason == "stop_hit"
         level = position.stop_loss if is_stop else position.tp1
         fill = self._exit_fill_price(position.direction, hour_open, level, is_stop=is_stop)
-        return self._slip(fill, buying=position.direction == "short") if is_stop else fill
+        if not is_stop:
+            return fill
+        return self._slip(fill, buying=position.direction == "short", symbol=position.symbol, shares=position.shares)
 
     def _locate_in_hours(self, position: PaperPosition, bar: pd.Series, hourly: HourlyBars) -> ExitFound | None:
         """Which level a daily bar that held BOTH of them reached first, from that
@@ -728,7 +779,10 @@ class PaperTradingEngine:
             return None
         fill = self._hourly_fill(position, float(hours["open"].iloc[touch.row]), touch.reason)
         resolution = RESOLUTION_HOURLY_AMBIGUOUS if touch.both else RESOLUTION_HOURLY
-        return ExitFound(fill, touch.reason, resolution, 0, hourly=hours.iloc[: touch.row + 1])
+        return ExitFound(
+            fill, touch.reason, resolution, 0, hourly=hours.iloc[: touch.row + 1],
+            slippage_bps=self._exit_bps(position, market=touch.reason == "stop_hit"),
+        )
 
     def _scan_entry_day(self, position: PaperPosition, hourly: HourlyBars) -> ExitFound | None:
         """Checks the part of the ENTRY day after the position existed, hour by hour.
@@ -775,7 +829,10 @@ class PaperTradingEngine:
                 fill = self._hourly_fill(position, float(after["open"].iloc[touch.row]), touch.reason)
                 held = after.iloc[(0 if entry_row is None else entry_row + 1) : touch.row + 1]
             resolution = RESOLUTION_HOURLY_AMBIGUOUS if touch.both else RESOLUTION_HOURLY
-            return ExitFound(fill, touch.reason, resolution, 0, hourly=held)
+            return ExitFound(
+                fill, touch.reason, resolution, 0, hourly=held,
+                slippage_bps=self._exit_bps(position, market=touch.reason == "stop_hit"),
+            )
         if now >= end and rows["start"].iloc[-1] + HOURLY_BAR >= end:
             self._record_entry_day_check(position, ENTRY_DAY_HOURLY)
         elif now >= end + ENTRY_DAY_DATA_GRACE:
@@ -894,6 +951,7 @@ class PaperTradingEngine:
                     held_bars=held,
                     last_bar="complete" if found.reason == "time_exit" else "exit",
                     resolution=found.resolution,
+                    slippage_bps=found.slippage_bps,
                 )
             )
 
