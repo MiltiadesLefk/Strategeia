@@ -46,6 +46,9 @@ class SettingsUpdateRequest(BaseModel):
     committee_max_llm_calls: int | None = Field(default=None, ge=6, le=40)
     committee_debate_rounds: int | None = Field(default=None, ge=1, le=3)
     committee_risk_rounds: int | None = Field(default=None, ge=1, le=3)
+    onboarding_risk_tolerance: Literal["", "low", "medium", "high"] | None = None
+    onboarding_time_horizon: Literal["", "days", "weeks", "months"] | None = None
+    onboarding_experience: Literal["", "beginner", "intermediate", "advanced"] | None = None
     scan_universe_size: int | None = Field(default=None, gt=0)
     news_cards_enabled: bool | None = None
     news_card_batch_limit: int | None = Field(default=None, ge=1, le=30)

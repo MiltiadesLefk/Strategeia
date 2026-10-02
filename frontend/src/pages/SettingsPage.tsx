@@ -11,6 +11,7 @@ import { NotificationsSettingsCard } from '../components/NotificationsSettingsCa
 import { CongressFollowCard } from '../components/CongressFollowCard';
 import { FundFollowCard } from '../components/FundFollowCard';
 import { NewsCardsSettingsCard } from '../components/NewsCardsSettingsCard';
+import { OnboardingCard } from '../components/OnboardingCard';
 import { CommitteeSettingsCard } from '../components/CommitteeSettingsCard';
 import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
@@ -1025,6 +1026,7 @@ export function SettingsPage() {
 
       <NewsCardsSettingsCard />
       <ThesisAlertsSettingsCard />
+      <OnboardingCard />
       <CommitteeSettingsCard />
 
       <CongressFollowCard />

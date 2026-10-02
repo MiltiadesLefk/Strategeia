@@ -4,6 +4,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.analysis.onboarding import OnboardingAnswers, OnboardingSuggestion, suggest
 from app.api.deps import require_auth
 from app.config import load_app_settings, update_app_settings
 from app.data_providers.finnhub_provider import FinnhubProvider
@@ -68,6 +69,13 @@ def get_status() -> StatusResponse:
         finnhub_online=finnhub_online,
         telegram_online=telegram_online,
     )
+
+
+@router.post("/onboarding-suggestion", response_model=OnboardingSuggestion)
+def onboarding_suggestion(answers: OnboardingAnswers) -> OnboardingSuggestion:
+    """A suggested style and risk percentage from the questionnaire. Computes
+    only: nothing is saved and no setting changes."""
+    return suggest(answers)
 
 
 @router.put("")

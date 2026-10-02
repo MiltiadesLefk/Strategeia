@@ -1271,3 +1271,13 @@ export function useRefreshFinra() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['finra'] }),
   });
 }
+
+import type { OnboardingAnswers, OnboardingSuggestion } from './types';
+
+/** Computes a suggested style and risk % from the questionnaire. Saves nothing. */
+export function useOnboardingSuggestion() {
+  return useMutation({
+    mutationFn: (answers: OnboardingAnswers) =>
+      api.post<OnboardingSuggestion>('/api/settings/onboarding-suggestion', answers),
+  });
+}

@@ -432,6 +432,10 @@ export interface AppSettings {
   committee_max_llm_calls: number;
   committee_debate_rounds: number;
   committee_risk_rounds: number;
+  /** First-run questionnaire answers (empty = not answered). Stored only; a suggestion changes nothing until Apply. */
+  onboarding_risk_tolerance: string;
+  onboarding_time_horizon: string;
+  onboarding_experience: string;
   scan_universe_size: number;
   news_cards_enabled: boolean;
   news_card_batch_limit: number;
@@ -491,6 +495,9 @@ export interface SettingsUpdateRequest {
   committee_max_llm_calls?: number;
   committee_debate_rounds?: number;
   committee_risk_rounds?: number;
+  onboarding_risk_tolerance?: string;
+  onboarding_time_horizon?: string;
+  onboarding_experience?: string;
   scan_universe_size?: number;
   news_cards_enabled?: boolean;
   news_card_batch_limit?: number;
@@ -2539,4 +2546,17 @@ export interface FinraSymbolResponse {
   latest_trade_date: string | null;
   days: FinraDay[];
   signal: ShadowSignal | null;
+}
+
+export interface OnboardingAnswers {
+  risk_tolerance: string;
+  time_horizon: string;
+  experience: string;
+}
+
+export interface OnboardingSuggestion {
+  style: string;
+  style_description: string;
+  risk_pct: number;
+  reasons: string[];
 }

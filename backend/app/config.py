@@ -612,6 +612,12 @@ class AppSettings(BaseModel):
     committee_debate_rounds: int = Field(default=1, ge=1, le=3)
     committee_risk_rounds: int = Field(default=1, ge=1, le=3)
 
+    # First-run questionnaire answers ("" = not answered). Stored only; the suggestion they
+    # produce changes no setting until the user presses Apply.
+    onboarding_risk_tolerance: str = ""
+    onboarding_time_horizon: str = ""
+    onboarding_experience: str = ""
+
     scan_universe_size: int = 50
 
     # News cards: an AI (the configured provider's routine model) labels each
