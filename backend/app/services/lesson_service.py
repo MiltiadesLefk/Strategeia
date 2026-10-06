@@ -98,6 +98,7 @@ _BENCHMARK_PERIODS: tuple[tuple[int, str], ...] = ((80, "3mo"), (170, "6mo"), (3
 _CLOSE_REASON_TEXT = {
     "stop_hit": "stop-loss hit",
     "tp1_hit": "first profit target hit",
+    "tp2_hit": "second profit target hit (after selling part at the first)",
     "time_exit": "holding-time limit reached",
     "manual": "closed manually",
 }

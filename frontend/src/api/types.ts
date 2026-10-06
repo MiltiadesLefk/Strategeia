@@ -271,6 +271,8 @@ export interface MarketSession {
   as_of: string;
 }
 
+export type ScaleOutStopMode = 'breakeven' | 'trail';
+
 export interface Position {
   id: number;
   trade_plan_id: number | null;
@@ -307,6 +309,18 @@ export interface Position {
   exit_resolution?: string | null;
   /** Whether the rest of the entry day was checked hour by hour: 'hourly' | 'daily_only'; null = not yet. */
   entry_day_check?: string | null;
+  /** Partial scale-out at TP1 (all null for a position that never scaled out). `shares` is then what
+   *  is still held; realized_pnl / realized_r cover the whole trade, R per the size at entry. */
+  original_shares?: number | null;
+  partial_shares?: number | null;
+  partial_fill_price?: number | null;
+  /** Profit banked at TP1, before fees. */
+  partial_gross_pnl?: number | null;
+  partial_resolution?: string | null;
+  /** The remainder's stop (breakeven); stop_loss stays the original one. */
+  runner_stop?: number | null;
+  /** Set only in trail mode: how far behind the best price the stop follows. */
+  runner_trail_distance?: number | null;
   /** The AI-written lesson for a closed trade (2-4 sentences). Null until one is written, and
    *  also null when the AI could not write one: nothing templated stands in (see lesson_error). */
   lesson_text?: string | null;
@@ -465,6 +479,14 @@ export interface AppSettings {
   liquidity_slippage_enabled: boolean;
   /** Extra bps at 100% of average daily volume (square-root law, capped at 100 bps). */
   liquidity_slippage_coefficient: number;
+  /** Opt-in: TP1 sells part of the position and the rest runs to TP2 (default off). */
+  scale_out_enabled: boolean;
+  /** Share of the position sold at TP1 (0.1 to 0.9). */
+  scale_out_fraction: number;
+  /** Where the remainder's stop goes after TP1: its entry price, or trailing behind the best price. */
+  scale_out_stop_mode: ScaleOutStopMode;
+  /** Trail distance in multiples of the original risk (trail mode only). */
+  scale_out_trail_r: number;
   /** Notifications (Telegram): morning note, weekly digest, alerts on open positions. */
   morning_note_enabled: boolean;
   /** "HH:MM", New York time. */
@@ -532,6 +554,10 @@ export interface SettingsUpdateRequest {
   max_holding_days?: number;
   liquidity_slippage_enabled?: boolean;
   liquidity_slippage_coefficient?: number;
+  scale_out_enabled?: boolean;
+  scale_out_fraction?: number;
+  scale_out_stop_mode?: ScaleOutStopMode;
+  scale_out_trail_r?: number;
   morning_note_enabled?: boolean;
   morning_note_time_et?: string;
   weekly_digest_enabled?: boolean;

@@ -16,7 +16,7 @@ import { OnboardingCard } from '../components/OnboardingCard';
 import { CommitteeSettingsCard } from '../components/CommitteeSettingsCard';
 import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
-import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
+import type { AiOverlayObjectionAction, ResearchMode, ScaleOutStopMode, TestConnectionOverrides } from '../api/types';
 
 const LLM_OPTIONS = [
   { value: 'none', label: 'None (rule-based text)' },
@@ -169,6 +169,10 @@ export function SettingsPage() {
   const [maxHoldingDays, setMaxHoldingDays] = useState(20);
   const [liquiditySlippage, setLiquiditySlippage] = useState(false);
   const [liquidityCoefficient, setLiquidityCoefficient] = useState(100);
+  const [scaleOut, setScaleOut] = useState(false);
+  const [scaleOutFractionPct, setScaleOutFractionPct] = useState(50);
+  const [scaleOutStopMode, setScaleOutStopMode] = useState<ScaleOutStopMode>('breakeven');
+  const [scaleOutTrailR, setScaleOutTrailR] = useState(1);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
   const [aiOverlayScores, setAiOverlayScores] = useState(true);
   const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
@@ -242,6 +246,10 @@ export function SettingsPage() {
     setMaxHoldingDays(settings.max_holding_days);
     setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
     setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
+    setScaleOut(settings.scale_out_enabled ?? false);
+    setScaleOutFractionPct(Math.round((settings.scale_out_fraction ?? 0.5) * 100));
+    setScaleOutStopMode(settings.scale_out_stop_mode ?? 'breakeven');
+    setScaleOutTrailR(settings.scale_out_trail_r ?? 1);
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
@@ -367,6 +375,10 @@ export function SettingsPage() {
         max_holding_days: maxHoldingDays,
         liquidity_slippage_enabled: liquiditySlippage,
         liquidity_slippage_coefficient: liquidityCoefficient,
+        scale_out_enabled: scaleOut,
+        scale_out_fraction: Math.min(0.9, Math.max(0.1, scaleOutFractionPct / 100)),
+        scale_out_stop_mode: scaleOutStopMode,
+        scale_out_trail_r: scaleOutTrailR,
       },
       { onSuccess: () => flashSaved('account') },
     );
@@ -442,6 +454,10 @@ export function SettingsPage() {
     setMaxHoldingDays(settings.max_holding_days);
     setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
     setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
+    setScaleOut(settings.scale_out_enabled ?? false);
+    setScaleOutFractionPct(Math.round((settings.scale_out_fraction ?? 0.5) * 100));
+    setScaleOutStopMode(settings.scale_out_stop_mode ?? 'breakeven');
+    setScaleOutTrailR(settings.scale_out_trail_r ?? 1);
   }
 
   function resetAutomation() {
@@ -990,6 +1006,59 @@ export function SettingsPage() {
             coefficient x sqrt(shares / 20-day average volume), capped at 100 bps. The number above is the extra bps
             an order the size of a full day's volume would pay; at 1% of daily volume the default 100 costs 10 bps.
             Backtests use the same model.
+          </div>
+        </div>
+        <div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            Scale Out at TP1
+            <OnOffBadge on={scaleOut} />
+          </label>
+          <select value={scaleOut ? 'enabled' : 'disabled'} onChange={(e) => setScaleOut(e.target.value === 'enabled')}>
+            <option value="disabled">Disabled - a position closes fully at TP1</option>
+            <option value="enabled">Enabled - sell part at TP1, let the rest run to TP2</option>
+          </select>
+          {scaleOut && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
+              <label className="text-muted" style={{ fontSize: 12 }}>
+                Sell at TP1 (%)
+                <input
+                  type="number"
+                  value={scaleOutFractionPct}
+                  min={10}
+                  max={90}
+                  step={5}
+                  onChange={(e) => setScaleOutFractionPct(Number(e.target.value))}
+                  style={{ marginLeft: 6, width: 80 }}
+                />
+              </label>
+              <select value={scaleOutStopMode} onChange={(e) => setScaleOutStopMode(e.target.value as ScaleOutStopMode)}>
+                <option value="breakeven">The rest's stop moves to breakeven</option>
+                <option value="trail">The rest's stop trails the best price</option>
+              </select>
+              {scaleOutStopMode === 'trail' && (
+                <label className="text-muted" style={{ fontSize: 12 }}>
+                  Trail distance (x original risk)
+                  <input
+                    type="number"
+                    value={scaleOutTrailR}
+                    min={0.25}
+                    max={5}
+                    step={0.25}
+                    onChange={(e) => setScaleOutTrailR(Number(e.target.value))}
+                    style={{ marginLeft: 6, width: 80 }}
+                  />
+                </label>
+              )}
+            </div>
+          )}
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Off by default, so existing results don't change. When on, reaching TP1 sells that share of the position
+            (a limit fill, no slippage) and the rest runs with a stop at your entry price (or trailing behind the best
+            price by the distance above, never below your entry), then closes at TP2, that stop, or the holding-time
+            limit. It is still one trade: its P&amp;L and R count the part sold and the rest together, R per the size
+            you entered with. On the day TP1 is reached a daily bar cannot show whether its low came before or after,
+            so a dip through the new stop that day counts as coming after (the cautious reading). Backtests use the
+            same rules. Turning it off later still manages positions that already sold a part.
           </div>
         </div>
         <div>

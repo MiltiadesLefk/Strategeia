@@ -134,6 +134,9 @@ def _build_engine(session: Session, provider: BacktestDataProvider, settings: Ap
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         max_holding_days=settings.max_holding_days,
         liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
+        scale_out_fraction=settings.scale_out_fraction if settings.scale_out_enabled else None,
+        scale_out_stop_mode=settings.scale_out_stop_mode,
+        scale_out_trail_r=settings.scale_out_trail_r,
         clock=current_as_of,
         intraday_exits=False,
     )
@@ -405,7 +408,7 @@ def _collect_trades(
             "planned_entry_price": position.planned_entry_price,
             "stop_loss": position.stop_loss,
             "tp1": position.tp1,
-            "shares": position.shares,
+            "shares": position.original_shares or position.shares,
             "confidence_points": info.get("confidence_points"),
             "confidence_points_max": info.get("confidence_points_max"),
             "confidence_score": info.get("confidence_score"),
@@ -427,8 +430,8 @@ def _collect_trades(
                 price = provider.get_quote(position.symbol).price
             sign = 1 if position.direction == "long" else -1
             fees = position.fees_paid or 0.0
-            pnl = (price - position.entry_price) * position.shares * sign - fees
-            risk = abs(position.entry_price - position.stop_loss) * position.shares
+            pnl = (price - position.entry_price) * position.shares * sign + (position.partial_gross_pnl or 0.0) - fees
+            risk = abs(position.entry_price - position.stop_loss) * (position.original_shares or position.shares)
             row.update(
                 exit_at=None, exit_date=None, exit_price=price, close_reason="open_at_end", realized_pnl=pnl,
                 realized_r=pnl / risk if risk > 0 else 0.0, fees_paid=fees,

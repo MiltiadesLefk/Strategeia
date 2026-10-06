@@ -708,6 +708,16 @@ class AppSettings(BaseModel):
     liquidity_slippage_enabled: bool = False
     liquidity_slippage_coefficient: float = 100.0
 
+    # Partial scale-out at TP1 (opt-in, off = a position closes fully at TP1 exactly as
+    # before, results unchanged): sell `scale_out_fraction` of the shares at TP1, then
+    # move the rest's stop to breakeven (or trail it `scale_out_trail_r` x the original
+    # risk behind the best price) and let it run to TP2, the stop or the time limit.
+    # Part of the strategy fingerprint while on.
+    scale_out_enabled: bool = False
+    scale_out_fraction: float = 0.5
+    scale_out_stop_mode: Literal["breakeven", "trail"] = "breakeven"
+    scale_out_trail_r: float = 1.0
+
     # Kill switches and drift alarms: a sleeve that trips one stops OPENING new
     # positions (open ones are managed as usual, nothing is closed) and a Telegram
     # alert is sent; you lift the pause by hand. Off until switched on.

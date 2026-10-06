@@ -24,6 +24,7 @@ import { Flash } from '../components/Flash';
 const CLOSE_REASON_LABELS: Record<string, string> = {
   stop_hit: 'Stop',
   tp1_hit: 'Target (TP1)',
+  tp2_hit: 'Target (TP2)',
   time_exit: 'Time limit',
   manual: 'Manual',
 };
@@ -63,7 +64,7 @@ function ActivePositionCard({ position }: { position: Position }) {
 
   const levels: PriceLevel[] = [
     { price: position.entry_price, color: '#2563eb', title: 'Entry' },
-    { price: position.stop_loss, color: '#ef4444', title: 'SL' },
+    { price: position.partial_fill_price != null ? (position.runner_stop ?? position.entry_price) : position.stop_loss, color: '#ef4444', title: 'SL' },
     { price: position.tp1, color: '#10b981', title: 'TP1' },
     { price: position.tp2, color: '#10b981', title: 'TP2' },
   ];
@@ -82,7 +83,7 @@ function ActivePositionCard({ position }: { position: Position }) {
   const unrealizedDollars = currentPrice !== undefined ? (currentPrice - position.entry_price) * position.shares * sign : null;
   const currentR = currentPrice !== undefined && riskPerShare > 0 ? ((currentPrice - position.entry_price) * sign) / riskPerShare : null;
   // How much room is left before the stop, as a share of the current price.
-  const roomToStopPct = currentPrice !== undefined && currentPrice > 0 ? ((currentPrice - position.stop_loss) * sign * 100) / currentPrice : null;
+  const roomToStopPct = currentPrice !== undefined && currentPrice > 0 ? ((currentPrice - (position.partial_fill_price != null ? (position.runner_stop ?? position.entry_price) : position.stop_loss)) * sign * 100) / currentPrice : null;
   // Time limit: which trading day this is, counted from the bars actually on the
   // chart (bars after the entry bar; today's still-forming bar counts as "today").
   // Only shown when the entry bar is inside the loaded window, so it is never a guess.
@@ -93,6 +94,10 @@ function ActivePositionCard({ position }: { position: Position }) {
     candles && candles.length > 0 && candles[0].date <= entryDate ? candles.filter((c) => c.date > entryDate).length : null;
   const slipped =
     position.planned_entry_price != null && Math.abs(position.planned_entry_price - position.entry_price) > 0.005;
+  // Scale-out: part was sold at TP1, so `shares` is only what is still held and the stop in force
+  // is the runner's (the original stop_loss stays the R basis).
+  const scaledOut = position.partial_fill_price != null && position.original_shares != null;
+  const activeStop = scaledOut ? (position.runner_stop ?? position.entry_price) : position.stop_loss;
 
   return (
     <div className="card" ref={ref}>
@@ -104,6 +109,17 @@ function ActivePositionCard({ position }: { position: Position }) {
           <span className="text-muted" style={{ fontSize: 12 }}>
             {position.shares} shares @ {formatMoney(position.entry_price)}
           </span>
+          {scaledOut && (
+            <span
+              className="text-muted"
+              style={{ fontSize: 12 }}
+              title={`Sold ${position.partial_shares} of ${position.original_shares} shares at TP1 (profit ${formatMoney(position.partial_gross_pnl ?? null)} before fees). The rest runs to TP2 with its stop at ${formatMoney(activeStop)}${position.runner_trail_distance ? ', trailing' : ' (breakeven)'}.`}
+            >
+              · sold {position.partial_shares} @ {formatMoney(position.partial_fill_price ?? null)} (banked{' '}
+              {formatMoney(position.partial_gross_pnl ?? null)}), stop now {formatMoney(activeStop)}
+              {position.runner_trail_distance ? ' trailing' : ''}
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {unrealizedPct !== null && unrealizedDollars !== null && (
@@ -155,7 +171,7 @@ function ActivePositionCard({ position }: { position: Position }) {
           <div className="text-muted" style={{ fontSize: 11 }}>
             Stop Loss
           </div>
-          <div className="tabular-nums text-red">{formatMoney(position.stop_loss)}</div>
+          <div className="tabular-nums text-red">{formatMoney(position.partial_fill_price != null ? (position.runner_stop ?? position.entry_price) : position.stop_loss)}</div>
         </div>
         <div>
           {/* The number that actually matters minute to minute: how far the
@@ -330,10 +346,13 @@ export function PortfolioPage() {
                     <DirectionBadge direction={p.direction} />
                   </td>
                   <td className="tabular-nums">{formatMoney(p.entry_price)}</td>
-                  <td className="tabular-nums">{p.shares}</td>
+                  <td className="tabular-nums" title={p.original_shares != null ? `Sold ${p.partial_shares} at TP1, ${p.shares} at the exit` : undefined}>
+                    {p.original_shares ?? p.shares}
+                  </td>
                   <td className="tabular-nums">{formatMoney(p.close_price)}</td>
                   <td className="text-muted" title={exitResolutionHint(p)}>
                     {closeReasonLabel(p.close_reason)}
+                    {p.partial_fill_price != null ? ` (+ ${p.partial_shares} sold at ${formatMoney(p.partial_fill_price)})` : ''}
                   </td>
                   <td className={`tabular-nums ${p.realized_pnl && p.realized_pnl > 0 ? 'text-green' : p.realized_pnl && p.realized_pnl < 0 ? 'text-red' : ''}`}>
                     {p.realized_pnl !== null ? formatMoney(p.realized_pnl) : '—'}

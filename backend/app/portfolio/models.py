@@ -9,7 +9,7 @@ from app.timeutil import utcnow_naive
 
 TradePlanStatus = Literal["pending", "executed", "discarded", "no_trade"]
 PositionStatus = Literal["open", "closed"]
-CloseReason = Literal["stop_hit", "tp1_hit", "time_exit", "manual"]
+CloseReason = Literal["stop_hit", "tp1_hit", "tp2_hit", "time_exit", "manual"]
 
 
 class TradePlanRecord(SQLModel, table=True):
@@ -175,6 +175,25 @@ class PaperPosition(SQLModel, table=True):
     # recorded only while the liquidity-aware slippage setting is on; None otherwise.
     entry_slippage_bps: Optional[float] = None
     exit_slippage_bps: Optional[float] = None
+    # Partial scale-out (Settings -> Scale out at TP1, off by default; see the engine's
+    # _apply_partial). All None on every position that never scaled out, which is every
+    # position while the setting is off. After a partial, `shares` is what is STILL held,
+    # `original_shares` the size at entry (the R denominator), `partial_gross_pnl` the
+    # profit banked at TP1 before fees, and `runner_stop` the remainder's stop (the entry
+    # price, i.e. breakeven; stop_loss stays the ORIGINAL stop so R keeps one meaning).
+    # `runner_trail_distance` is set only in trail mode: the stop then follows the best
+    # price since the partial at that distance, never below runner_stop. `partial_bar_day`
+    # (market-time ISO date) is where a later sweep resumes; `partial_at` is the hour's
+    # start (naive UTC) when the partial was found on an hourly bar, else None.
+    original_shares: Optional[int] = None
+    partial_shares: Optional[int] = None
+    partial_fill_price: Optional[float] = None
+    partial_gross_pnl: Optional[float] = None
+    partial_resolution: Optional[str] = None
+    partial_bar_day: Optional[str] = None
+    partial_at: Optional[datetime] = None
+    runner_stop: Optional[float] = None
+    runner_trail_distance: Optional[float] = None
     # The after-the-fact lesson an AI wrote for this closed trade (see
     # services/lesson_service.py): 2-4 sentences, plain text. Null until one is
     # written, and ALSO null when the AI could not write one: no template stands

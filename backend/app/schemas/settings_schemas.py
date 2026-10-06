@@ -72,6 +72,10 @@ class SettingsUpdateRequest(BaseModel):
     max_holding_days: int | None = Field(default=None, ge=0, le=60)
     liquidity_slippage_enabled: bool | None = None
     liquidity_slippage_coefficient: float | None = Field(default=None, ge=0, le=1000)
+    scale_out_enabled: bool | None = None
+    scale_out_fraction: float | None = Field(default=None, ge=0.1, le=0.9)
+    scale_out_stop_mode: Literal["breakeven", "trail"] | None = None
+    scale_out_trail_r: float | None = Field(default=None, ge=0.25, le=5)
     kill_switch_enabled: bool | None = None
     kill_switch_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
     kill_switch_drift_psi: float | None = Field(default=None, ge=0, le=5)
