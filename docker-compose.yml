@@ -36,7 +36,7 @@ services:
       # Beta: every screen (Company dropdown, Market Scan, dashboard, auto-scan)
       # sees only these symbols — see data_providers/universe.py. Remove the
       # line to scan the full bundled universe again.
-      - STRATEGEIA_DEV_TICKERS=NVDA,AAPL
+      - STRATEGEIA_DEV_TICKERS=NVDA,AAPL,VST
       # The contact SEC EDGAR sees on each insider-trade request (the SEC
       # asks every program that downloads from it to say who runs it). Set
       # it in the same gitignored `.env` as CLAUDE_CODE_OAUTH_TOKEN above,
