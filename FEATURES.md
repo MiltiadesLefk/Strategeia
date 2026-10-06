@@ -731,6 +731,7 @@ The code is `backend/app/portfolio/missed_trades.py` (sorting, rebuilding, walki
 - **Gaps:** a day (or, when hourly bars are used, an hour) that opens past the stop fills at the **open**
   (worse). One that opens past the target fills at the **open** (better).
 - Stop exits pay slippage (a market order). Target exits don't (a resting limit order).
+- **Liquidity-aware slippage (opt-in, Settings -> Paper Account, off by default):** when on, every market fill (entry, stop exit, time exit) pays extra basis points on top of the flat slippage: `coefficient x sqrt(shares / 20-day average volume)`, capped at 100 bps (default coefficient 100, so 1% of daily volume costs 10 bps). Target exits still pay nothing. The slippage actually paid is stored on the position (`entry_slippage_bps`, `exit_slippage_bps`). Backtests use the same engine and the same setting. The enabled flag and coefficient join the strategy-version fingerprint only while on. The missed-trades study stays on the flat slippage (it has no volume data).
 - A **manual close** from the Portfolio page closes at the current market price.
 - **Why a time limit:** a stalled position used to sit open forever, holding one of the 5 slots and
   a sector slot while its original reason aged. Turning the limit on changed behaviour for stalled
@@ -1532,6 +1533,7 @@ Every call the app makes to a source is counted once, in one place, since the se
 | Default risk per trade | 1% | Sets the share count (§6) |
 | Exit-check interval | 15 minutes | How often positions are checked |
 | Slippage | 5 bps | The cost added to market fills (entries and stops) |
+| Liquidity-aware slippage (`liquidity_slippage_enabled`, `liquidity_slippage_coefficient`) | off, 100 | When on, market fills pay extra bps that grow with order size versus average daily volume (§7). The coefficient is the extra bps at 100% of daily volume, capped at 100 bps |
 | Commission per trade | $0 | — |
 | Watchers on / off (`watchers_enabled`) | off | Master switch for the background watchers (§19). Installed: the SEC filings watcher, the Fed watcher and the posts watcher |
 | What a watcher event does (`watchers_action`) | record, alert and re-evaluate | `record`, `alert` or `alert_and_reevaluate` (§19) |
@@ -1639,7 +1641,7 @@ Every call the app makes to a source is counted once, in one place, since the se
   target-hit day's real high are never counted (§7). Trades closed before the figures existed, or with
   no price history at the time, show a dash until the backfill is run by hand. The best price *after*
   an exit is unknowable, so "were the targets too near?" cannot be answered from these numbers.
-- **Slippage is a flat 5 bps.** It doesn't grow for thin stocks or big orders.
+- **Slippage is a flat 5 bps by default.** It only grows for thin stocks or big orders if you switch on liquidity-aware slippage (§7), which is a rough square-root rule, not a calibrated model.
 - **Intraday charts (1D, 1W)** only come from Yahoo. No honest free second source exists: Stooq now
   blocks scripted requests, Finnhub's free plan has no candles, and Nasdaq's public chart only gives
   today's per-minute prices (no open/high/low, no volume, no earlier days). When Yahoo is
