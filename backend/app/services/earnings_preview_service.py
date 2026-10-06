@@ -176,7 +176,7 @@ def build_earnings_preview(
     implied_covers = False
     verdict = None
     if options is not None and options.atm_implied_volatility is not None:
-        days = days_to_expiration(options.expiration)
+        days = days_to_expiration(options.expiration, today)
         move = compute_expected_move_pct(options.atm_implied_volatility, days) if days else None
         if move is not None:
             try:
