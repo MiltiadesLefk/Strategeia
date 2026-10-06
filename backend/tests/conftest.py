@@ -113,6 +113,21 @@ def _isolated_watchlist_store(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_watcher_registry():
+    """The watcher registry is process-wide. Anything that runs the app lifespan
+    (main.py registers sec/fed/posts/fund/finra/house) or a register_*_watcher()
+    call would otherwise leave those watchers installed for every later test, and
+    tests that assume an empty registry would pass alone but fail in the full suite.
+    Restore the registry to what it was before each test."""
+    from app.watchers import registry
+
+    saved = dict(registry._REGISTRY)
+    yield
+    registry._REGISTRY.clear()
+    registry._REGISTRY.update(saved)
+
+
+@pytest.fixture(autouse=True)
 def _reset_in_process_cooldowns(monkeypatch):
     """Every in-process, not-persisted cooldown in the API (matching the
     established pattern — see scanner.py's AUTO_TRADE_COOLDOWN_SECONDS and
