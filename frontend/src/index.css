@@ -902,10 +902,6 @@ input[type='text'].palette-input {
   background: linear-gradient(135deg, var(--accent-light), #b8321f);
 }
 
-.app-main {
-  max-width: 1500px;
-}
-
 h1 {
   font-size: 26px;
 }
