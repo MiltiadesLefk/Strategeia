@@ -41,6 +41,9 @@ def build_sleeve_engine(
         clock=clock,
         max_holding_days=settings.max_holding_days,
         liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
+        scale_out_fraction=settings.scale_out_fraction if settings.scale_out_enabled else None,
+        scale_out_stop_mode=settings.scale_out_stop_mode,
+        scale_out_trail_r=settings.scale_out_trail_r,
         sleeve=None if is_core else sleeve,
     )
 

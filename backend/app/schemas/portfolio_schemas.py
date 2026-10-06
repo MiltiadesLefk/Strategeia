@@ -43,6 +43,17 @@ class PositionSchema(BaseModel):
     # Total slippage (bps) the entry / exit market fill paid; set only while liquidity-aware slippage is on.
     entry_slippage_bps: float | None = None
     exit_slippage_bps: float | None = None
+    # Partial scale-out at TP1 (None on every position that never scaled out): `shares` is then
+    # what is still held, original_shares the size at entry, and realized_pnl/realized_r cover
+    # the whole trade (the part sold at TP1 plus the rest).
+    original_shares: int | None = None
+    partial_shares: int | None = None
+    partial_fill_price: float | None = None
+    partial_gross_pnl: float | None = None
+    partial_resolution: str | None = None
+    partial_at: UtcDatetime | None = None
+    runner_stop: float | None = None
+    runner_trail_distance: float | None = None
     # The AI-written lesson for a closed trade (see services/lesson_service.py).
     lesson_text: str | None = None
     lesson_provider: str | None = None

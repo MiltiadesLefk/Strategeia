@@ -88,6 +88,8 @@ def held_window(position: PaperPosition, bars: pd.DataFrame) -> tuple[pd.DataFra
     if not scope.empty:
         scope = scope[_naive_utc_dates(scope) <= pd.Timestamp(position.closed_at)]
     reason = position.close_reason
+    if position.partial_fill_price is not None or reason == "tp2_hit":
+        return None  # a scaled-out runner: the re-walk below only knows the original levels, so it would guess
 
     if reason in ("stop_hit", "tp1_hit"):
         for number, (_, bar) in enumerate(scope.iterrows(), start=1):

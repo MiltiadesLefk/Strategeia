@@ -51,6 +51,7 @@ const OVERRIDE_FIELDS: { key: string; label: string; step: string; fallback: num
 const CLOSE_REASON_LABELS: Record<string, string> = {
   stop_hit: 'Stop',
   tp1_hit: 'Target (TP1)',
+  tp2_hit: 'Target (TP2)',
   time_exit: 'Time limit',
   open_at_end: 'Still open at the end',
 };

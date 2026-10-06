@@ -187,6 +187,16 @@ def build_snapshot(settings: AppSettings) -> dict[str, Any]:
         snapshot["liquidity_slippage"] = {
             "liquidity_slippage_coefficient": normalize(values["liquidity_slippage_coefficient"])
         }
+    if settings.scale_out_enabled:
+        # Only while on (it changes how a position exits), so an install that never
+        # uses it keeps its fingerprint. The trail multiple only matters in trail mode.
+        scale_out: dict[str, Any] = {
+            "scale_out_fraction": normalize(values["scale_out_fraction"]),
+            "scale_out_stop_mode": values["scale_out_stop_mode"],
+        }
+        if settings.scale_out_stop_mode == "trail":
+            scale_out["scale_out_trail_r"] = normalize(values["scale_out_trail_r"])
+        snapshot["scale_out"] = scale_out
     return snapshot
 
 
@@ -242,7 +252,7 @@ def describe_changes(old: dict[str, Any] | None, new: dict[str, Any]) -> list[st
     if old is None:
         return []
     lines: list[str] = []
-    for group in ("settings", "overlay", "ml", "rules"):
+    for group in ("settings", "overlay", "ml", "liquidity_slippage", "scale_out", "rules"):
         before = old.get(group) or {}
         after = new.get(group) or {}
         if group == "overlay" and before and not after:
