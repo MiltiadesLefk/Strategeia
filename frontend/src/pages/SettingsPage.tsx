@@ -970,8 +970,8 @@ export function SettingsPage() {
             value={liquiditySlippage ? 'enabled' : 'disabled'}
             onChange={(e) => setLiquiditySlippage(e.target.value === 'enabled')}
           >
-            <option value="disabled">Disabled — flat slippage only</option>
-            <option value="enabled">Enabled — bigger orders vs daily volume pay more</option>
+            <option value="disabled">Disabled â€” flat slippage only</option>
+            <option value="enabled">Enabled â€” bigger orders vs daily volume pay more</option>
           </select>
           {liquiditySlippage && (
             <input
