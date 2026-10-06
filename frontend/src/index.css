@@ -458,9 +458,15 @@ label {
   margin-bottom: 4px;
 }
 
+input:not([type]),
 input[type='text'],
+input[type='search'],
+input[type='email'],
+input[type='url'],
 input[type='number'],
 input[type='password'],
+input[type='date'],
+textarea,
 select {
   width: 100%;
   padding: 8px 10px;
@@ -485,6 +491,7 @@ select optgroup {
 }
 
 input:focus,
+textarea:focus,
 select:focus {
   outline: 2px solid var(--indigo);
   outline-offset: -1px;
