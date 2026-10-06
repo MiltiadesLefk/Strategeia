@@ -474,6 +474,16 @@ input::placeholder {
   color: var(--text-muted);
 }
 
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background: var(--solid);
+  color: var(--text);
+}
+
 input:focus,
 select:focus {
   outline: 2px solid var(--indigo);
