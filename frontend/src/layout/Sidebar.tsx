@@ -144,17 +144,30 @@ function StatusPill({ online, label }: { online: boolean; label: string }) {
 export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobileOpen?: boolean; onClose?: () => void; onOpenPalette?: () => void }) {
   const { data: status } = useSettingsStatus();
   const { mutate: logout, isPending: loggingOut } = useLogout();
+  const renderItem = (item: (typeof NAV_ITEMS)[number]) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      end={item.end}
+      onClick={onClose}
+      onMouseEnter={() => prefetchRoute(item.to)}
+      onFocus={() => prefetchRoute(item.to)}
+      className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+    >
+      <Icon path={ICONS[item.icon]} />
+      {item.label}
+    </NavLink>
+  );
   return (
     <aside
       className={`sidebar${mobileOpen ? ' open' : ''}`}
       style={{
-        width: 232,
+        width: 240,
         flexShrink: 0,
-        background: 'var(--navy)',
         color: 'var(--text-inverse)',
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px 14px',
+        padding: '20px 12px 14px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 24px' }}>
@@ -202,31 +215,10 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
         </button>
       )}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={onClose}
-            onMouseEnter={() => prefetchRoute(item.to)}
-            onFocus={() => prefetchRoute(item.to)}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '9px 12px',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 500,
-              color: isActive ? 'var(--text-inverse)' : 'var(--text-inverse-muted)',
-              background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
-              textDecoration: 'none',
-            })}
-          >
-            <Icon path={ICONS[item.icon]} />
-            {item.label}
-          </NavLink>
-        ))}
+        <div className="sidebar-section">MENU</div>
+        {NAV_ITEMS.filter((i) => i.to !== '/settings').map(renderItem)}
+        <div className="sidebar-section">SYSTEM</div>
+        {NAV_ITEMS.filter((i) => i.to === '/settings').map(renderItem)}
       </nav>
       {/* The old "Trading Bot Online" pill lived here: unconditional green
           markup with no state behind it, so it read "Online" with the backend
@@ -237,6 +229,13 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
           collapse into one summary row unless something actually needs
           attention. */}
       <ServiceStatus status={status} />
+      <div className="sidebar-user">
+        <div className="sidebar-user-avatar">S</div>
+        <div style={{ lineHeight: 1.25, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Operator</div>
+          <div className="text-muted" style={{ fontSize: 11 }}>Paper trading</div>
+        </div>
+      </div>
       {/* Required attribution for Elbstream's free ticker-logo API (CompanyIcon.tsx) */}
       <a
         href="https://elbstream.com/logos"

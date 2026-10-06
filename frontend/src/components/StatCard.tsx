@@ -25,8 +25,22 @@ export function StatCard({
   const hero = size === 'hero';
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div className="text-muted" style={{ fontSize: 13 }}>
-        {label}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          {label}
+        </div>
+        <span
+          className="stat-chip"
+          aria-hidden="true"
+          style={{
+            background: positive === false ? 'var(--red-bg)' : positive === true ? 'var(--green-bg)' : 'rgba(96, 165, 250, 0.14)',
+            color: positive === false ? 'var(--red)' : positive === true ? 'var(--green)' : 'var(--indigo-light)',
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 17l6-6 4 4 8-8M15 7h6v6" />
+          </svg>
+        </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
         <div
