@@ -7,7 +7,7 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 /** Notifications on the Settings page: the morning note, the Friday weekly digest and the
  *  automatic alerts on open positions. Saves on its own. Delivery needs Telegram (set above);
  *  the preview buttons work without it and send nothing. */
-export function NotificationsSettingsCard() {
+export function NotificationsSettingsCard({ embedded = false }: { embedded?: boolean }) {
   const { data: settings } = useSettings();
   const update = useUpdateSettings();
   const previewMorning = usePreviewNote('morning');
@@ -60,8 +60,12 @@ export function NotificationsSettingsCard() {
   const preview = previewMorning.data ?? previewWeekly.data;
 
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }} data-testid="notifications-settings">
-      <h3>Notifications</h3>
+    <div
+      className={embedded ? undefined : 'card'}
+      style={embedded ? { display: 'flex', flexDirection: 'column', gap: 14, borderTop: '1px solid var(--border)', paddingTop: 14 } : { display: 'flex', flexDirection: 'column', gap: 14 }}
+      data-testid="notifications-settings"
+    >
+      {embedded ? <h4>Scheduled notes and position alerts</h4> : <h3>Notifications</h3>}
       <div className="text-muted" style={{ fontSize: 13, maxWidth: 680 }}>
         Telegram messages built from the app&apos;s own data. They only inform: none of them can open, change or close a
         paper trade. {telegramReady ? '' : 'Telegram is not configured above, so nothing is delivered yet (alerts are still recorded). '}

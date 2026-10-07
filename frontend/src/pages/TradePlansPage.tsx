@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { getDisplayTimeZone } from '../lib/timezone';
 import { SilentSignals } from '../components/SilentSignals';
 import { useSearchParams } from 'react-router-dom';
 import { useAnalysis, useGenerateTradePlan, useMarketSession, useOpenPosition, useTradePlans } from '../api/hooks';
@@ -103,7 +104,7 @@ function AiOpinionBlock({ plan }: { plan: TradePlan }) {
 /** The viewer's own clock for a UTC instant: "Mon 16:45". The notes quote New
  *  York time (the rule is defined there); this says what that means locally. */
 function formatLocalTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: getDisplayTimeZone() });
 }
 
 /**

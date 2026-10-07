@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react';
+import { getDisplayTimeZone } from '../lib/timezone';
 import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useSettings, useSettingsStatus } from '../api/hooks';
 import { PauseHistoryCard, SleeveSwitcher, SleevesOverview, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { LessonCell, LessonDetailRow } from '../components/TradeLesson';
@@ -202,7 +203,7 @@ function ActivePositionCard({ position }: { position: Position }) {
           <div className="text-muted" style={{ fontSize: 11 }}>
             Opened
           </div>
-          <div className="tabular-nums">{new Date(position.opened_at).toLocaleDateString()}</div>
+          <div className="tabular-nums">{new Date(position.opened_at).toLocaleDateString(undefined, { timeZone: getDisplayTimeZone() })}</div>
           <div className="text-muted" style={{ fontSize: 10 }}>
             {formatRelativeTime(position.opened_at)}
           </div>

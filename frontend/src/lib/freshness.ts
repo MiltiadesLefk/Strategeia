@@ -1,3 +1,4 @@
+import { getDisplayTimeZone } from './timezone';
 /**
  * Text and tone for the "as of 14:32 · 3 min ago" label (components/DataFreshness.tsx).
  * Pure and import-free so it can be unit-tested with plain Node
@@ -82,7 +83,7 @@ export function describeFreshness(input: FreshnessInput): Freshness | null {
   // the future; show "just now" rather than a negative age.
   const ageMs = Math.max(0, input.now - input.asOf);
   return {
-    clock: formatClock(input.asOf, input.now, input.timeZone),
+    clock: formatClock(input.asOf, input.now, input.timeZone ?? getDisplayTimeZone()),
     age: formatAge(ageMs),
     ageMs,
     stale: ageMs > FRESHNESS_STALE_MS,

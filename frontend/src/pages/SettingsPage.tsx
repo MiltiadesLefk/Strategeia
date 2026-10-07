@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Tabs } from '../components/Tabs';
+import { TimeZoneCard } from '../components/TimeZoneCard';
 import { useSettings, useTestConnection, useUpdateSettings, useWatchlist } from '../api/hooks';
 import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
@@ -17,6 +20,15 @@ import { CommitteeSettingsCard } from '../components/CommitteeSettingsCard';
 import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
 import type { AiOverlayObjectionAction, ResearchMode, ScaleOutStopMode, TestConnectionOverrides } from '../api/types';
+
+const SETTINGS_TABS = [
+  { value: 'general', label: 'General', help: 'How the app shows times.' },
+  { value: 'ai', label: 'AI', help: 'Which AI writes the commentary, the optional AI veto, headline labels and the committee.' },
+  { value: 'trading', label: 'Trading', help: 'Paper account, risk, entries and exits, auto-scan and the kill switches.' },
+  { value: 'universe', label: 'Universe & Data', help: 'Which symbols are scanned and where the market data comes from.' },
+  { value: 'alerts', label: 'Alerts', help: 'Telegram, scheduled notes, thesis alerts and background watchers.' },
+  { value: 'smart', label: 'Smart Money', help: 'Whose Congress trades and fund filings to follow.' },
+];
 
 const LLM_OPTIONS = [
   { value: 'none', label: 'None (rule-based text)' },
@@ -132,6 +144,10 @@ function ResetButton({ onClick }: { onClick: () => void }) {
 
 export function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const tab = SETTINGS_TABS.some((t) => t.value === requestedTab) ? (requestedTab as string) : 'general';
+  const selectTab = (value: string) => setSearchParams({ tab: value }, { replace: true });
   const { data: watchlistInfo } = useWatchlist();
   const { mutate: update, isPending: saving } = useUpdateSettings();
   const { mutate: testLlm, data: llmTestResult, isPending: testingLlm, reset: resetLlmTest } = useTestConnection();
@@ -479,6 +495,15 @@ export function SettingsPage() {
     <div className="settings-columns">
       <h1 style={{ fontSize: 22 }}>Settings</h1>
 
+      <div style={{ columnSpan: 'all', marginBottom: 20 }}>
+        <Tabs tabs={SETTINGS_TABS} value={tab} onChange={selectTab} />
+        <div className="text-muted" style={{ fontSize: 13, marginTop: 8 }}>{SETTINGS_TABS.find((t) => t.value === tab)?.help}</div>
+      </div>
+
+      {tab === 'general' && <TimeZoneCard />}
+
+      {tab === 'ai' && (
+        <>
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>AI Narrative Provider</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
@@ -789,100 +814,21 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>Finnhub (optional, free tier)</h3>
-        <div className="text-muted" style={{ fontSize: 13 }}>
-          A fourth market-data source, off by default because the app does not need it: quotes, fundamentals and news
-          already come from Yahoo, with Nasdaq, Stooq and SEC EDGAR behind it. Worth enabling mainly as extra
-          redundancy during a Yahoo outage. The free tier cannot serve full financials history or intraday candles,
-          so those keep coming from the other providers regardless.
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input type="checkbox" checked={finnhubEnabled} onChange={(e) => setFinnhubEnabled(e.target.checked)} style={{ width: 'auto' }} />
-          Enable Finnhub for quotes/news/earnings
-          <OnOffBadge on={finnhubEnabled} />
-        </label>
-        {finnhubEnabled && (
-          <SecretField
-            key={`${settings?.finnhub_api_key ?? ''}-${resetNonce}`}
-            label="Finnhub API Key"
-            masked={settings?.finnhub_api_key ?? ''}
-            value={finnhubKey}
-            onChange={setFinnhubKey}
-          />
-        )}
-        {finnhubMissingKey && (
-          <div className="text-red" style={{ fontSize: 12 }}>
-            Enter a Finnhub API key above before saving, or turn this off first.
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SaveButton pending={saving || testingFinnhub} justSaved={justSavedKey === 'finnhub'} onClick={saveFinnhub} disabled={finnhubMissingKey} />
-          <ResetButton onClick={resetFinnhub} />
-          {finnhubEnabled && (
-            <button className="btn btn-secondary" onClick={() => testFinnhub({ target: 'finnhub', overrides: testOverridesFinnhub() })}
-              disabled={testingFinnhub}
-              title="Tests what is in this form right now, saved or not"
-            >
-              {testingFinnhub ? 'Testing…' : 'Test Connection'}
-            </button>
-          )}
-        </div>
-        {finnhubTestResult && (
-          <div className={finnhubTestResult.ok ? 'text-green' : 'text-red'} style={{ fontSize: 13 }}>
-            {finnhubTestResult.message}
-          </div>
-        )}
-      </div>
+          <NewsCardsSettingsCard />
+          <CommitteeSettingsCard />
+        </>
+      )}
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>Telegram Notifications</h3>
-        <div className="text-muted" style={{ fontSize: 13 }}>
-          Get a Telegram message whenever a new AI trade plan is generated, and an alert if the AI provider, Finnhub,
-          or market-data connection goes offline or comes back (checked on the same interval as mark-to-market,
-          below). Create a bot via <code>@BotFather</code>, then message your new bot once and check{' '}
-          <code>https://api.telegram.org/bot&lt;token&gt;/getUpdates</code> for your chat ID.
-        </div>
-        <SecretField
-          key={`${settings?.telegram_bot_token ?? ''}-${resetNonce}`}
-          label="Bot Token"
-          masked={settings?.telegram_bot_token ?? ''}
-          value={telegramToken}
-          onChange={setTelegramToken}
-          placeholder="123456:ABC-..."
-        />
-        <div>
-          <label>Chat ID</label>
-          <input type="text" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} placeholder="e.g. 123456789" />
-        </div>
-        {telegramIncomplete && (
-          <div className="text-red" style={{ fontSize: 12 }}>
-            {telegramHasToken ? 'Enter a Chat ID too' : 'Enter a Bot Token too'} — Telegram needs both to send notifications.
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SaveButton pending={saving || testingTelegram} justSaved={justSavedKey === 'telegram'} onClick={saveTelegram} disabled={telegramIncomplete} />
-          <ResetButton onClick={resetTelegram} />
-          <button className="btn btn-secondary" onClick={() => testTelegram({ target: 'telegram', overrides: testOverridesTelegram() })}
-            disabled={testingTelegram || telegramIncomplete}
-            title="Tests what is in this form right now, saved or not"
-          >
-            {testingTelegram ? 'Testing…' : 'Test Connection'}
-          </button>
-        </div>
-        {telegramTestResult && (
-          <div className={telegramTestResult.ok ? 'text-green' : 'text-red'} style={{ fontSize: 13 }}>
-            {telegramTestResult.message}
-          </div>
-        )}
-      </div>
-
+      {tab === 'trading' && (
+        <>
+          <OnboardingCard />
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>Paper Account</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
           Simulated money only. Positions are priced against real market data, but no broker is connected and no
           order is ever placed anywhere.
         </div>
+        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Account &amp; sizing</div>
         <div>
           <label>Starting Cash ($)</label>
           <input type="number" value={startingCash} onChange={(e) => setStartingCash(Number(e.target.value))} />
@@ -916,6 +862,7 @@ export function SettingsPage() {
             5 points. Raise it for fewer, higher-conviction plans; lower it to see more marginal setups.
           </div>
         </div>
+        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Scanning</div>
         <div>
           <label>Scan Universe Size</label>
           <select value={scanSize} onChange={(e) => setScanSize(Number(e.target.value))}>
@@ -943,6 +890,7 @@ export function SettingsPage() {
             )}
           </div>
         </div>
+        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Exits</div>
         <div>
           <label>Mark-to-Market Interval (minutes)</label>
           <input
@@ -975,37 +923,6 @@ export function SettingsPage() {
             labelled 1-4 weeks, so the default 20 (four weeks) is the end of that horizon; a position that stalls
             past it ties up one of your slots and a sector cap. 0 turns the limit off. Applies to positions that
             are already open, so lowering it can close stalled ones at the next check.
-          </div>
-        </div>
-        <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            Liquidity-Aware Slippage
-            <OnOffBadge on={liquiditySlippage} />
-          </label>
-          <select
-            value={liquiditySlippage ? 'enabled' : 'disabled'}
-            onChange={(e) => setLiquiditySlippage(e.target.value === 'enabled')}
-          >
-            <option value="disabled">Disabled — flat slippage only</option>
-            <option value="enabled">Enabled — bigger orders vs daily volume pay more</option>
-          </select>
-          {liquiditySlippage && (
-            <input
-              type="number"
-              value={liquidityCoefficient}
-              min={0}
-              max={1000}
-              step={10}
-              onChange={(e) => setLiquidityCoefficient(Number(e.target.value))}
-              style={{ marginTop: 6 }}
-            />
-          )}
-          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Off by default, so existing results don't change. When on, every market fill (entries, stop and time
-            exits; never take-profit limits) pays extra basis points on top of the flat slippage:
-            coefficient x sqrt(shares / 20-day average volume), capped at 100 bps. The number above is the extra bps
-            an order the size of a full day's volume would pay; at 1% of daily volume the default 100 costs 10 bps.
-            Backtests use the same model.
           </div>
         </div>
         <div>
@@ -1059,6 +976,38 @@ export function SettingsPage() {
             you entered with. On the day TP1 is reached a daily bar cannot show whether its low came before or after,
             so a dip through the new stop that day counts as coming after (the cautious reading). Backtests use the
             same rules. Turning it off later still manages positions that already sold a part.
+          </div>
+        </div>
+        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Execution</div>
+        <div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            Liquidity-Aware Slippage
+            <OnOffBadge on={liquiditySlippage} />
+          </label>
+          <select
+            value={liquiditySlippage ? 'enabled' : 'disabled'}
+            onChange={(e) => setLiquiditySlippage(e.target.value === 'enabled')}
+          >
+            <option value="disabled">Disabled — flat slippage only</option>
+            <option value="enabled">Enabled — bigger orders vs daily volume pay more</option>
+          </select>
+          {liquiditySlippage && (
+            <input
+              type="number"
+              value={liquidityCoefficient}
+              min={0}
+              max={1000}
+              step={10}
+              onChange={(e) => setLiquidityCoefficient(Number(e.target.value))}
+              style={{ marginTop: 6 }}
+            />
+          )}
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Off by default, so existing results don't change. When on, every market fill (entries, stop and time
+            exits; never take-profit limits) pays extra basis points on top of the flat slippage:
+            coefficient x sqrt(shares / 20-day average volume), capped at 100 bps. The number above is the extra bps
+            an order the size of a full day's volume would pay; at 1% of daily volume the default 100 costs 10 bps.
+            Backtests use the same model.
           </div>
         </div>
         <div>
@@ -1129,25 +1078,121 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <NotificationsSettingsCard />
+          <KillSwitchSettingsCard />
+        </>
+      )}
 
-      <WatchersCard />
+      {tab === 'universe' && (
+        <>
+          <WatchlistCard />
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h3>Finnhub (optional, free tier)</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          A fourth market-data source, off by default because the app does not need it: quotes, fundamentals and news
+          already come from Yahoo, with Nasdaq, Stooq and SEC EDGAR behind it. Worth enabling mainly as extra
+          redundancy during a Yahoo outage. The free tier cannot serve full financials history or intraday candles,
+          so those keep coming from the other providers regardless.
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input type="checkbox" checked={finnhubEnabled} onChange={(e) => setFinnhubEnabled(e.target.checked)} style={{ width: 'auto' }} />
+          Enable Finnhub for quotes/news/earnings
+          <OnOffBadge on={finnhubEnabled} />
+        </label>
+        {finnhubEnabled && (
+          <SecretField
+            key={`${settings?.finnhub_api_key ?? ''}-${resetNonce}`}
+            label="Finnhub API Key"
+            masked={settings?.finnhub_api_key ?? ''}
+            value={finnhubKey}
+            onChange={setFinnhubKey}
+          />
+        )}
+        {finnhubMissingKey && (
+          <div className="text-red" style={{ fontSize: 12 }}>
+            Enter a Finnhub API key above before saving, or turn this off first.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SaveButton pending={saving || testingFinnhub} justSaved={justSavedKey === 'finnhub'} onClick={saveFinnhub} disabled={finnhubMissingKey} />
+          <ResetButton onClick={resetFinnhub} />
+          {finnhubEnabled && (
+            <button className="btn btn-secondary" onClick={() => testFinnhub({ target: 'finnhub', overrides: testOverridesFinnhub() })}
+              disabled={testingFinnhub}
+              title="Tests what is in this form right now, saved or not"
+            >
+              {testingFinnhub ? 'Testing…' : 'Test Connection'}
+            </button>
+          )}
+        </div>
+        {finnhubTestResult && (
+          <div className={finnhubTestResult.ok ? 'text-green' : 'text-red'} style={{ fontSize: 13 }}>
+            {finnhubTestResult.message}
+          </div>
+        )}
+      </div>
 
-      <NewsCardsSettingsCard />
-      <ThesisAlertsSettingsCard />
-      <OnboardingCard />
-      <KillSwitchSettingsCard />
-      <CommitteeSettingsCard />
+          <DataSourcesCard />
+          <DataCacheCard />
+        </>
+      )}
 
-      <CongressFollowCard />
+      {tab === 'alerts' && (
+        <>
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h3>Telegram</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          Get a Telegram message whenever a new AI trade plan is generated, and an alert if the AI provider, Finnhub,
+          or market-data connection goes offline or comes back (checked on the same interval as the
+          Mark-to-Market Interval on the Trading tab). Create a bot via <code>@BotFather</code>, then message your new bot once and check{' '}
+          <code>https://api.telegram.org/bot&lt;token&gt;/getUpdates</code> for your chat ID.
+        </div>
+        <SecretField
+          key={`${settings?.telegram_bot_token ?? ''}-${resetNonce}`}
+          label="Bot Token"
+          masked={settings?.telegram_bot_token ?? ''}
+          value={telegramToken}
+          onChange={setTelegramToken}
+          placeholder="123456:ABC-..."
+        />
+        <div>
+          <label>Chat ID</label>
+          <input type="text" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} placeholder="e.g. 123456789" />
+        </div>
+        {telegramIncomplete && (
+          <div className="text-red" style={{ fontSize: 12 }}>
+            {telegramHasToken ? 'Enter a Chat ID too' : 'Enter a Bot Token too'} — Telegram needs both to send notifications.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SaveButton pending={saving || testingTelegram} justSaved={justSavedKey === 'telegram'} onClick={saveTelegram} disabled={telegramIncomplete} />
+          <ResetButton onClick={resetTelegram} />
+          <button className="btn btn-secondary" onClick={() => testTelegram({ target: 'telegram', overrides: testOverridesTelegram() })}
+            disabled={testingTelegram || telegramIncomplete}
+            title="Tests what is in this form right now, saved or not"
+          >
+            {testingTelegram ? 'Testing…' : 'Test Connection'}
+          </button>
+        </div>
+        {telegramTestResult && (
+          <div className={telegramTestResult.ok ? 'text-green' : 'text-red'} style={{ fontSize: 13 }}>
+            {telegramTestResult.message}
+          </div>
+        )}
 
-      <FundFollowCard />
+        <NotificationsSettingsCard embedded />
+        <ThesisAlertsSettingsCard embedded />
+      </div>
 
-      <WatchlistCard />
+          <WatchersCard />
+        </>
+      )}
 
-      <DataSourcesCard />
-
-      <DataCacheCard />
+      {tab === 'smart' && (
+        <>
+          <CongressFollowCard />
+          <FundFollowCard />
+        </>
+      )}
     </div>
   );
 }

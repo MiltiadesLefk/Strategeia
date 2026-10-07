@@ -1,4 +1,5 @@
 import { Line } from 'react-chartjs-2';
+import { getDisplayTimeZone } from '../../lib/timezone';
 import './chartSetup';
 import type { EquityPoint } from '../../api/types';
 
@@ -25,11 +26,11 @@ export function EquityCurveChart({ points }: { points: EquityPoint[] }) {
 
   const labels = points.map((p) => {
     const at = new Date(p.timestamp);
-    if (intraday) return at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    if (intraday) return at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZone: getDisplayTimeZone() });
     if (spanMs < 14 * DAY_MS) {
-      return at.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' });
+      return at.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', timeZone: getDisplayTimeZone() });
     }
-    return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: getDisplayTimeZone() });
   });
 
   const data = {
@@ -59,7 +60,7 @@ export function EquityCurveChart({ points }: { points: EquityPoint[] }) {
             callbacks: {
               title: (items) => {
                 const point = points[items[0]?.dataIndex ?? 0];
-                return point ? new Date(point.timestamp).toLocaleString() : '';
+                return point ? new Date(point.timestamp).toLocaleString(undefined, { timeZone: getDisplayTimeZone() }) : '';
               },
               label: (ctx) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(ctx.parsed.y ?? 0),
             },

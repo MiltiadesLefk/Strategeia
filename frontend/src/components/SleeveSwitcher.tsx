@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getDisplayTimeZone } from '../lib/timezone';
 import { useSearchParams } from 'react-router-dom';
 import { useCreateSleeve, useResumeSleeve, useSleevePauses, useSleeves } from '../api/hooks';
 import type { ApiError } from '../api/client';
@@ -148,7 +149,7 @@ function SleevePauseNotice({ sleeveKey }: { sleeveKey: string }) {
   return (
     <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }} data-testid="sleeve-paused">
       <div style={{ flex: 1, minWidth: 240, fontSize: 13 }}>
-        <strong className="text-red">Paused ({active.reason})</strong> since {new Date(active.paused_at).toLocaleString()}:{' '}
+        <strong className="text-red">Paused ({active.reason})</strong> since {new Date(active.paused_at).toLocaleString(undefined, { timeZone: getDisplayTimeZone() })}:{' '}
         {active.detail}. It opens no new positions; open positions are still managed.
       </div>
       <button type="button" className="btn btn-primary" disabled={resume.isPending} onClick={() => resume.mutate(sleeveKey)}>
@@ -177,8 +178,8 @@ export function PauseHistoryCard() {
             <tr key={p.id}>
               <td>{nameOf(p.sleeve_key)}</td>
               <td>{p.reason}</td>
-              <td className="tabular-nums">{new Date(p.paused_at).toLocaleString()}</td>
-              <td className="tabular-nums">{p.resolved_at ? new Date(p.resolved_at).toLocaleString() : <span className="text-red">in force</span>}</td>
+              <td className="tabular-nums">{new Date(p.paused_at).toLocaleString(undefined, { timeZone: getDisplayTimeZone() })}</td>
+              <td className="tabular-nums">{p.resolved_at ? new Date(p.resolved_at).toLocaleString(undefined, { timeZone: getDisplayTimeZone() }) : <span className="text-red">in force</span>}</td>
               <td style={{ fontSize: 12 }}>{p.detail}</td>
             </tr>
           ))}
