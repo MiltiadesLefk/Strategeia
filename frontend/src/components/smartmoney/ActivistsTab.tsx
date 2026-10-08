@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SymbolFilterSelect } from '../SymbolFilterSelect';
 import { useFundsOverview, useOwnershipFilings } from '../../api/hooks';
 import type { ApiError } from '../../api/client';
 import type { OwnershipFiling } from '../../api/types';
@@ -13,7 +14,6 @@ const SCHEDULE_OPTIONS = [
   { value: '13D', label: '13D only (may seek influence)' },
   { value: '13G', label: '13G only (passive)' },
 ];
-const SYMBOL_PATTERN = /^[A-Z0-9.-]{0,10}$/;
 
 function OwnershipNotes() {
   return (
@@ -135,17 +135,7 @@ export function ActivistsTab() {
           </div>
           <div>
             <label>Symbol</label>
-            <input
-              type="text"
-              value={symbol}
-              placeholder="all"
-              maxLength={10}
-              onChange={(e) => {
-                const next = e.target.value.toUpperCase();
-                if (SYMBOL_PATTERN.test(next)) setSymbol(next);
-              }}
-              style={{ width: 100 }}
-            />
+            <SymbolFilterSelect value={symbol} onChange={setSymbol} width={170} />
           </div>
         </div>
         <RefreshFundsControls cooldownSeconds={overview.data?.refresh_cooldown_seconds ?? 60} />

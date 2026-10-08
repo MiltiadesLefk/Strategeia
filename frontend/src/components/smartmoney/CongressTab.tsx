@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SymbolFilterSelect } from '../SymbolFilterSelect';
 import {
   useCongressClusters,
   useCongressStatus,
@@ -17,7 +18,6 @@ const SIDE_OPTIONS = [
   { value: 'buys', label: 'Buys only' },
   { value: 'sells', label: 'Sells only' },
 ];
-const SYMBOL_PATTERN = /^[A-Z0-9.-]{0,10}$/;
 
 /** "$1,001 - $15,000" is what the form says; keep it. Never a single number. */
 function rangeText(t: { amount_text: string; amount_low: number | null; amount_high: number | null }): string {
@@ -254,17 +254,7 @@ function CongressBody({ status }: { status: CongressStatus }) {
               </option>
             ))}
           </select>
-          <input
-            type="text"
-            aria-label="Symbol"
-            placeholder="Symbol"
-            value={symbol}
-            onChange={(e) => {
-              const next = e.target.value.toUpperCase();
-              if (SYMBOL_PATTERN.test(next)) setSymbol(next);
-            }}
-            style={{ width: 110 }}
-          />
+          <SymbolFilterSelect value={symbol} onChange={setSymbol} />
           {listMode && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
               <input type="checkbox" checked={followedOnly} onChange={(e) => setFollowedOnly(e.target.checked)} style={{ width: 'auto' }} />

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SymbolFilterSelect } from '../components/SymbolFilterSelect';
 import {
   useRefreshSmartMoneyInsiders,
   useSmartMoneyClusters,
@@ -28,7 +29,6 @@ const SIDE_OPTIONS: { value: SmartMoneySide; label: string }[] = [
   { value: 'buys', label: 'Buys only' },
   { value: 'sells', label: 'Sells only' },
 ];
-const SYMBOL_PATTERN = /^[A-Z0-9.-]{0,10}$/;
 
 type SourceTab = 'insiders' | 'congress' | 'funds' | 'activists';
 
@@ -88,10 +88,15 @@ function SourceTabs({ tab, onTab }: { tab: SourceTab; onTab: (tab: SourceTab) =>
 function ScoringNote() {
   return (
     <div className="card" style={{ background: 'var(--canvas)', border: '1px solid var(--border)', fontSize: 13 }}>
-      <strong>How this is used.</strong> Only open-market <strong>buys</strong> can ever add to a trade plan's score, and
-      never more than one point. <strong>Sells are shown for context only and are never scored</strong>: executives mostly
-      sell to pay taxes, diversify or follow a plan they set months earlier. Every row is dated by the moment SEC accepted
-      the filing, which is the first time anyone could have seen it; the trade itself happened earlier.
+      <strong>How this is used.</strong> All four sources count, <strong>buying and selling</strong>, and each is worth
+      up to 2 points on a trade plan (buying supports a long and argues against a short; selling does the reverse).{' '}
+      <strong>Insiders:</strong> net buying counts, and so does selling, in full when it was the insider&apos;s own choice
+      and at a quarter of its value when it was made under a 10b5-1 plan (scheduled months earlier).{' '}
+      <strong>Congress:</strong> members who net bought or sold in the last 45 days (4 members is the strong reading).{' '}
+      <strong>Funds:</strong> followed funds&apos; 13F changes (3 funds is the strong reading).{' '}
+      <strong>5% owners:</strong> a new Schedule 13D or a raised stake is buying; a cut stake, or one that fell under 5%,
+      is selling. Every row is dated by the moment SEC accepted the filing, which is the first time anyone could have
+      seen it; the trade itself happened earlier.
     </div>
   );
 }
@@ -194,7 +199,7 @@ function InsidersTab({ status }: { status: SmartMoneyStatus }) {
           note={data ? `${data.buy_count} buys, ${data.sell_count} sells (open market)` : undefined}
         />
         <StatCard label="Bought" value={data ? formatMoney(data.buy_value, { compact: true }) : '—'} positive={data && data.buy_value > 0 ? true : null} />
-        <StatCard label="Sold" value={data ? formatMoney(data.sell_value, { compact: true }) : '—'} note="context only, never scored" />
+        <StatCard label="Sold" value={data ? formatMoney(data.sell_value, { compact: true }) : '—'} note="plan sales count at a quarter" />
         <StatCard label="Cluster buys" value={clusters.data ? String(clusters.data.clusters.length) : '—'} note="2+ insiders within 14 days" />
       </div>
 
@@ -237,17 +242,7 @@ function InsidersTab({ status }: { status: SmartMoneyStatus }) {
               </option>
             ))}
           </select>
-          <input
-            type="text"
-            aria-label="Symbol"
-            placeholder="Symbol"
-            value={symbol}
-            onChange={(e) => {
-              const next = e.target.value.toUpperCase();
-              if (SYMBOL_PATTERN.test(next)) setSymbol(next);
-            }}
-            style={{ width: 110 }}
-          />
+          <SymbolFilterSelect value={symbol} onChange={setSymbol} />
           <div style={{ marginLeft: 'auto' }} className="text-muted">
             <span style={{ fontSize: 12 }}>
               Filings stored through {status.newest_filing ? formatRelativeTime(status.newest_filing) : '—'}
