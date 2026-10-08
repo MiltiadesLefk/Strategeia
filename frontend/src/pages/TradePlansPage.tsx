@@ -1,8 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { getDisplayTimeZone } from '../lib/timezone';
 import { SilentSignals } from '../components/SilentSignals';
-import { useSearchParams } from 'react-router-dom';
-import { useAnalysis, useGenerateTradePlan, useMarketSession, useOpenPosition, useTradePlans } from '../api/hooks';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  qk,
+  useAnalysis,
+  useCommitteeRun,
+  useGenerateTradePlan,
+  useMarketSession,
+  useOpenPosition,
+  useSettings,
+  useTradePlans,
+} from '../api/hooks';
+import { LiveRun } from './CommitteePage';
 import { SleeveSwitcher, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { DirectionBadge, TradePlanStatusBadge } from '../components/Badge';
@@ -39,7 +50,7 @@ function AiOpinionBlock({ plan }: { plan: TradePlan }) {
         <IconBadge variant="info" size={26} />
         <span style={{ fontWeight: 700, fontSize: 13 }}>AI Second Opinion</span>
         {plan.ai_decision_model && (
-          <span className="text-muted" style={{ fontSize: 12 }} title="The model that gave this verdict (Settings → AI Narrative Provider → Decision model).">
+          <span className="text-muted" style={{ fontSize: 12 }} title="The model that gave this verdict (Settings → AI → Decision model).">
             AI overlay · {plan.ai_decision_model}
           </span>
         )}
@@ -149,6 +160,8 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
   const { data: analysis } = useAnalysis(plan.direction ? plan.symbol : null);
   const { data: session } = useMarketSession();
   const now = useNow();
+  const committeeRun = useCommitteeRun(plan.committee_run_id ?? null);
+  const committeeBusy = committeeRun.data?.status === 'queued' || committeeRun.data?.status === 'running';
 
   if (plan.direction === null) {
     return (
@@ -189,7 +202,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
       : [];
 
   const executed = plan.status === 'executed' || isSuccess;
-  const blockedReason = executeBlockedReason(plan, session, now);
+  const blockedReason = committeeBusy ? 'The AI Committee is still reading this plan.' : executeBlockedReason(plan, session, now);
 
   return (
     <div className="card">
@@ -276,6 +289,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
               {plan.ai_take_text} <span style={{ opacity: 0.6 }}>({plan.ai_provider === 'none' ? 'rule-based' : plan.ai_provider})</span>
             </div>
           </div>
+          <CommitteeNote plan={plan} />
           {plan.signal_reasons && (
             <div style={{ background: 'var(--card-alt)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
               <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 11, flexWrap: 'wrap' }}>
@@ -321,7 +335,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                 </span>
                 <span
                   className="text-muted"
-                  title="Open-market insider buying from SEC Form 4 filings, last 90 days. Selling is deliberately never scored — executives sell for diversification, taxes and scheduled 10b5-1 plans, so only buying carries information."
+                  title="Insiders (SEC Form 4, last 90 days), up to 2 points either way. Net open-market buying supports a long ($100k net is 1 point, $1M is 2). Selling argues against a long and supports a short: sales by the insider's own choice count in full, sales under a scheduled 10b5-1 plan at a quarter of their value ($5M weighted is 1 point, $50M is 2)."
                 >
                   Insider{' '}
                   <span className={`tabular-nums ${(plan.insider_score ?? 0) > 0 ? 'text-green' : (plan.insider_score ?? 0) < 0 ? 'text-red' : ''}`}>
@@ -329,6 +343,18 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
                     {plan.insider_score ?? 0}
                   </span>
                 </span>
+                {EXTRA_PARTS.map(([key, label, help]) => {
+                  const value = plan.extra_scores?.[key] ?? 0;
+                  return (
+                    <span key={key} className="text-muted" title={help}>
+                      {label}{' '}
+                      <span className={`tabular-nums ${value > 0 ? 'text-green' : value < 0 ? 'text-red' : ''}`}>
+                        {value > 0 ? '+' : ''}
+                        {value}
+                      </span>
+                    </span>
+                  );
+                })}
                 <span
                   className="text-muted"
                   title="Consistent beat/miss streak on reported (already-happened) consensus EPS, last several quarters. Real history, not a forecast of the next print."
@@ -523,16 +549,118 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
   );
 }
 
+const COMMITTEE_RATING_CLASS: Record<string, string> = {
+  Buy: 'badge badge-green',
+  Overweight: 'badge badge-green',
+  Hold: 'badge badge-neutral',
+  Underweight: 'badge badge-amber',
+  Sell: 'badge badge-red',
+};
+
+/** What the AI Committee made of this plan: live while it reads, then the verdict, with every report one click away. */
+function CommitteeNote({ plan }: { plan: TradePlan }) {
+  const { data: settings } = useSettings();
+  const queryClient = useQueryClient();
+  const runId = plan.committee_run_id ?? null;
+  const run = useCommitteeRun(runId);
+  const status = run.data?.status;
+  const active = status === 'queued' || status === 'running';
+  const [showAll, setShowAll] = useState(false);
+  const wasActive = useRef(false);
+
+  // When the run ends, reload the plans: the verdict may have changed the plan (cancelled it, added its note).
+  useEffect(() => {
+    if (active) {
+      wasActive.current = true;
+    } else if (wasActive.current && status) {
+      wasActive.current = false;
+      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
+    }
+  }, [active, status, queryClient]);
+
+  if (runId === null && plan.direction == null) return null; // a no-trade decision never reaches the committee
+  const rating = run.data?.rating ?? plan.committee_rating ?? null;
+  const showing = active || showAll;
+  const done = run.data ? run.data.steps.filter((s) => s.status === 'done').length : 0;
+  const total = run.data ? run.data.steps.filter((s) => s.status !== 'skipped').length : 0;
+  return (
+    <div style={{ background: 'var(--card-alt)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 }} data-testid="plan-committee">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>AI Committee</span>
+        {rating && <span className={COMMITTEE_RATING_CLASS[rating] ?? 'badge badge-neutral'}>{rating}</span>}
+        {active && (
+          <span className="badge badge-amber">
+            reading… {done} of {total} steps
+          </span>
+        )}
+        {runId !== null && !active && (
+          <button type="button" className="btn btn-secondary" style={{ padding: '2px 10px', fontSize: 12 }} onClick={() => setShowAll((v) => !v)}>
+            {showAll ? 'Hide the debate' : 'Read the full debate'}
+          </button>
+        )}
+        {runId !== null && (
+          <Link to={`/committee?run=${runId}`} style={{ fontSize: 12 }}>
+            Open on the Committee page
+          </Link>
+        )}
+      </div>
+      {plan.committee_note && (
+        <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
+          {plan.committee_note}
+        </div>
+      )}
+      {!plan.committee_note && runId === null && (
+        <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
+          {settings?.committee_gate_enabled ? 'Not read by the committee.' : 'Not read: the committee gate is off (Settings, AI tab).'}
+        </div>
+      )}
+      {showing && runId !== null && (
+        <div style={{ marginTop: 12 }}>
+          <LiveRun id={runId} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The parts added after the original ten (backend analysis/live_evidence.py). Each is signed for the trade's
+// direction; the last two are caution flags that can only subtract.
+const EXTRA_PARTS: [string, string, string][] = [
+  ['congress', 'Congress', 'Members of Congress net buying (supports a long) or net selling (supports a short), by filing date, last 45 days. A net of 4 members is worth 2 points. Reports lag by up to 45 days.'],
+  ['funds', 'Funds', 'Followed funds 13F changes: net buying supports a long, net selling supports a short. 3 or more funds is worth 2 points. Data is up to 45 days old.'],
+  ['ownership', '5% owners', 'Holders of 5% or more: a new Schedule 13D or a raised stake is buying, a cut stake or falling under 5% is selling. Last 90 days, up to 2 points.'],
+  ['short_volume', 'Short vol', 'Unusually high FINRA short-sale volume against its own baseline: argues against a long, supports a short. Short volume is not short interest.'],
+  ['filing_8k', '8-K', 'Negative-leaning 8-K items filed in the last 3 days (bankruptcy, delisting, restatement, executive change): against a long, mildly for a short.'],
+  ['financial_health', 'Financials', 'Profitability trend from the reported years: profitable and improving supports a long, loss-making or sliding profits support a short.'],
+  ['valuation', 'Valuation', 'P/E at the extremes (15 or less is cheap, over 60 or no earnings is expensive unless revenue grows 30%+) plus the DCF and peer comparison: cheap supports a long, expensive supports a short. Up to 2 points.'],
+  ['analyst_consensus', 'Consensus', 'Consensus EPS for the next report against the last reported EPS: expected growth of 10% or more supports a long, an expected fall of 5% or more supports a short.'],
+  ['relative_strength', 'Vs market', 'The stock\'s 63-day return against SPY: leading by 5 points or more supports a long, lagging by that much supports a short.'],
+  ['volume_trend', 'Volume trend', 'Volume on up days against down days over 20 days: accumulation supports a long, distribution supports a short.'],
+  ['options_oi', 'Options OI', 'Put/call ratio of open interest (positions still held): call-heavy supports a long, put-heavy supports a short.'],
+  ['fed_window', 'Fed window', 'Caution flag: a Fed statement or Chair speech within a day. Only ever subtracts, whichever way the trade goes.'],
+  ['post_mentions', 'Posts', 'Caution flag: a post naming this company in the last 24 hours (an unofficial archive). Only ever subtracts.'],
+];
+
 export function TradePlansPage() {
   // URL-backed, not a hardcoded default — arriving via "Generate Trade Plan"
   // from a symbol's Analysis page carries the symbol along (?symbol=X);
   // landing here directly requires an explicit choice, same as Analysis.
   const [params, setParams] = useSearchParams();
   const symbol = params.get('symbol');
+  const selectedPlanId = params.get('plan') ? Number(params.get('plan')) : null;
   const [statusFilter, setStatusFilter] = useState('active');
   const [sleeve, selectSleeve] = useSelectedSleeve();
   const { mutate: generate, data: latest, isPending, error: generateError } = useGenerateTradePlan();
+  const { data: settings } = useSettings();
   const { data: history, isLoading: historyLoading } = useTradePlans();
+  // Opening a plan from any list brings its card into view.
+  useEffect(() => {
+    if (selectedPlanId !== null) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [selectedPlanId]);
+  // The plan on show: the one clicked in the history, else the one just generated (re-read from the list so a
+  // committee verdict that arrives later shows up), else the freshly returned copy.
+  const shownId = selectedPlanId ?? latest?.id ?? null;
+  const shown = (shownId !== null ? history?.find((p) => p.id === shownId) : undefined) ?? (selectedPlanId === null ? latest : undefined);
 
   const filteredHistory = useMemo(() => {
     if (!history) return [];
@@ -551,7 +679,13 @@ export function TradePlansPage() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => symbol && generate({ symbol, sleeve })}
+            onClick={() => {
+              if (!symbol) return;
+              const next = new URLSearchParams(params);
+              next.delete('plan');
+              setParams(next, { replace: true });
+              generate({ symbol, sleeve });
+            }}
             disabled={isPending || !symbol}
             title={symbol ? undefined : 'Choose a company first'}
           >
@@ -559,14 +693,39 @@ export function TradePlansPage() {
           </button>
         </div>
       </div>
+      {isPending && settings?.committee_gate_enabled && (
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          The rules are scoring it first. If the plan passes, the AI Committee then reads it with all the data gathered, which
+          can take a few minutes. Keep this page open.
+        </div>
+      )}
 
       <SleeveSwitcher selected={sleeve} onSelect={selectSleeve} />
 
       {generateError && <ErrorBanner message={(generateError as ApiError).message} />}
-      {latest && (
+      {shown && (
         <>
-          <PipelineSteps />
-          <TradePlanCard plan={latest} />
+          {selectedPlanId === null && <PipelineSteps />}
+          {selectedPlanId !== null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span className="text-muted" style={{ fontSize: 13 }}>
+                Showing plan #{shown.id} from {shown.created_at ? formatLocalTime(shown.created_at) : 'earlier'}.
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '2px 10px', fontSize: 12 }}
+                onClick={() => {
+                  const next = new URLSearchParams(params);
+                  next.delete('plan');
+                  setParams(next, { replace: true });
+                }}
+              >
+                Close
+              </button>
+            </div>
+          )}
+          <TradePlanCard key={shown.id} plan={shown} />
         </>
       )}
 
@@ -596,11 +755,22 @@ export function TradePlansPage() {
                 <th>Confidence</th>
                 <th>Strategy</th>
                 <th>Status</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {filteredHistory.map((p) => (
-                <tr key={p.id}>
+                <tr
+                  key={p.id}
+                  onClick={() => {
+                    const next = new URLSearchParams(params);
+                    next.set('plan', String(p.id));
+                    setParams(next, { replace: true });
+                  }}
+                  style={{ cursor: 'pointer', background: p.id === selectedPlanId ? 'var(--card-alt)' : undefined }}
+                  title="Click to read this plan"
+                  data-testid={`plan-row-${p.id}`}
+                >
                   <td style={{ fontWeight: 600 }}>
                     <TickerLink symbol={p.symbol} iconSize={24} />
                   </td>
@@ -618,6 +788,23 @@ export function TradePlansPage() {
                         redo at the open, {formatLocalTime(p.redo_at)}
                       </div>
                     )}
+                  </td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      className={p.id === selectedPlanId ? 'btn btn-primary' : 'btn btn-secondary'}
+                      style={{ padding: '4px 12px', fontSize: 12 }}
+                      aria-label={`Read plan ${p.id}, ${p.symbol}`}
+                      data-testid={`read-plan-${p.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = new URLSearchParams(params);
+                        next.set('plan', String(p.id));
+                        setParams(next, { replace: true });
+                      }}
+                    >
+                      {p.id === selectedPlanId ? 'Showing' : 'Read plan'}
+                    </button>
                   </td>
                 </tr>
               ))}

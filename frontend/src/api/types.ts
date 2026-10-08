@@ -207,6 +207,13 @@ export interface TradePlan {
   vix_regime_score?: number | null;
   options_score?: number | null;
   insider_score?: number | null;
+  // Points by part for Smart Money, 8-K filings, financials and valuation (absent on older plans).
+  extra_scores?: Record<string, number> | null;
+  // The AI Committee run that read this plan and its rating (absent when it did not run).
+  committee_run_id?: number | null;
+  committee_rating?: string | null;
+  // What the committee did with this plan, or why it did not read it.
+  committee_note?: string | null;
   /** One-directional risk flags (0 or a penalty, never a bonus): options
    *  market pricing an outsized move, and a scheduled FOMC/CPI/jobs release
    *  in the next day. */
@@ -446,6 +453,9 @@ export interface AppSettings {
   committee_max_llm_calls: number;
   committee_debate_rounds: number;
   committee_risk_rounds: number;
+  committee_gate_enabled: boolean;
+  committee_gate_action: 'cancel' | 'hold';
+  committee_gate_max_per_scan: number;
   /** First-run questionnaire answers (empty = not answered). Stored only; a suggestion changes nothing until Apply. */
   onboarding_risk_tolerance: string;
   onboarding_time_horizon: string;
@@ -528,6 +538,9 @@ export interface SettingsUpdateRequest {
   committee_max_llm_calls?: number;
   committee_debate_rounds?: number;
   committee_risk_rounds?: number;
+  committee_gate_enabled?: boolean;
+  committee_gate_action?: 'cancel' | 'hold';
+  committee_gate_max_per_scan?: number;
   onboarding_risk_tolerance?: string;
   onboarding_time_horizon?: string;
   onboarding_experience?: string;

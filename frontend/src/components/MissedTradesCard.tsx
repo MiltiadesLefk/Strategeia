@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMissedTrades, useRefreshMissedTrades } from '../api/hooks';
 import type { ApiError } from '../api/client';
 import type {
@@ -165,8 +166,14 @@ function stateLabel(t: MissedTradeItem): { text: string; className: string } {
 
 function TradeRow({ t }: { t: MissedTradeItem }) {
   const state = stateLabel(t);
+  const navigate = useNavigate();
   return (
-    <tr>
+    <tr
+      onClick={() => navigate(`/trade-plans?plan=${t.plan_id}`)}
+      style={{ cursor: 'pointer' }}
+      title="Click to read this plan"
+      data-testid={`missed-row-${t.plan_id}`}
+    >
       <td style={{ fontWeight: 600 }}>
         <TickerLink symbol={t.symbol} iconSize={22} />
       </td>
@@ -181,6 +188,20 @@ function TradeRow({ t }: { t: MissedTradeItem }) {
       <td className={`tabular-nums ${rClass(t.r_multiple)}`}>
         {t.r_multiple === null ? '—' : formatR(t.r_multiple)}
         {t.state === 'open' && t.r_multiple !== null && <span className="text-muted" style={{ fontSize: 10 }}> mark</span>}
+      </td>
+      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ padding: '4px 12px', fontSize: 12 }}
+          aria-label={`Read plan ${t.plan_id}, ${t.symbol}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/trade-plans?plan=${t.plan_id}`);
+          }}
+        >
+          Read plan
+        </button>
       </td>
     </tr>
   );
@@ -294,6 +315,7 @@ export function MissedTradesCard() {
                         <th>Confidence</th>
                         <th>Outcome</th>
                         <th>Hypothetical R</th>
+                        <th />
                       </tr>
                     </thead>
                     <tbody>
