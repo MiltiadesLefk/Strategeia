@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCommitteeRun, useCommitteeRuns, useStartCommitteeRun } from '../api/hooks';
 import type { CommitteeRun, CommitteeStep } from '../api/types';
+import { CompanyDropdown } from '../components/CompanyDropdown';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatRelativeTime } from '../components/common';
 
 const RATING_CLASS: Record<string, string> = {
@@ -115,7 +116,7 @@ function RatingCard({ run }: { run: CommitteeRun }) {
   );
 }
 
-function LiveRun({ id }: { id: number }) {
+export function LiveRun({ id }: { id: number }) {
   const run = useCommitteeRun(id);
   if (run.isLoading) return <LoadingSpinner />;
   if (run.error || !run.data) return <ErrorBanner message={run.error?.message ?? 'Could not load this run'} onRetry={() => run.refetch()} />;
@@ -176,15 +177,7 @@ export function CommitteePage() {
       </div>
 
       <div className="card" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input
-          aria-label="Symbol"
-          placeholder="Ticker, e.g. NVDA"
-          value={draft}
-          maxLength={12}
-          onChange={(e) => setDraft(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === 'Enter' && !busy && submit()}
-          style={{ width: 160 }}
-        />
+        <CompanyDropdown value={draft} onChange={setDraft} />
         <button className="btn" disabled={!draft.trim() || busy || start.isPending} onClick={submit}>
           {busy ? 'A run is in progress…' : 'Convene the committee'}
         </button>

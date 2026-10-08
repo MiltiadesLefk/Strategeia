@@ -305,6 +305,12 @@ tbody tr:hover {
   margin-bottom: 20px;
 }
 
+/* A card that needs the whole row (the AI provider choice, which the rest of
+   the AI tab depends on) spans every column and sits above the packed ones. */
+.settings-columns > .card.settings-wide {
+  column-span: all;
+}
+
 .stat-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

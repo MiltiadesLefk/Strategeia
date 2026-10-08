@@ -16,7 +16,7 @@ export function DecisionModelField({ kind, value, onChange, routineModel, placeh
   const invalid = decisionModelInvalid(kind, value);
   return (
     <div>
-      <label>Decision model (AI overlay)</label>
+      <label>Decision model (optional, for the AI overlay and committee verdicts)</label>
       <input
         type="text"
         value={value}
@@ -27,8 +27,9 @@ export function DecisionModelField({ kind, value, onChange, routineModel, placeh
         autoComplete="off"
       />
       <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-        Answers only the AI overlay's "would you take this trade?" question, the one call that can stop a trade, so
-        it can be a stronger model than the one writing the narration above. <strong>Blank = use the same model.</strong>
+        Answers the AI overlay's "would you take this trade?" question (the one call that can stop a trade) and the
+        AI Committee's manager, trader, risk and final-rating steps. It can be a stronger model than the everyday one
+        above. <strong>Blank = use the same model.</strong>
       </div>
       {invalid && (
         <div className="text-red" style={{ fontSize: 12, marginTop: 4 }}>

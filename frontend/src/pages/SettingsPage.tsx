@@ -504,15 +504,16 @@ export function SettingsPage() {
 
       {tab === 'ai' && (
         <>
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="card settings-wide" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>AI Narrative Provider</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
-          Which AI writes the plain-English commentary on charts, research cards and trade plans. This is narration
-          only — it describes numbers the rule-based engine already computed and never decides a signal. Leaving this
-          on "None" is fully supported: every screen falls back to rule-based wording and nothing breaks. It is also
-          the provider the AI Trading Overlay below uses, and the overlay stays inert until a real one is selected
-          here.
+          <strong>One choice for the whole app.</strong> This provider and its models power every AI feature on this tab
+          and elsewhere: chart and research commentary, trade-plan write-ups, the morning note, trade lessons, headline
+          labels, the AI Trading Overlay and the AI Committee. The everyday model does the writing; the optional decision
+          model answers the overlay and committee verdicts. "None" is fully supported: every screen falls back to
+          rule-based wording. The AI never picks a direction, entry, stop or size, and backtests never call it.
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, alignItems: 'start' }}>
         <div>
           <label>Provider</label>
           <div className="text-muted" style={{ fontSize: 12, marginBottom: 4 }}>
@@ -547,7 +548,7 @@ export function SettingsPage() {
               placeholder="sk-or-..."
             />
             <div>
-              <label>Model</label>
+              <label>Everyday model (writing)</label>
               <input type="text" value={openrouterModel} onChange={(e) => setOpenrouterModel(e.target.value)} />
               <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
                 Any model slug OpenRouter lists, e.g. <code>anthropic/claude-3.5-haiku</code>. These calls are short
@@ -568,7 +569,7 @@ export function SettingsPage() {
               placeholder="orca-..."
             />
             <div>
-              <label>Model</label>
+              <label>Everyday model (writing)</label>
               <input type="text" value={orcarouterModel} onChange={(e) => setOrcarouterModel(e.target.value)} />
               <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
                 Default <code>orcarouter/auto</code> lets the gateway pick a model per request. Or pin one, e.g.{' '}
@@ -589,7 +590,7 @@ export function SettingsPage() {
               placeholder="sk-..."
             />
             <div>
-              <label>Model</label>
+              <label>Everyday model (writing)</label>
               <input type="text" value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)} placeholder="gpt-4o-mini" maxLength={96} spellCheck={false} autoComplete="off" />
             </div>
             <DecisionModelField kind="api" value={openaiDecisionModel} onChange={setOpenaiDecisionModel} routineModel={openaiModel} />
@@ -605,7 +606,7 @@ export function SettingsPage() {
               onChange={setGeminiKey}
             />
             <div>
-              <label>Model</label>
+              <label>Everyday model (writing)</label>
               <input type="text" value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} placeholder="gemini-1.5-flash" maxLength={96} spellCheck={false} autoComplete="off" />
             </div>
             <DecisionModelField kind="gemini" value={geminiDecisionModel} onChange={setGeminiDecisionModel} routineModel={geminiModel} />
@@ -613,7 +614,7 @@ export function SettingsPage() {
         )}
         {llmProvider === 'claude_code_cli' && (
           <div>
-            <label>Model</label>
+            <label>Everyday model (writing)</label>
             <input
               type="text"
               value={claudeCliModel}
@@ -640,47 +641,17 @@ export function SettingsPage() {
         {llmProvider === 'claude_code_cli' && (
           <DecisionModelField kind="claude" value={claudeDecisionModel} onChange={setClaudeDecisionModel} routineModel={claudeCliModel} />
         )}
+        </div>
         {llmProvider === 'claude_code_cli' && (
           <div className="text-muted" style={{ fontSize: 13 }}>
             Best-effort option: shells out to your local Claude Code CLI. No key needed, but no SLA either — higher
             latency than a direct API and depends on the CLI being installed and logged in on this machine.
-            <strong> Running the backend in Docker?</strong> This can never come online there — the container has no
-            access to your machine's CLI or its login, by design (that's the whole reason it needs no key). Either
-            run the backend directly with <code>uvicorn</code> instead of Docker, or pick a key-based provider above.
+            <strong> Running the backend in Docker?</strong> The image has its own copy of the CLI, but it can't use
+            your machine's login. Run <code>claude setup-token</code> on your PC, put the result in a{' '}
+            <code>.env</code> file next to <code>docker-compose.yml</code> as <code>CLAUDE_CODE_OAUTH_TOKEN=...</code>,
+            then run <code>docker compose up -d</code>. Without it, text falls back to rule-based wording.
           </div>
         )}
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>Research mode</div>
-          <div className="text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
-            Applies only to AI calls that gather background for research pages. The AI Trading Overlay and the
-            narration never use the web, in either mode.
-          </div>
-          {RESEARCH_MODES.map((opt) => (
-            <label key={opt.value} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="research-mode"
-                value={opt.value}
-                checked={researchMode === opt.value}
-                onChange={() => setResearchMode(opt.value)}
-                style={{ width: 'auto', marginTop: 3 }}
-              />
-              <span>
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</span>
-                <span className="text-muted" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
-                  {opt.help}
-                </span>
-              </span>
-            </label>
-          ))}
-          <div className={WEB_SEARCH_PROVIDERS.has(llmProvider) ? 'text-green' : 'text-muted'} style={{ fontSize: 12 }} data-testid="research-web-support">
-            {llmProvider === 'none'
-              ? 'No AI provider is selected, so there is nothing to search the web with.'
-              : WEB_SEARCH_PROVIDERS.has(llmProvider)
-                ? 'The selected provider supports web search.'
-                : 'The selected provider has no web search, so research answers will use our data only.'}
-          </div>
-        </div>
         {llmMissingKey && (
           <div className="text-red" style={{ fontSize: 12 }}>
             Enter an API key above before saving — {LLM_OPTIONS.find((o) => o.value === llmProvider)?.label} needs one.
@@ -714,6 +685,46 @@ export function SettingsPage() {
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h3>Research web search</h3>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>Research mode</div>
+          <div className="text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+            Applies only to AI calls that gather background for research pages. The AI Trading Overlay and the
+            narration never use the web, in either mode.
+          </div>
+          {RESEARCH_MODES.map((opt) => (
+            <label key={opt.value} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="research-mode"
+                value={opt.value}
+                checked={researchMode === opt.value}
+                onChange={() => setResearchMode(opt.value)}
+                style={{ width: 'auto', marginTop: 3 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</span>
+                <span className="text-muted" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
+                  {opt.help}
+                </span>
+              </span>
+            </label>
+          ))}
+          <div className={WEB_SEARCH_PROVIDERS.has(llmProvider) ? 'text-green' : 'text-muted'} style={{ fontSize: 12 }} data-testid="research-web-support">
+            {llmProvider === 'none'
+              ? 'No AI provider is selected, so there is nothing to search the web with.'
+              : WEB_SEARCH_PROVIDERS.has(llmProvider)
+                ? 'The selected provider supports web search.'
+                : 'The selected provider has no web search, so research answers will use our data only.'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SaveButton pending={saving} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
+          <ResetButton onClick={resetLlm} />
+        </div>
+      </div>
+
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>AI Trading Overlay</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
           The setup itself is still decided by deterministic, rule-based math — technicals, fundamentals and news
@@ -730,8 +741,8 @@ export function SettingsPage() {
           while Provider is "None").
         </div>
         <div className="text-muted" style={{ fontSize: 12 }}>
-          This call uses the provider's <strong>Decision model</strong> (set in the card above; blank = the same model as
-          the narration), so you can spend a stronger model on the one answer that can stop a trade.
+          This call uses the provider's <strong>Decision model</strong> (set in the provider card above; blank = the same model as
+          the everyday one), so you can spend a stronger model on the one answer that can stop a trade.
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ToggleSwitch checked={aiOverlayEnabled} onChange={setAiOverlayEnabled} label="Enable AI second opinion on every evaluation" />
