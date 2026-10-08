@@ -35,10 +35,13 @@ export function NewsCardsSettingsCard() {
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="news-cards-settings">
       <h3>News cards</h3>
       <div className="text-muted" style={{ fontSize: 13, maxWidth: 640 }}>
-        When on, the AI you configured above labels each saved headline once with its event type, sentiment and
-        materiality. Labels appear on the Analysis page&apos;s News tab and are recorded on every trade plan as a silent
-        signal; they do not change any score today. Each run uses at most three AI calls. Off by default because it
-        spends AI calls.
+        <strong>This is how news is scored.</strong> When on, the AI you configured above labels each new headline
+        once with its event type, sentiment and materiality, and fixed rules turn the labels into the news part of
+        the confidence score (up to 2 points, signed for the trade&apos;s direction). The AI never sees the trade.
+        Keyword matching is used only for a symbol whose headlines could not be labelled (no AI provider, a failed
+        call, nothing recent). Labels also appear on the Analysis page&apos;s News tab. Each symbol evaluated uses at
+        most three AI calls, and only for headlines not yet labelled. On by default; turning it off goes back to
+        keyword matching.
       </div>
       <ToggleSwitch checked={enabled} onChange={setEnabled} label="News cards" />
       <div>

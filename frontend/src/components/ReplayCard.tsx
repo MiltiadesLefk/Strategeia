@@ -73,7 +73,7 @@ function FlipRow({ f }: { f: ReplayFlip }) {
 export function ReplayCard() {
   const { mutate, isPending, data, error, reset } = useReplay();
   const [knob, setKnob] = useState<KnobKey>('min_confidence_for_trade');
-  const [confidence, setConfidence] = useState(40);
+  const [confidence, setConfidence] = useState(30);
   const [action, setAction] = useState<'cancel' | 'hold' | 'none'>('none');
   const [scores, setScores] = useState(false);
   const [directions, setDirections] = useState<'both' | 'long' | 'short'>('long');
