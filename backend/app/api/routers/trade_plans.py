@@ -14,6 +14,8 @@ from app.portfolio.models import Sleeve, TradePlanRecord
 from app.portfolio.sleeves import CORE_SLEEVE_KEY, SleeveError, get_sleeve
 from app.schemas.trade_plan_schemas import TradePlanGenerateRequest, TradePlanResponse
 from app.services.deferred_evaluation_service import pending_redo_for_plan, pending_redo_times
+from app.analysis.live_evidence import extra_scores_from_json
+from app.committee.gate import CommitteeGateBudget
 from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, clamp_points, generate_trade_plan
 
 router = APIRouter(prefix="/api/trade-plans", tags=["trade-plans"], dependencies=[Depends(require_auth)])
@@ -34,8 +36,12 @@ def generate(
     default_size = settings.paper_starting_cash if sleeve.key == CORE_SLEEVE_KEY else sleeve.starting_cash
     account_size = req.account_size if req.account_size is not None else default_size
     risk_pct = req.risk_pct if req.risk_pct is not None else settings.default_risk_pct
+    # A click on Generate is allowed one committee run, started in the background so the plan comes back at once
+    # and the reports arrive as they are written (it only runs when the gate is switched on in Settings and the
+    # rules approved the plan).
     response = generate_trade_plan(
-        req.symbol.upper(), account_size, risk_pct, data_provider, llm_provider, session, sleeve=sleeve
+        req.symbol.upper(), account_size, risk_pct, data_provider, llm_provider, session, sleeve=sleeve,
+        committee_gate=CommitteeGateBudget(1, background=True),
     )
     response.sleeve_key = sleeve.key
     return response
@@ -102,6 +108,10 @@ def trade_plan_to_response(
         vix_regime_score=record.vix_regime_score,
         options_score=record.options_score,
         insider_score=record.insider_score,
+        extra_scores=extra_scores_from_json(record.extra_scores),
+        committee_run_id=record.committee_run_id,
+        committee_rating=record.committee_rating,
+        committee_note=record.committee_note,
         expected_move_score=record.expected_move_score,
         earnings_surprise_score=record.earnings_surprise_score,
         macro_event_score=record.macro_event_score,
@@ -123,6 +133,7 @@ def trade_plan_to_response(
                     record.macro_event_score, record.ai_overlay_score,
                 )
             )
+            + sum((extra_scores_from_json(record.extra_scores) or {}).values())
         ),
         confidence_points_max=MAX_SCORE_FOR_CONFIDENCE,
         auto_execute_note=record.auto_execute_note,

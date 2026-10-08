@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlmodel import Session, select
 
+from app.committee.gate import CommitteeGateBudget
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.data_providers.universe import get_default_watchlist
@@ -56,6 +57,7 @@ def run_auto_scan(
     symbols = [s for s in get_default_watchlist(settings.scan_universe_size) if s not in open_symbols]
 
     outcome = AutoScanOutcome()
+    gate_budget = CommitteeGateBudget(settings.committee_gate_max_per_scan)
     for symbol in symbols:
         try:
             response = generate_trade_plan(
@@ -67,12 +69,13 @@ def run_auto_scan(
                 session,
                 allow_auto_execute=slots_remaining > 0,
                 source="auto_scan",
+                committee_gate=gate_budget,
             )
         except Exception:
             logger.exception("Auto-scan: failed to evaluate %s", symbol)
             continue
 
-        if response.direction is None:
+        if response.direction is None or response.status == "no_trade":
             outcome.no_trade.append(symbol)
             continue
 
@@ -153,6 +156,7 @@ def run_market_open_redos(
     clock = resolve_clock(clock)
     now = clock()
     outcome = RedoOutcome()
+    gate_budget = CommitteeGateBudget(settings.committee_gate_max_per_scan)
 
     for deferral in due_redos(session, now):
         symbol = deferral.symbol
@@ -207,6 +211,7 @@ def run_market_open_redos(
                 source="market_open_redo",
                 clock=clock,
                 sleeve=redo_sleeve,
+                committee_gate=gate_budget,
             )
         except Exception as exc:
             logger.exception("Market-open redo failed for %s (attempt %d)", symbol, deferral.attempts)
@@ -232,7 +237,7 @@ def run_market_open_redos(
 
         deferral.result_plan_id = response.id
         when = format_market_time(now)
-        if response.direction is None:
+        if response.direction is None or response.status == "no_trade":
             deferral.outcome = f"Redone at {when}: no trade. {response.reason or ''}".strip()
             outcome.no_trade.append(symbol)
         elif response.status == "executed":

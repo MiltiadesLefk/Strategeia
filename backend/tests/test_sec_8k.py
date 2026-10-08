@@ -8,6 +8,7 @@ import json
 from datetime import date, datetime, timedelta
 
 import pytest
+from app.analysis import shadow_signals
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -121,6 +122,15 @@ def row(accession, accepted, items, *, form="8-K", filed=None, report=None, doc=
 
 
 # ---------------------------------------------------------------- item codes
+
+
+@pytest.fixture(autouse=True)
+def _signals_read_as_shadow(request, monkeypatch):
+    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
+    (analysis/live_evidence.py), so run the shadow loop as if none were live; the tests that assert the
+    promotion itself opt out with the `promoted` marker."""
+    if request.node.get_closest_marker("promoted") is None:
+        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_parse_items_keeps_order_and_drops_blanks_and_duplicates():
@@ -311,6 +321,7 @@ def test_old_or_harmless_filings_score_zero_but_are_still_available(session):
     assert signal.available and signal.would_score == 0 and signal.value == "none"
 
 
+@pytest.mark.promoted
 def test_the_signal_never_scores_more_than_one_point():
     assert filing_8k_scoring.FILING_8K_SCORE_CAP <= SHADOW_POINTS_CAP
-    assert filing_8k_scoring.SIGNAL_NAME not in LIVE_SIGNALS
+    assert filing_8k_scoring.SIGNAL_NAME in LIVE_SIGNALS  # promoted to real scoring (live_evidence.py)

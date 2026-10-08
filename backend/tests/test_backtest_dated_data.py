@@ -460,23 +460,23 @@ def test_a_part_that_is_off_has_no_handler_at_all(engine):
 
 
 def test_coverage_counts_only_the_parts_a_run_switched_on():
-    base = describe_coverage(30)
-    assert base["profile"] == "price_only" and base["achievable_points"] == 7
+    base = describe_coverage(16)
+    assert base["profile"] == "price_only" and base["achievable_points"] == 9
     assert base["included"] == {"fundamentals": False, "insiders": False, "earnings": False}
 
-    fundamentals = describe_coverage(30, include_fundamentals=True)
-    assert fundamentals["achievable_points"] == 7 + FUNDAMENTALS_REACHABLE_POINTS
+    fundamentals = describe_coverage(16, include_fundamentals=True)
+    assert fundamentals["achievable_points"] == 9 + FUNDAMENTALS_REACHABLE_POINTS
     assert fundamentals["profile"] == "price_plus_dated_data"
     active = {p["part"]: p for p in fundamentals["active_parts"]}
     assert active["fundamentals"]["live_points_max"] == 3
     assert "fundamentals" not in {p["part"] for p in fundamentals["inactive_parts"]}
 
-    everything = describe_coverage(30, include_fundamentals=True, include_insiders=True, include_earnings=True)
-    assert everything["achievable_points"] == 11
-    assert everything["achievable_max_confidence_pct"] == 69
+    everything = describe_coverage(16, include_fundamentals=True, include_insiders=True, include_earnings=True)
+    assert everything["achievable_points"] == 14
+    assert everything["achievable_max_confidence_pct"] == 44
     inactive = {p["part"] for p in everything["inactive_parts"]}
     assert {"news", "options", "earnings_date", "macro_event", "ai_overlay", "expected_move"} <= inactive
-    assert everything["bar_points_needed"] == 5 and everything["bar_share_of_achievable"] == pytest.approx(5 / 11)
+    assert everything["bar_points_needed"] == 5 and everything["bar_share_of_achievable"] == pytest.approx(5 / 14)
 
 
 # --------------------------------------------------------------------------- the run
@@ -534,7 +534,7 @@ def test_dated_parts_change_points_only_where_the_data_exists(engine):
         assert "revenue grew" not in (t["signal_reasons"] or "")  # no filings stored: no revenue point, only the price-range part
         assert t["scores"]["fundamental_score"] <= 1
 
-    assert rich.coverage["profile"] == "price_plus_dated_data" and rich.coverage["achievable_points"] == 9
+    assert rich.coverage["profile"] == "price_plus_dated_data" and rich.coverage["achievable_points"] == 11
     availability = rich.summary["dated_data"]["fundamentals"]
     assert availability["symbols_with_data"] == 1 and 0 < availability["answered"] < availability["requests"]
     assert "dated_data" not in plain.summary

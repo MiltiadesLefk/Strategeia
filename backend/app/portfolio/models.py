@@ -69,6 +69,17 @@ class TradePlanRecord(SQLModel, table=True):
     # Open-market insider buying, +/-1 (analysis/insider_scoring.py). Same
     # "shown, never hidden" pattern; nullable so pre-existing rows read None.
     insider_score: Optional[int] = None
+    # JSON {part: points} for the parts added after the original ten (analysis/live_evidence.py); None on older rows.
+    extra_scores: Optional[str] = None
+    # The evidence points behind confidence_score and the maximum they were scored against. None on rows made
+    # before they were stored, which were all scored out of LEGACY_POINTS_MAX (16).
+    confidence_points: Optional[int] = None
+    confidence_points_max: Optional[int] = None
+    # The AI Committee run that read this plan before it could open (committee/gate.py) and its rating; None when it did not run.
+    committee_run_id: Optional[int] = None
+    committee_rating: Optional[str] = None
+    # One sentence on what the committee did with the plan or why it did not read it (shown on the card).
+    committee_note: Optional[str] = None
     # Forward-looking dimensions on the market's own current pricing/record,
     # never a guess at unpublished content — see each analysis module's
     # docstring. expected_move/macro_event are one-directional (0 or a

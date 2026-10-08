@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from app.analysis import shadow_signals
+import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -101,6 +103,14 @@ def stored_items(session):
 
 
 # ------------------------------------------------------------------ parsing
+
+
+@pytest.fixture(autouse=True)
+def _signals_read_as_shadow(request, monkeypatch):
+    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
+    (analysis/live_evidence.py), so run the shadow loop as if none were live."""
+    if request.node.get_closest_marker("promoted") is None:
+        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_the_monetary_feed_parses_with_utc_times_and_types():

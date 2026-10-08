@@ -30,7 +30,9 @@ from app.portfolio.missed_trade_models import OUTCOME_RESOLVED, MissedTradeOutco
 from app.portfolio.models import PaperPosition, TradePlanRecord
 from app.portfolio.signal_stats import wilson_interval
 
-SETTINGS = AppSettings(min_confidence_for_trade=30, ai_overlay_objection_action="cancel", ai_overlay_scores_confidence=True)
+from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, _confidence_score as pct  # noqa: E402
+
+SETTINGS = AppSettings(min_confidence_for_trade=pct(5), ai_overlay_objection_action="cancel", ai_overlay_scores_confidence=True)
 WHEN = datetime(2026, 9, 1, 14, 45)
 
 
@@ -59,7 +61,7 @@ def flipped(result):
 
 
 def test_raising_the_bar_drops_the_two_marginal_taken_trades():
-    result = replay_decisions(FIXTURE, SETTINGS, parse_overrides({"min_confidence_for_trade": 40}))
+    result = replay_decisions(FIXTURE, SETTINGS, parse_overrides({"min_confidence_for_trade": pct(7)}))
     # A (38%) and B (31%) fall under 40%; C (44%) stays.
     assert set(flipped(result)) == {1, 2}
     assert all(f.flip == FLIP_NOW_SKIPPED for f in result.flips)
@@ -76,7 +78,7 @@ def test_raising_the_bar_drops_the_two_marginal_taken_trades():
 
 
 def test_lowering_the_bar_takes_the_25_percent_setup_with_its_hypothetical_result():
-    result = replay_decisions(FIXTURE, SETTINGS, parse_overrides({"min_confidence_for_trade": 20}))
+    result = replay_decisions(FIXTURE, SETTINGS, parse_overrides({"min_confidence_for_trade": pct(4)}))
     # D is 25% -> taken (+1.5R). E is 19% -> still skipped. F is still vetoed by the objection.
     assert set(flipped(result)) == {4}
     assert flipped(result)[4].flip == FLIP_NOW_TAKEN and flipped(result)[4].result_r == 1.5
@@ -111,7 +113,7 @@ def test_direction_filter_drops_shorts():
 
 def test_a_flip_without_a_result_is_counted_but_adds_nothing_to_the_rates():
     rows = FIXTURE + [row(7, 4, taken=False, r=None, state=RESULT_NONE)]
-    result = replay_decisions(rows, SETTINGS, parse_overrides({"min_confidence_for_trade": 20}))
+    result = replay_decisions(rows, SETTINGS, parse_overrides({"min_confidence_for_trade": pct(4)}))
     assert result.now_taken == 2 and result.flips_without_result == 1
     assert result.after.taken == 5 and result.after.resolved == 4 and result.after.no_result == 1
     assert result.after.total_r == pytest.approx(3.5)
@@ -133,13 +135,13 @@ def test_decisions_already_different_today_do_not_move_the_before_column():
 
 
 def test_small_samples_are_labelled():
-    assert replay_decisions(FIXTURE, SETTINGS, parse_overrides({"min_confidence_for_trade": 40})).after.small_sample
+    assert replay_decisions(FIXTURE, SETTINGS, parse_overrides({"min_confidence_for_trade": pct(7)})).after.small_sample
 
 
 def test_points_round_trip_for_every_reachable_confidence():
     from app.services.trade_plan_service import _confidence_score
 
-    assert all(points_from_score(_confidence_score(p)) == p for p in range(17))
+    assert all(points_from_score(_confidence_score(p)) == p for p in range(MAX_SCORE_FOR_CONFIDENCE + 1))
 
 
 # ----------------------------------------------------------------- refusals
@@ -239,10 +241,10 @@ def test_the_endpoint_replays_and_writes_nothing(session):
     app.dependency_overrides[get_app_settings] = lambda: SETTINGS
     try:
         client = TestClient(app)
-        ok = client.post("/api/replay", json={"overrides": {"min_confidence_for_trade": 20}})
+        ok = client.post("/api/replay", json={"overrides": {"min_confidence_for_trade": pct(4)}})
         refused = client.post("/api/replay", json={"overrides": {"default_risk_pct": 2}})
         empty = client.post("/api/replay", json={"overrides": {}})
-        extra = client.post("/api/replay", json={"overrides": {"min_confidence_for_trade": 20}, "save": True})
+        extra = client.post("/api/replay", json={"overrides": {"min_confidence_for_trade": pct(4)}, "save": True})
     finally:
         for dep in (get_session, get_app_settings):
             app.dependency_overrides.pop(dep, None)

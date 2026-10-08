@@ -13,6 +13,7 @@ from app.backtest import runner
 from app.backtest.calendar import close_moment, decision_moment, trading_days
 from app.backtest.data_provider import BacktestDataProvider, PriceBook
 from app.backtest.params import BacktestInputError, BacktestParams, SettingsOverrides, effective_settings
+from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE
 from app.config import AppSettings
 from app.knowledge.point_in_time import as_of
 from app.llm_providers.null_provider import NullLLMProvider
@@ -90,9 +91,11 @@ def test_a_clean_uptrend_gives_one_long_whose_numbers_match_the_bars(book, resul
     assert trade["realized_pnl"] == pytest.approx(pnl)
     assert trade["realized_r"] == pytest.approx(pnl / (abs(trade["entry_price"] - trade["stop_loss"]) * trade["shares"]))
 
-    # the score that let it in: 3 technical + 2 weekly/SPY = 5 points = 31%, above the 30% bar
-    assert trade["confidence_points"] == 5 and trade["confidence_points_max"] == 16
-    assert trade["scores"]["technical_score"] + trade["scores"]["market_confirmation_score"] == 5
+    # the score that let it in: 3 technical + 2 weekly/SPY + 1 for the clean uptrend leading the market or its
+    # volume trend (price-only evidence) = 6 points, above the 5-point bar
+    assert trade["confidence_points"] == 6 and trade["confidence_points_max"] == MAX_SCORE_FOR_CONFIDENCE
+    scores = trade["scores"]
+    assert scores["technical_score"] + scores["market_confirmation_score"] + scores["relative_strength"] + scores["volume_trend"] == 6
     assert trade["scores"]["news_score"] == trade["scores"]["fundamental_score"] == 0
 
 

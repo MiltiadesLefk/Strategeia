@@ -512,7 +512,7 @@ def test_ai_opinion_includes_a_dedicated_news_assessment_and_shows_the_keyword_r
     )
     assert response.ai_opinion_text == "Strong technical setup overall."  # distinct field, not overwritten
     # The prompt sent to the LLM must expose the rule-based (keyword) news read for contrast.
-    opinion_prompt = llm.prompts[0]
+    opinion_prompt = next(p for p in llm.prompts if "Rule-based news read" in p)
     assert "Rule-based news read" in opinion_prompt
     assert "record revenue" in opinion_prompt.lower()
 
@@ -1023,8 +1023,9 @@ def test_confidence_is_a_plain_percentage_of_the_points_earned():
     unreachable in both directions."""
     assert trade_plan_service._confidence_score(0) == 0
     assert trade_plan_service._confidence_score(trade_plan_service.MAX_SCORE_FOR_CONFIDENCE) == 100
-    half = trade_plan_service.MAX_SCORE_FOR_CONFIDENCE / 2
-    assert trade_plan_service._confidence_score(round(half)) == 50
+    maximum = trade_plan_service.MAX_SCORE_FOR_CONFIDENCE
+    for points in range(maximum + 1):
+        assert trade_plan_service._confidence_score(points) == round(points / maximum * 100)
 
 
 def test_the_default_bar_preserves_the_historical_five_point_cutoff(session, monkeypatch):

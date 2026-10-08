@@ -204,3 +204,7 @@ def _reset_in_process_cooldowns(monkeypatch):
     from app.auth import LoginAttemptTracker
 
     monkeypatch.setattr("app.api.routers.auth.login_attempts", LoginAttemptTracker())
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "promoted: a test about a signal that is live in real scoring, not read as a shadow signal")

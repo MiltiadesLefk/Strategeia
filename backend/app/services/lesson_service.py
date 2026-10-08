@@ -52,7 +52,9 @@ from app.llm_providers.base import ROUTINE_TIER, LLMProvider
 from app.llm_providers.factory import generate_with_fallback
 from app.markets import is_daily_bar_final
 from app.portfolio.models import PaperPosition, TradePlanRecord
-from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, clamp_points
+from app.analysis.live_evidence import EXTRA_LABELS, extra_scores_from_json
+from app.portfolio.calibration import LEGACY_POINTS_MAX
+from app.services.trade_plan_service import clamp_points
 from app.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -260,13 +262,18 @@ def _untrusted(text: str, max_chars: int) -> str:
 def _plan_section(plan: TradePlanRecord | None) -> str:
     if plan is None:
         return "Original plan: none stored for this position (opened by hand), so there is no recorded reasoning to review.\n"
-    points = clamp_points(sum(getattr(plan, field) or 0 for field, _ in _PLAN_SCORE_FIELDS))
-    components = ", ".join(
+    extra = extra_scores_from_json(plan.extra_scores) or {}
+    if plan.confidence_points is not None:
+        points = plan.confidence_points
+    else:
+        points = clamp_points(sum(getattr(plan, field) or 0 for field, _ in _PLAN_SCORE_FIELDS) + sum(extra.values()))
+    # A plan without a stored maximum was scored out of the old 16 points.
+    points_max = plan.confidence_points_max or LEGACY_POINTS_MAX
+    parts = [
         f"{label} {getattr(plan, field):+d}" for field, label in _PLAN_SCORE_FIELDS if getattr(plan, field) is not None
-    )
-    lines = [
-        f"Original plan: confidence {plan.confidence_score}% ({points} of {MAX_SCORE_FOR_CONFIDENCE} evidence points)."
-    ]
+    ] + [f"{EXTRA_LABELS[key]} {value:+d}" for key, value in extra.items() if value and key in EXTRA_LABELS]
+    components = ", ".join(parts)
+    lines = [f"Original plan: confidence {plan.confidence_score}% ({points} of {points_max} evidence points)."]
     if components:
         lines.append(f"Score components (points): {components}.")
     untrusted_lines = []

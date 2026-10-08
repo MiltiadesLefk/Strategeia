@@ -102,6 +102,15 @@ def _weekdays(end: date, count: int) -> list[date]:
 # ---- parser and provider -------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _signals_read_as_shadow(request, monkeypatch):
+    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
+    (analysis/live_evidence.py), so run the shadow loop as if none were live; the tests that assert the
+    promotion itself opt out with the `promoted` marker."""
+    if request.node.get_closest_marker("promoted") is None:
+        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
+
+
 def test_parser_reads_a_real_excerpt_and_skips_oddities():
     rows = parse_short_volume_file(REAL_EXCERPT)
     assert set(rows) == {"A", "AAPL", "BRK/B", "NVDA"}
@@ -354,9 +363,14 @@ def test_a_promoted_signal_is_no_longer_shadowed(monkeypatch):
     assert SIGNAL_NAME not in {s.name for s in evaluate_shadow_signals(ShadowContext("AAPL", "long"))}
 
 
-def test_live_signals_is_empty_and_in_the_strategy_fingerprint(monkeypatch):
-    assert shadow_signals.LIVE_SIGNALS == set()
-    assert build_snapshot(AppSettings())["rules"]["shadow_signals.LIVE_SIGNALS"] == []
+@pytest.mark.promoted
+def test_live_signals_are_the_promoted_ones_and_in_the_strategy_fingerprint(monkeypatch):
+    promoted = {
+        "congress_buying", "fund_accumulation", "ownership_5pct_filing", "finra_short_volume", "sec_8k_negative_items",
+        "news_cards", "fed_event_window", "post_mentions",
+    }
+    assert shadow_signals.LIVE_SIGNALS == promoted
+    assert build_snapshot(AppSettings())["rules"]["shadow_signals.LIVE_SIGNALS"] == sorted(promoted)
     before = fingerprint(build_snapshot(AppSettings()))
     monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", {SIGNAL_NAME})
     assert fingerprint(build_snapshot(AppSettings())) != before
@@ -405,20 +419,20 @@ def test_a_no_trade_record_records_them_too(session, monkeypatch):
     assert SIGNAL_NAME in {s.name for s in response.shadow_signals}
 
 
-def test_shadow_signals_never_change_a_decision(session, monkeypatch):
+@pytest.mark.promoted
+def test_a_high_short_volume_costs_a_long_one_point_and_changes_no_level(session, monkeypatch):
     baseline = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    # Ingest data the scorer reads as an unusually high ratio against a long.
+    # Ingest data read as an unusually high short-volume ratio, which argues against a long.
     _seed_high_short_volume(session)
     with_signal = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    scored = next(s for s in with_signal.shadow_signals if s.name == SIGNAL_NAME)
-    assert scored.available and scored.would_score == -1  # it did read the data...
-    for field in (
-        "direction", "entry", "stop", "tp1", "tp2", "rr1", "rr2", "suggested_shares", "confidence_score",
-        "confidence_points", "confidence_points_max", "technical_score", "fundamental_score", "news_score",
-        "market_confirmation_score", "vix_regime_score", "options_score", "insider_score", "expected_move_score",
-        "earnings_surprise_score", "macro_event_score", "ai_overlay_score",
-    ):
-        assert getattr(with_signal, field) == getattr(baseline, field), field  # ...and changed nothing
+    assert baseline.extra_scores["short_volume"] == 0 and with_signal.extra_scores["short_volume"] == -1
+    assert with_signal.confidence_points == baseline.confidence_points - 1
+    assert "short volume" in with_signal.signal_reasons.lower()
+    # It costs a point; it still cannot change a direction, a level or a size by itself.
+    for field in ("direction", "entry", "stop", "tp1", "tp2", "rr1", "rr2", "suggested_shares"):
+        assert getattr(with_signal, field) == getattr(baseline, field), field
+    # A live signal is scored, not also recorded as a silent one.
+    assert SIGNAL_NAME not in {s.name for s in with_signal.shadow_signals or []}
 
 
 def test_a_scorer_that_raises_cannot_break_a_plan(session, monkeypatch):

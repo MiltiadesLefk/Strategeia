@@ -37,7 +37,7 @@ from app.portfolio.signal_stats import (
     wilson_interval,
 )
 
-POINTS_MAX = 16
+from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE as POINTS_MAX  # noqa: E402
 
 
 def pct(points: int) -> int:
@@ -70,6 +70,8 @@ def add_trade(
             symbol="TEST",
             direction=direction,
             confidence_score=pct(points),
+            confidence_points=points,
+            confidence_points_max=POINTS_MAX,
             status="executed",
             **components,
         )
@@ -221,7 +223,7 @@ def test_band_table_matches_hand_computed_numbers(session):
     add_trade(session, 8, -1.0)
     # Band 11+: two winners.
     add_trade(session, 12, 2.0)
-    add_trade(session, 16, 3.0)
+    add_trade(session, POINTS_MAX, 3.0)
     # Band <= 6: nothing.
     report = compute_calibration(session)
     by_label = {b.label: b for b in report.bands}
@@ -264,20 +266,26 @@ def test_band_edges_land_in_the_right_band_and_label_correctly(session):
     report = compute_calibration(session)
     assert [b.n for b in report.bands] == [2, 2, 2, 2]
     assert band_label(0, 6, POINTS_MAX) == "6 pts or fewer"
-    assert band_label(11, 16, POINTS_MAX) == "11+ pts"
+    assert band_label(11, POINTS_MAX, POINTS_MAX) == "11+ pts"
     assert band_label(7, 8, POINTS_MAX) == "7-8 pts"
     assert band_label(9, 9, POINTS_MAX) == "9 pts"
 
 
-def test_confidence_points_inverts_every_reachable_percentage():
-    for points in range(POINTS_MAX + 1):
-        plan = TradePlanRecord(symbol="X", confidence_score=pct(points))
+def test_confidence_points_inverts_every_reachable_percentage_of_the_legacy_scale():
+    # A row from before raw points were stored was scored out of 16, whatever the maximum is now.
+    for points in range(17):
+        plan = TradePlanRecord(symbol="X", confidence_score=round(points / 16 * 100))
         assert confidence_points(plan, POINTS_MAX) == points
-    assert confidence_points(TradePlanRecord(symbol="X", confidence_score=250), POINTS_MAX) == POINTS_MAX
+    assert confidence_points(TradePlanRecord(symbol="X", confidence_score=250), POINTS_MAX) == 16
+
+
+def test_stored_points_win_over_the_percentage():
+    plan = TradePlanRecord(symbol="X", confidence_score=pct(20), confidence_points=20, confidence_points_max=POINTS_MAX)
+    assert confidence_points(plan, POINTS_MAX) == 20
 
 
 def test_gap_in_configured_bands_is_counted_not_dropped(session, monkeypatch):
-    monkeypatch.setattr("app.portfolio.calibration.CONFIDENCE_BANDS", ((0, 6), (9, 16)))
+    monkeypatch.setattr("app.portfolio.calibration.CONFIDENCE_BANDS", ((0, 6), (9, POINTS_MAX)))
     add_trade(session, 8, 1.0)  # falls in the 7-8 gap
     add_trade(session, 10, 1.0)
     report = compute_calibration(session)

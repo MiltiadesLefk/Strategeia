@@ -22,6 +22,7 @@ from typing import Any
 from app.analysis.ai_overlay_scoring import AI_OVERLAY_SCORE_CAP
 from app.analysis.earnings_history_scoring import SURPRISE_TRACK_RECORD_CAP
 from app.analysis.expected_move import EXPECTED_MOVE_SCORE_CAP
+from app.analysis.live_evidence import EXTRA_CAPS, EXTRA_LABELS, EXTRA_PARTS, PRICE_ONLY_PARTS
 from app.analysis.fundamental_scoring import FUNDAMENTAL_SCORE_CAP, NEWS_SCORE_CAP
 from app.analysis.insider_scoring import INSIDER_SCORE_CAP
 from app.analysis.macro_calendar import MACRO_EVENT_SCORE_CAP
@@ -102,6 +103,17 @@ def describe_coverage(
             "note": "can only subtract",
         },
     ]
+    # Relative strength and the volume trend come from the same bars the chart uses, so a backtest scores them.
+    for key in PRICE_ONLY_PARTS:
+        active.append(
+            {
+                "part": key,
+                "label": {"relative_strength": "Return against the market (SPY)", "volume_trend": "Accumulation or distribution over 20 days"}[key],
+                "points_max": EXTRA_CAPS[key],
+                "live_points_max": EXTRA_CAPS[key],
+                "note": "from prices and volume alone",
+            }
+        )
     optional_parts = [
         (
             include_fundamentals, "fundamentals", "Fundamentals: revenue growth and nearness to the 52-week high or low",
@@ -140,6 +152,22 @@ def describe_coverage(
         ("expected_move", "Options-implied expected move (penalty)", EXPECTED_MOVE_SCORE_CAP, "no options history"),
         ("macro_event", "Macro-event proximity (penalty)", MACRO_EVENT_SCORE_CAP, "the event calendar covers 2026 only, so it is left out"),
         ("ai_overlay", "AI trading overlay (penalty)", AI_OVERLAY_SCORE_CAP, "an AI that already knows what happened cannot be tested honestly"),
+    ]
+    not_rebuilt = {
+        "congress": "the Smart Money archive is not rebuilt for a past date",
+        "funds": "the Smart Money archive is not rebuilt for a past date",
+        "ownership": "the Smart Money archive is not rebuilt for a past date",
+        "short_volume": "no short-volume history is loaded for a backtest",
+        "filing_8k": "no 8-K archive is loaded for a backtest",
+        "financial_health": "today's company figures are not rebuilt for a past date",
+        "valuation": "today's P/E, DCF and peers are not rebuilt for a past date",
+        "analyst_consensus": "no consensus history is available for a past date",
+        "options_oi": "no options history is available for a past date",
+        "fed_window": "the Fed archive is not loaded for a backtest",
+        "post_mentions": "the posts archive is not loaded for a backtest",
+    }
+    inactive += [
+        (key, EXTRA_LABELS[key], EXTRA_CAPS[key], reason) for key, reason in not_rebuilt.items()
     ]
     achievable = sum(part["points_max"] for part in active)
     live_bar_points = points_needed_for(live_min_confidence_for_trade if live_min_confidence_for_trade is not None else min_confidence_for_trade)

@@ -16,6 +16,7 @@ import json
 from datetime import datetime, timedelta
 
 import pytest
+from app.analysis import shadow_signals
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
@@ -118,6 +119,15 @@ class FakeLLM:
 
 
 # --- the form ----------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _signals_read_as_shadow(request, monkeypatch):
+    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
+    (analysis/live_evidence.py), so run the shadow loop as if none were live; the tests that assert the
+    promotion itself opt out with the `promoted` marker."""
+    if request.node.get_closest_marker("promoted") is None:
+        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_a_valid_batch_parses_even_when_fenced_in_prose():
@@ -506,8 +516,8 @@ def test_collect_accepts_an_explicit_symbol_list(api):
     assert state["collect_calls"] == [["IBM", "LUV"]]
 
 
-def test_the_news_card_settings_are_validated_and_default_off():
-    assert AppSettings().news_cards_enabled is False
+def test_the_news_card_settings_are_validated_and_default_on():
+    assert AppSettings().news_cards_enabled is True
     from app.schemas.settings_schemas import SettingsUpdateRequest
 
     assert SettingsUpdateRequest(news_card_batch_limit=30).news_card_batch_limit == 30

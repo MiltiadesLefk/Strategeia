@@ -107,6 +107,7 @@ def effective_settings(base: AppSettings, overrides: SettingsOverrides | None = 
     changes: dict[str, Any] = {
         "llm_provider": "none",
         "ai_trading_overlay_enabled": False,
+        "committee_gate_enabled": False,
         "telegram_bot_token": "",
         "telegram_chat_id": "",
         "finnhub_enabled": False,

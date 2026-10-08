@@ -69,6 +69,7 @@ from app.portfolio.missed_trades import (
 )
 from app.portfolio.models import PaperPosition, TradePlanRecord
 from app.portfolio.signal_stats import bootstrap_mean_interval, wilson_interval
+from app.portfolio.calibration import confidence_points
 from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, _confidence_score, clamp_points
 
 logger = logging.getLogger(__name__)
@@ -430,11 +431,11 @@ def load_replay_rows(session: Session, limit: int = MAX_REPLAY_ROWS) -> tuple[li
     return [_to_row(plan, positions.get(plan.id), outcomes.get(plan.id)) for plan in plans], truncated
 
 
-def points_from_score(confidence_score: int) -> int:
+def points_from_score(confidence_score: int, points_max: int = MAX_SCORE_FOR_CONFIDENCE) -> int:
     """The evidence points behind a stored confidence percentage. The percentage is
     points / MAX_SCORE_FOR_CONFIDENCE rounded, and only 17 values are reachable, so
     the mapping back is exact (the plan row stores the percentage, not the points)."""
-    return clamp_points(round(confidence_score * MAX_SCORE_FOR_CONFIDENCE / 100))
+    return clamp_points(round(confidence_score * points_max / 100))
 
 
 def _to_row(plan: TradePlanRecord, position: PaperPosition | None, outcome: MissedTradeOutcome | None) -> ReplayRow:
@@ -448,7 +449,7 @@ def _to_row(plan: TradePlanRecord, position: PaperPosition | None, outcome: Miss
         created_at=plan.created_at,
         taken=taken,
         direction=direction,
-        confidence_points=points_from_score(plan.confidence_score),
+        confidence_points=confidence_points(plan, MAX_SCORE_FOR_CONFIDENCE),
         ai_overlay_score=min(0, plan.ai_overlay_score or 0),
         ai_stance=plan.ai_opinion_stance,
         ai_verdict=plan.ai_trade_verdict,

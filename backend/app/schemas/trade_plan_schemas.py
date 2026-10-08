@@ -64,6 +64,12 @@ class TradePlanResponse(BaseModel):
     vix_regime_score: int | None = None
     options_score: int | None = None
     insider_score: int | None = None
+    # Points for the Smart Money, filings, financials and valuation parts, by name (None on older plans).
+    extra_scores: dict[str, int] | None = None
+    # The committee run that read the plan, and its rating (None when it did not run).
+    committee_run_id: int | None = None
+    committee_rating: str | None = None
+    committee_note: str | None = None
     expected_move_score: int | None = None
     earnings_surprise_score: int | None = None
     macro_event_score: int | None = None

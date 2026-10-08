@@ -46,7 +46,10 @@ from app.portfolio.signal_stats import (
 # every row with 2 or 3 trades and nothing readable. Edit the tuples to re-cut;
 # they only need to be sorted, non-overlapping and cover 0..max (any trade that
 # falls in a gap is counted in `excluded`, never dropped).
-CONFIDENCE_BANDS: tuple[tuple[int, int], ...] = ((0, 6), (7, 8), (9, 10), (11, 16))
+# Every plan made before raw points were stored was scored out of this many points.
+LEGACY_POINTS_MAX = 16
+
+CONFIDENCE_BANDS: tuple[tuple[int, int], ...] = ((0, 6), (7, 8), (9, 10), (11, 32))
 
 # Below this many trades a row or an IC is shown but flagged "too few to read
 # much into" (matches the Dashboard/Portfolio win-rate note), and the verdict is
@@ -159,10 +162,15 @@ class _Trade:
 
 
 def confidence_points(plan: TradePlanRecord, points_max: int) -> int:
-    """The evidence points behind a plan's stored confidence percentage. The
-    plan stores only the percentage, which is points / points_max rounded, so
-    the inverse is exact for every reachable value."""
-    return max(0, min(points_max, round(plan.confidence_score * points_max / 100)))
+    """The evidence points behind a plan. A plan stores its raw points (and the maximum they were
+    scored against), which stay comparable across the scale change that added the Smart Money,
+    filings, financials and valuation parts (16 to 23 points). A plan without them (older rows)
+    stores only the percentage, which is points / points_max rounded, so the inverse is exact for
+    every reachable value."""
+    if plan.confidence_points is not None:
+        return max(0, min(points_max, int(plan.confidence_points)))
+    legacy = LEGACY_POINTS_MAX  # a row without stored points was scored out of the old maximum
+    return max(0, min(points_max, legacy, round(plan.confidence_score * legacy / 100)))
 
 
 def band_label(low: int, high: int, points_max: int) -> str:

@@ -81,13 +81,14 @@ def test_a_run_goes_from_queued_to_done_with_trades_equity_and_summary(env):
     assert summary["symbols_with_data"] == 1 and summary["symbols_skipped"] == []
     assert run["params"]["symbols"] == ["AAA"] and run["params"]["start"] == START
     assert run["params"]["history"]["AAA"]["bars"] == 271  # up to the run's last day
-    assert run["coverage"]["profile"] == "price_only" and run["coverage"]["achievable_points"] == 7
+    assert run["coverage"]["profile"] == "price_only" and run["coverage"]["achievable_points"] == 9
 
     trades = client.get(f"/api/backtests/{run_id}/trades").json()
     assert len(trades) >= 1
     first = trades[0]
-    assert first["symbol"] == "AAA" and first["direction"] == "long" and first["confidence_points"] == 5
-    assert first["scores"]["technical_score"] + first["scores"]["market_confirmation_score"] == 5
+    assert first["symbol"] == "AAA" and first["direction"] == "long" and first["confidence_points"] == 6
+    s = first["scores"]  # 5 from the chart and weekly/SPY, 1 from the price-only evidence (relative strength or volume trend)
+    assert s["technical_score"] + s["market_confirmation_score"] + s["relative_strength"] + s["volume_trend"] == 6
 
     equity = client.get(f"/api/backtests/{run_id}/equity").json()
     assert len(equity) == summary["days_simulated"]
@@ -112,14 +113,14 @@ def test_a_run_writes_only_the_backtest_tables(env):
 
 def test_overrides_are_recorded_and_the_bar_is_reported_beside_the_live_one(env):
     client, manager, _ = env
-    run_id = post(client, overrides={"min_confidence_for_trade": 20, "slippage_bps": 0}, decision_every_n_days=2).json()["id"]
+    run_id = post(client, overrides={"min_confidence_for_trade": 12, "slippage_bps": 0}, decision_every_n_days=2).json()["id"]
     manager.wait(60)
     run = client.get(f"/api/backtests/{run_id}").json()
-    assert run["params"]["overrides"] == {"min_confidence_for_trade": 20, "slippage_bps": 0.0}
+    assert run["params"]["overrides"] == {"min_confidence_for_trade": 12, "slippage_bps": 0.0}
     assert run["params"]["decision_every_n_days"] == 2
-    assert run["params"]["effective_settings"]["min_confidence_for_trade"] == 20
-    assert run["coverage"]["min_confidence_for_trade"] == 20
-    assert run["coverage"]["live_min_confidence_for_trade"] == 30
+    assert run["params"]["effective_settings"]["min_confidence_for_trade"] == 12
+    assert run["coverage"]["min_confidence_for_trade"] == 12
+    assert run["coverage"]["live_min_confidence_for_trade"] == 16
     assert run["coverage"]["bar_points_needed"] == 4 and run["coverage"]["live_bar_points_needed"] == 5
 
 

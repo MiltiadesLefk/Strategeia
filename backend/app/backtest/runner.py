@@ -381,7 +381,9 @@ def _plan_info(response) -> dict[str, Any]:
         "confidence_points_max": response.confidence_points_max,
         "confidence_score": response.confidence_score,
         "signal_reasons": response.signal_reasons,
-        "scores": {name: getattr(response, name) for name in SCORE_COMPONENTS},
+        # the original components plus the later evidence parts (relative strength and volume trend are the ones a
+        # price-only run can earn), so a stored trade shows every point it earned
+        "scores": {**{name: getattr(response, name) for name in SCORE_COMPONENTS}, **(response.extra_scores or {})},
     }
 
 

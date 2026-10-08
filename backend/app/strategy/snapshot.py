@@ -99,7 +99,30 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
         "VIX_ELEVATED_THRESHOLD", "VIX_PROXY_SYMBOL",
     ),
     "app.analysis.options_scoring": ("OPTIONS_SCORE_CAP", "PUT_CALL_BULLISH_THRESHOLD", "PUT_CALL_BEARISH_THRESHOLD"),
-    "app.analysis.insider_scoring": ("INSIDER_SCORE_CAP", "MIN_NET_BUY_VALUE"),
+    "app.analysis.insider_scoring": (
+        "INSIDER_SCORE_CAP", "MIN_NET_BUY_VALUE", "STRONG_NET_BUY_VALUE", "PLAN_SELL_WEIGHT",
+        "MIN_WEIGHTED_SELL_VALUE", "STRONG_WEIGHTED_SELL_VALUE",
+    ),
+    "app.analysis.live_evidence": ("EXTRA_MAX_POINTS",),
+    "app.analysis.price_evidence": (
+        "RELATIVE_STRENGTH_SCORE_CAP", "RELATIVE_STRENGTH_DAYS", "RELATIVE_STRENGTH_GAP_PCT",
+        "VOLUME_TREND_SCORE_CAP", "VOLUME_TREND_DAYS", "ACCUMULATION_RATIO",
+    ),
+    "app.analysis.options_consensus_evidence": (
+        "OPTIONS_OI_SCORE_CAP", "BULLISH_OI_RATIO", "BEARISH_OI_RATIO", "MIN_TOTAL_OI",
+        "CONSENSUS_SCORE_CAP", "STRONG_GROWTH_PCT", "WEAK_FALL_PCT",
+    ),
+    "app.analysis.fed_event_window": ("FED_WINDOW_PENALTY",),
+    "app.analysis.post_mentions": ("POST_MENTION_PENALTY",),
+    "app.analysis.financial_health_scoring": ("FINANCIAL_HEALTH_SCORE_CAP", "HEALTHY_NET_MARGIN_PCT", "WEAK_NET_MARGIN_PCT"),
+    "app.analysis.valuation_scoring": ("VALUATION_SCORE_CAP", "CHEAP_PE", "EXPENSIVE_PE", "FAST_GROWTH_PCT", "DCF_UPSIDE_PCT", "DCF_DOWNSIDE_PCT",
+        "PEER_CHEAP_RATIO", "PEER_EXPENSIVE_RATIO"),
+    "app.analysis.congress_scoring": ("CONGRESS_SCORE_CAP", "WINDOW_DAYS", "MIN_NET_MEMBERS", "STRONG_NET_MEMBERS"),
+    "app.analysis.fund_signals": ("FUND_SCORE_CAP", "OWNERSHIP_SCORE_CAP", "FUND_SIGNAL_MAX_AGE_DAYS", "STRONG_NET_FUNDS",
+        "OWNERSHIP_CHANGE_DAYS", "MIN_STAKE_CHANGE_PP", "OWNERSHIP_REPORTING_FLOOR_PCT"),
+    "app.analysis.short_volume_scoring": ("SHORT_VOLUME_SCORE_CAP", "HIGH_RATIO_DELTA"),
+    "app.analysis.filing_8k_scoring": ("FILING_8K_SCORE_CAP", "RECENT_WINDOW_DAYS"),
+    "app.analysis.news_card_scoring": ("NEWS_CARD_SCORE_CAP", "RECENT_WINDOW_DAYS", "NET_THRESHOLD"),
     "app.analysis.earnings_history_scoring": (
         "SURPRISE_TRACK_RECORD_CAP", "MIN_QUARTERS_FOR_TRACK_RECORD", "MEANINGFUL_SURPRISE_PCT",
         "CONSISTENCY_THRESHOLD", "REACTION_LOOKAHEAD_DAYS",
@@ -179,6 +202,14 @@ def build_snapshot(settings: AppSettings) -> dict[str, Any]:
             "llm_model": None if settings.llm_provider == "none" else normalize(decision_model),
             **_collect_constants(OVERLAY_RULE_CONSTANTS),
         }
+    if settings.committee_gate_enabled:
+        # Only while on, so an install that never uses it keeps its fingerprint. The committee
+        # decides through its decision model, so that model is part of what made the decision.
+        snapshot["committee_gate"] = {
+            "committee_gate_action": values["committee_gate_action"],
+            "llm_provider": settings.llm_provider,
+            "llm_model": None if settings.llm_provider == "none" else normalize(settings.effective_decision_model()),
+        }
     if settings.ml_style_enabled:
         # Only while on, so an install that never uses it keeps its fingerprint.
         snapshot["ml"] = {"ml_min_expected_r": normalize(values["ml_min_expected_r"])}
@@ -216,6 +247,12 @@ def fingerprint(snapshot: dict[str, Any]) -> str:
 def _label(group: str, key: str) -> str:
     if group == "settings":
         return DECISION_SETTINGS.get(key, key)
+    if group == "committee_gate":
+        return {
+            "committee_gate_action": "committee gate action",
+            "llm_provider": "committee LLM provider",
+            "llm_model": "committee LLM model",
+        }.get(key, key)
     if group == "overlay":
         if key in OVERLAY_SETTINGS:
             return OVERLAY_SETTINGS[key]

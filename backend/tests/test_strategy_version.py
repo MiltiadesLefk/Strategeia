@@ -359,7 +359,7 @@ def test_diff_reads_in_plain_words():
     old = build_snapshot(AppSettings())
     new = build_snapshot(AppSettings(min_confidence_for_trade=38, auto_execute_trade_plans=False))
     changes = describe_changes(old, new)
-    assert "min confidence 30 -> 38" in changes
+    assert "min confidence 16 -> 38" in changes
     assert "auto-execute on -> off" in changes
     assert len(changes) == 2
 
@@ -476,7 +476,7 @@ def test_versions_endpoint_lists_newest_first_with_changes_and_counts(client):
     assert body["current_number"] == 2
     assert body["unversioned_plans"] == 1
     newest, oldest = body["versions"]
-    assert newest["changes"] == ["min confidence 30 -> 38"]
+    assert newest["changes"] == ["min confidence 16 -> 38"]
     assert oldest["changes"] == []
     assert newest["settings_snapshot"]["settings"]["min_confidence_for_trade"] == 38
     assert (newest["plans"], newest["no_trades"], newest["positions_opened"], newest["closed_trades"]) == (2, 0, 2, 1)

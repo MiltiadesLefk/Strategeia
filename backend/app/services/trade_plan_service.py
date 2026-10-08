@@ -22,9 +22,11 @@ from app.analysis.ai_overlay_scoring import overlay_opposes_trade, score_ai_over
 from app.analysis.ground_truth import GroundTruthSnapshot, build_ground_truth, find_ungrounded_figures
 from app.analysis.expected_move import compute_expected_move_pct, days_to_expiration, score_expected_move
 from app.analysis.indicators import latest_atr
-from app.analysis.insider_scoring import INSIDER_SCORE_CAP, score_insider_activity
+from app.analysis.insider_scoring import INSIDER_SCORE_CAP, insider_sell_split, score_insider_activity
 from app.analysis.insight_text import trade_plan_take_text
+from app.analysis.live_evidence import EXTRA_LABELS, EXTRA_MAX_POINTS, evaluate_extra_evidence
 from app.analysis.macro_calendar import score_macro_event_proximity
+from app.analysis.news_card_scoring import ai_news_score
 from app.analysis.market_confirmation import (
     MARKET_CONFIRMATION_SCORE_CAP,
     MARKET_PROXY_SYMBOL,
@@ -35,6 +37,7 @@ from app.analysis.market_confirmation import (
 )
 from app.analysis.options_scoring import OPTIONS_SCORE_CAP, score_options_positioning
 from app.analysis.scanner_scoring import score_symbol
+from app.committee.gate import CommitteeGateBudget, gate_is_usable, run_committee_gate
 from app.analysis.shadow_signals import ShadowContext, evaluate_shadow_signals, shadow_signals_from_json, shadow_signals_to_json
 from app.analysis.trend import ChartAnalysis, analyze_chart
 from app.config import AppSettings, load_app_settings
@@ -62,6 +65,9 @@ from app.portfolio.sleeves import CORE_SLEEVE_KEY, plan_sleeve_id, read_scope, s
 from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
 from app.services.archive_service import archive_fetched_data
+from app.services.committee_gate_service import start_background_gate
+from app.services.news_card_service import label_new_items, llm_is_usable
+from app.services.valuation_service import get_valuation
 from app.services.deferred_evaluation_service import queue_market_open_redo
 from app.services.lesson_notes import past_lessons_block
 from app.services.telegram_service import notify_trade_plan
@@ -100,6 +106,7 @@ MAX_SCORE_FOR_CONFIDENCE = (
     + OPTIONS_SCORE_CAP
     + INSIDER_SCORE_CAP
     + SURPRISE_TRACK_RECORD_CAP
+    + EXTRA_MAX_POINTS
 )
 # A straight 0-100 percentage of the achievable evidence: a plan showing 56%
 # earned 9 of the 16 points this engine can award, and nothing else is being
@@ -209,6 +216,31 @@ def _fetch_confirmation_charts(symbol: str, data_provider: DataProvider) -> tupl
             market_chart = None
 
     return weekly_chart, market_chart
+
+
+def _fetch_extra_inputs(symbol: str, direction: str | None, data_provider: DataProvider) -> dict:
+    """The extra data the added evidence parts read, all best effort: the market's bars (for relative strength),
+    the options chain (open interest), the next report's consensus and the valuation page's DCF and peers.
+    A failed or unsupported read is simply None and that part scores 0. Under a simulated moment only the market's
+    bars are read (the rest is today's data and is not rebuilt for a past date)."""
+    out: dict = {"market_ohlcv": None, "options_chain": None, "estimate": None, "valuation": None}
+    if symbol != MARKET_PROXY_SYMBOL:
+        try:
+            out["market_ohlcv"] = data_provider.get_ohlcv(MARKET_PROXY_SYMBOL, period="1y", interval="1d")
+        except AllProvidersFailedError:
+            pass
+    if is_simulated() or direction is None:
+        return out
+    for key, read in (
+        ("options_chain", lambda: data_provider.get_options_chain(symbol)),
+        ("estimate", lambda: data_provider.get_earnings_estimate(symbol)),
+        ("valuation", lambda: get_valuation(data_provider, symbol)),
+    ):
+        try:
+            out[key] = read()
+        except Exception:  # noqa: BLE001 - optional evidence must never fail a plan
+            logger.debug("optional evidence %s unavailable for %s", key, symbol, exc_info=True)
+    return out
 
 
 def _fetch_vix_level(symbol: str, data_provider: DataProvider) -> float | None:
@@ -426,6 +458,21 @@ def _overlay_ground_truth(
     )
 
 
+def _committee_skip_reason(settings, llm_provider, committee_gate, market_closed: bool, *, auto_executing_possible: bool) -> str:
+    """One plain sentence on why the committee did not read a plan, so the card never has to guess."""
+    if not settings.committee_gate_enabled:
+        return 'Not read: the committee gate is off. Switch it on in Settings, AI tab ("Use the committee as a final gate").'
+    if llm_provider.name == "none" or not llm_provider.is_configured():
+        return "Not read: no working AI provider (the AI is offline or not configured; see Settings, AI tab)."
+    if committee_gate is None:
+        return "Not read: this evaluation does not use the committee (a backtest, say)."
+    if market_closed:
+        return "Not read yet: the market is closed. The fresh plan is read at the 09:45 ET redo."
+    if not auto_executing_possible:
+        return "Not read: this scan had no free position slot, so nothing could open."
+    return "Not read by the committee."
+
+
 def generate_trade_plan(
     symbol: str,
     account_size: float,
@@ -439,6 +486,7 @@ def generate_trade_plan(
     clock: Clock | None = None,
     settings: AppSettings | None = None,
     sleeve: Sleeve | None = None,
+    committee_gate: CommitteeGateBudget | None = None,
 ) -> TradePlanResponse:
     """Fully evaluates `symbol` (price/volume/technicals + fundamentals +
     news + earnings) and either returns a tradeable plan or an explicit
@@ -497,6 +545,22 @@ def generate_trade_plan(
     )
     earnings_date = data_provider.get_earnings_date(symbol)
     news_score, news_reasons = score_news_sentiment(news, provisional_direction)
+    # News by AI: the provider labels each new headline (event, sentiment, materiality) and fixed rules turn
+    # the labels into points. The keyword score above stays only as the fallback for a symbol whose headlines
+    # could not be labelled (no provider, a failed call, nothing recent). The AI never sees the trade.
+    if provisional_direction is not None and settings.news_cards_enabled and llm_is_usable(llm_provider):
+        try:
+            label_new_items(
+                session, symbol, llm_provider, settings.news_card_batch_limit,
+                company_name=overview.name if overview else None,
+            )
+        except Exception:  # noqa: BLE001 - labelling must never fail a plan
+            logger.exception("news labelling failed for %s", symbol)
+    ai_news_available, ai_news_points, ai_news_reasons = ai_news_score(
+        session, symbol, provisional_direction, NEWS_SCORE_CAP
+    )
+    if ai_news_available:
+        news_score, news_reasons = ai_news_points, ai_news_reasons
     fundamental_score, fundamental_reasons = (
         score_fundamentals(overview, financial_years, earnings_date, quote.price, provisional_direction)
         if overview
@@ -526,7 +590,9 @@ def generate_trade_plan(
     # 0 rather than blocking the evaluation. See analysis/insider_scoring.py
     # for why selling is deliberately never scored.
     insider_activity = data_provider.get_insider_activity(symbol)
-    insider_score, insider_reasons = score_insider_activity(provisional_direction, insider_activity)
+    insider_score, insider_reasons = score_insider_activity(
+        provisional_direction, insider_activity, insider_sell_split(session, symbol)
+    )
 
     # Forward-looking, but on the market's OWN pricing/record, never a guess
     # at unpublished content — see each module's docstring for why this is a
@@ -544,11 +610,17 @@ def generate_trade_plan(
     # would apply the CURRENT week's macro releases to every past day. The
     # price-only backtest leaves macro events out entirely (0 points).
     macro_event_score, macro_event_reasons = (0, []) if is_simulated() else score_macro_event_proximity()
+    # Smart Money, 8-K filings, financials and valuation (analysis/live_evidence.py): all rule-based.
+    extra_inputs = _fetch_extra_inputs(symbol, provisional_direction, data_provider)
+    extra = evaluate_extra_evidence(
+        provisional_direction, session, symbol, overview, financial_years,
+        ohlcv=ohlcv, earnings_history=earnings_history, **extra_inputs,
+    )
 
     rule_based_score = (
         scan_result.score + fundamental_score + news_score + market_confirmation_score
         + vix_regime_score + options_score + insider_score
-        + expected_move_score + earnings_surprise_score + macro_event_score
+        + expected_move_score + earnings_surprise_score + macro_event_score + extra.total
     )
     # The purely rule-based read, computed before the overlay is consulted —
     # this is the number handed to the overlay prompt as context (see
@@ -581,6 +653,7 @@ def generate_trade_plan(
                 ("market confirmation", market_confirmation_score), ("VIX regime", vix_regime_score),
                 ("options", options_score), ("insider", insider_score), ("expected move", expected_move_score),
                 ("earnings track record", earnings_surprise_score), ("macro events", macro_event_score),
+                *((EXTRA_LABELS[key].lower(), value) for key, value in extra.points.items()),
             ),
         ),
     )
@@ -606,7 +679,7 @@ def generate_trade_plan(
     signal_reasons = "; ".join(
         [technical_reason, *fundamental_reasons, *news_reasons, *market_confirmation_reasons,
          *vix_regime_reasons, *options_reasons, *insider_reasons,
-         *expected_move_reasons, *earnings_surprise_reasons, *macro_event_reasons,
+         *expected_move_reasons, *earnings_surprise_reasons, *macro_event_reasons, *extra.reasons,
          *ai_overlay_reasons]
     )
 
@@ -699,6 +772,7 @@ def generate_trade_plan(
             vix_regime_score=vix_regime_score,
             options_score=options_score,
             insider_score=insider_score,
+            extra_scores=extra.to_json(),
             expected_move_score=expected_move_score,
             earnings_surprise_score=earnings_surprise_score,
             macro_event_score=macro_event_score,
@@ -736,6 +810,7 @@ def generate_trade_plan(
             vix_regime_score=vix_regime_score,
             options_score=options_score,
             insider_score=insider_score,
+            extra_scores=extra.points,
             expected_move_score=expected_move_score,
             earnings_surprise_score=earnings_surprise_score,
             macro_event_score=macro_event_score,
@@ -837,6 +912,7 @@ def generate_trade_plan(
         vix_regime_score=vix_regime_score,
         options_score=options_score,
         insider_score=insider_score,
+        extra_scores=extra.to_json(),
         expected_move_score=expected_move_score,
         earnings_surprise_score=earnings_surprise_score,
         macro_event_score=macro_event_score,
@@ -879,8 +955,81 @@ def generate_trade_plan(
         session.commit()
         session.refresh(record)
         auto_execute_note = f"\n{auto_execute_note}"
-    elif settings.auto_execute_trade_plans and allow_auto_execute:
-        if settings.ai_overlay_objection_action == "hold" and _overlay_contradicts_direction(direction, opinion):
+        if (
+            source == "manual"
+            and committee_gate is not None
+            and not is_simulated()
+            and gate_is_usable(settings, llm_provider)
+            and committee_gate.take()
+        ):
+            # You asked for this plan by hand: read it now so you are not left waiting for the open. For
+            # information only. This plan will not open (the redo makes the one that can), so an objection
+            # cancels nothing here, and the fresh plan is read again at the open.
+            if committee_gate.background:
+                # A person is waiting: return the plan now and let the reports arrive as they are written.
+                run_id, note = start_background_gate(
+                    record, direction, data_provider, llm_provider, settings, informational=True,
+                    manager=committee_gate.manager, session_factory=committee_gate.session_factory,
+                )
+                record.committee_run_id, record.committee_note = run_id, note
+            else:
+                gate = run_committee_gate(session, symbol, direction, data_provider, llm_provider, settings)
+                record = session.get(TradePlanRecord, record.id)
+                record.committee_run_id = gate.run_id
+                record.committee_rating = gate.rating
+                record.committee_note = f"{gate.note} Read after the close for your information; the fresh plan is read again at the open."
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+    elif (settings.auto_execute_trade_plans and allow_auto_execute) or (
+        committee_gate is not None and gate_is_usable(settings, llm_provider)
+    ):
+        auto_executing = settings.auto_execute_trade_plans and allow_auto_execute
+        # The AI Committee gate (committee/gate.py): the moment a position would really open, and
+        # only for a plan every rule already approved. It can stop the trade, never start or change it.
+        gate_note = ""
+        gate_stops = False
+        gate_pending = False
+        if committee_gate is not None and not is_simulated() and gate_is_usable(settings, llm_provider):
+            if committee_gate.background and committee_gate.take():
+                # A person is waiting: the plan is returned now, stays pending, and the committee's reports
+                # arrive as they are written. The verdict is applied when the run ends and never opens the plan.
+                run_id, gate_note = start_background_gate(
+                    record, direction, data_provider, llm_provider, settings, informational=False,
+                    manager=committee_gate.manager, session_factory=committee_gate.session_factory,
+                )
+                record.committee_run_id, record.committee_note = run_id, gate_note
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+                gate_pending = run_id is not None
+            elif not committee_gate.background and committee_gate.take():
+                gate = run_committee_gate(session, symbol, direction, data_provider, llm_provider, settings)
+                gate_note = gate.note
+                gate_stops = gate.objects
+                record = session.get(TradePlanRecord, record.id)  # the run committed: reload cleanly
+                if gate.objects and settings.committee_gate_action == "cancel":
+                    record.status = "no_trade"
+                    record.reason = f"{gate.note} No trade taken."
+                elif gate.objects:
+                    gate_note = f"{gate.note} Auto-execute held: left pending for manual review."
+                signal_reasons = "; ".join(filter(None, [signal_reasons, gate.note]))
+                record.signal_reasons = signal_reasons
+                record.committee_run_id = gate.run_id
+                record.committee_rating = gate.rating
+                record.committee_note = gate_note
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+            else:
+                gate_note = "AI Committee gate skipped: this scan already used its allowance of committee runs."
+                record.committee_note = gate_note
+        if gate_stops or gate_pending:
+            auto_execute_note = f"\n{gate_note}"
+        elif not auto_executing:
+            # A plan you will execute by hand: the committee has still read it, and says so on the card.
+            auto_execute_note = f"\n{gate_note}" if gate_note else ""
+        elif settings.ai_overlay_objection_action == "hold" and _overlay_contradicts_direction(direction, opinion):
             # "hold": the plan is written and left pending for a human,
             # on the reasoning that the one moment a second opinion is
             # worth having is the moment before capital commits.
@@ -907,7 +1056,7 @@ def generate_trade_plan(
             try:
                 engine.open_position(record)
                 session.refresh(record)
-                auto_execute_note = "\nAuto-executed as a paper position."
+                auto_execute_note = "\nAuto-executed as a paper position." + (f"\n{gate_note}" if gate_note else "")
             except MarketClosedError:
                 # The bell rang between the session check above and the fill
                 # (a plan finishing at 15:59:59). Same outcome as a plan made
@@ -935,6 +1084,14 @@ def generate_trade_plan(
         # right after (see CLAUDE.md's attribute-expiry note) — refreshing
         # again after this commit keeps that guarantee for the caller.
         record.auto_execute_note = auto_execute_note.strip()
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+
+    if record.committee_run_id is None and not record.committee_note:
+        record.committee_note = _committee_skip_reason(
+            settings, llm_provider, committee_gate, redo_at is not None, auto_executing_possible=allow_auto_execute
+        )
         session.add(record)
         session.commit()
         session.refresh(record)
@@ -969,6 +1126,10 @@ def generate_trade_plan(
         time_horizon=record.time_horizon,
         auto_execute_note=record.auto_execute_note,
         redo_at=redo_at,
+        committee_run_id=record.committee_run_id,
+        committee_rating=record.committee_rating,
+        committee_note=record.committee_note,
+        reason=record.reason if record.status == "no_trade" else None,
         ai_take_text=llm_result.text,
         ai_provider=llm_result.provider,
         status=record.status,
@@ -980,6 +1141,7 @@ def generate_trade_plan(
         vix_regime_score=vix_regime_score,
         options_score=options_score,
         insider_score=insider_score,
+        extra_scores=extra.points,
         expected_move_score=expected_move_score,
         earnings_surprise_score=earnings_surprise_score,
         macro_event_score=macro_event_score,

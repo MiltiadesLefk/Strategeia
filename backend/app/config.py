@@ -573,7 +573,9 @@ class AppSettings(BaseModel):
     # the new one are the same cutoff: 5 of the 16 achievable points. Keeping
     # the literal 40 would have silently tightened the bar to 7 points and
     # rejected setups the app has been trading all along.
-    min_confidence_for_trade: int = 30
+    # 16% of the 32 achievable points is 5 points: the same evidence bar the old 30% of 16 meant, kept
+    # as the added evidence parts raised the maximum (16 -> 23 -> 32). Re-check both together.
+    min_confidence_for_trade: int = 16
 
     # Whether AI calls made for RESEARCH (background pages a person reads) may
     # use the provider's web search. "our_data_only" (default) keeps every call
@@ -613,6 +615,13 @@ class AppSettings(BaseModel):
     committee_max_llm_calls: int = Field(default=14, ge=6, le=40)
     committee_debate_rounds: int = Field(default=1, ge=1, le=3)
     committee_risk_rounds: int = Field(default=1, ge=1, le=3)
+    # The committee as a gate on a trade the rules already approved (committee/gate.py). Off by
+    # default. Runs only at the moment a position would really open, in auto-scan and the
+    # market-open redo, for at most `committee_gate_max_per_scan` symbols per pass. It can only
+    # stop a trade: "cancel" turns the plan into a no-trade, "hold" leaves it pending for you.
+    committee_gate_enabled: bool = False
+    committee_gate_action: Literal["cancel", "hold"] = "cancel"
+    committee_gate_max_per_scan: int = Field(default=5, ge=1, le=20)
 
     # First-run questionnaire answers ("" = not answered). Stored only; the suggestion they
     # produce changes no setting until the user presses Apply.
@@ -624,11 +633,12 @@ class AppSettings(BaseModel):
 
     # News cards: an AI (the configured provider's routine model) labels each
     # archived headline once with an event type, sentiment and materiality. Off
-    # by default because it spends AI calls. The labels are shown on the News tab
-    # and recorded as a silent signal on plans; they never change a score today.
+    # by default only because ... (now ON by default): it spends AI calls, a few per symbol at most and
+    # only for headlines not yet labelled. The labels are shown on the News tab and ARE the news part of
+    # the confidence score when a symbol has recent labelled headlines (keyword matching is the fallback).
     # news_card_batch_limit is the most headlines labelled per run (a run is one
     # button press); AI calls per run are separately capped at three.
-    news_cards_enabled: bool = False
+    news_cards_enabled: bool = True
     news_card_batch_limit: int = 20
 
     paper_starting_cash: float = 100_000.0
