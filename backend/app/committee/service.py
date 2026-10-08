@@ -65,8 +65,27 @@ def execute_run(
     data_provider: DataProvider,
     llm: LLMProvider,
     settings: AppSettings,
+    on_finish: Callable[[int], None] | None = None,
 ) -> None:
-    """The body of a run. Never raises: any failure ends up on the run row."""
+    """The body of a run. Never raises: any failure ends up on the run row. `on_finish(run_id)` is called once
+    the row holds its final state, whatever that state is (it must not raise; a failure is logged)."""
+    try:
+        _execute_run(session_factory, run_id, data_provider, llm, settings)
+    finally:
+        if on_finish is not None:
+            try:
+                on_finish(run_id)
+            except Exception:  # noqa: BLE001
+                logger.exception("committee run %s: the finish hook failed", run_id)
+
+
+def _execute_run(
+    session_factory: Callable[[], Session],
+    run_id: int,
+    data_provider: DataProvider,
+    llm: LLMProvider,
+    settings: AppSettings,
+) -> None:
 
     def update(**fields) -> None:
         with session_factory() as session:
@@ -87,7 +106,7 @@ def execute_run(
         update(steps=json.dumps(steps), llm_calls_used=calls)
 
     try:
-        outcome = run_committee(symbol, data_provider, llm, settings, publish)
+        outcome = run_committee(symbol, data_provider, llm, settings, publish, session_factory=session_factory)
     except AllProvidersFailedError:
         update(status=RUN_FAILED, finished_at=utcnow_naive(), error=f"No price data could be fetched for {symbol}.")
         return
@@ -124,6 +143,7 @@ class CommitteeManager:
         settings: AppSettings,
         *,
         background: bool = True,
+        on_finish: Callable[[int], None] | None = None,
     ) -> int:
         if llm.name == "none" or not llm.is_configured():
             raise CommitteeNotConfiguredError(
@@ -151,11 +171,11 @@ class CommitteeManager:
                 session.refresh(run)
                 run_id = run.id
             if not background:
-                execute_run(self._session_factory, run_id, data_provider, llm, settings)
+                execute_run(self._session_factory, run_id, data_provider, llm, settings, on_finish)
                 return run_id
             self._thread = threading.Thread(
                 target=execute_run,
-                args=(self._session_factory, run_id, data_provider, llm, settings),
+                args=(self._session_factory, run_id, data_provider, llm, settings, on_finish),
                 name=f"committee-{run_id}",
                 daemon=True,
             )

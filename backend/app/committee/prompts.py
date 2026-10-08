@@ -69,30 +69,48 @@ ANALYSTS: tuple[Analyst, ...] = (
     Analyst(
         "market",
         "Market analyst",
-        "You are a technical market analyst. From the price data and indicators below, write a report on the "
-        "trend, momentum, the nearest support and resistance, volatility (ATR) and volume. Say where the data "
-        "points up and where it points down, and finish with a short Markdown table of the key points.",
+        "You are a technical market analyst. From the price data and indicators below (daily and weekly trend, the "
+        "broad market and the VIX, the stock's return against the market, the volume trend, support and resistance, "
+        "volatility), write a report on trend, momentum, whether it is leading or lagging the market, and whether "
+        "buyers or sellers have been heavier. Say where the data points up and where it points down, and finish "
+        "with a short Markdown table of the key points.",
     ),
     Analyst(
         "fundamentals",
         "Fundamentals analyst",
-        "You are a fundamentals analyst. From the company figures below (size, valuation, revenue and income by "
-        "year, the 52-week range, the next earnings date), write a report on what the numbers say about the "
-        "business and its valuation, and what they cannot say. Finish with a short Markdown table of the key points.",
+        "You are a fundamentals analyst. From the company figures below (size, valuation, revenue growth and net "
+        "margin by year, the 52-week range, the next earnings date, the consensus for it and the record of past "
+        "earnings surprises), write a report on what the numbers say about the business, its profitability trend, "
+        "its valuation (the P/E, the rough discounted-earnings estimate and the peer comparison), the analyst "
+        "consensus and its earnings track record, and what they cannot say. Finish with a short Markdown table "
+        "of the key points.",
     ),
     Analyst(
         "news",
         "News and sentiment analyst",
-        "You are a news analyst. From the headlines below, write a report on what has happened recently, which "
-        "items matter most for the share price, and what tone the coverage has. Say clearly when the coverage is "
-        "thin. Finish with a short Markdown table of the key points.",
+        "You are a news and catalysts analyst. From the headlines, the AI-labelled headlines, recent SEC 8-K filings, "
+        "upcoming market-wide releases (FOMC, CPI, jobs report), Fed items and posts below, write a report on what has "
+        "happened recently, which items matter most for the share price, which of them are upcoming or just-happened "
+        "catalysts, and what tone the coverage has. Say clearly when the coverage is thin. Finish "
+        "with a short Markdown table of the key points.",
     ),
     Analyst(
         "insider",
-        "Insider activity analyst",
-        "You are an insider-activity analyst. From the summary of recent insider purchases and sales below, "
-        "write a short report on what it does and does not tell us. Open-market buying is meaningful; selling is "
-        "routine (taxes, diversification, scheduled plans) and weak evidence on its own.",
+        "Smart-money and insider analyst",
+        "You are a smart-money analyst. From the data below (insider purchases and sales, members of Congress, "
+        "followed funds' 13F changes, 5% holders' new, raised, cut or ended stakes and FINRA short-sale volume), write a "
+        "short report on who is buying and who is selling or shorting, and say how much of the insider selling was by "
+        "choice and how much was scheduled in advance under 10b5-1 plans, and how much weight each source deserves. Open-market insider "
+        "buying is meaningful; selling is routine (taxes, diversification, scheduled plans) and weak evidence on its "
+        "own. Congress and 13F data are weeks old by the time they are public, and short volume is not short "
+        "interest. Say when a source has no data.",
+    ),
+    Analyst(
+        "options",
+        "Options analyst",
+        "You are an options analyst. From the options data below (put/call volume, open interest, implied volatility, "
+        "the implied move against the stock's normal range), write a short report on what the options market is "
+        "pricing in and whether it leans bullish or bearish. Free options data is noisy, so say how much it can bear.",
     ),
 )
 
@@ -100,7 +118,8 @@ REPORT_TITLES = {
     "market": "Market report",
     "fundamentals": "Fundamentals report",
     "news": "News report",
-    "insider": "Insider report",
+    "insider": "Smart-money and insider report",
+    "options": "Options report",
 }
 
 

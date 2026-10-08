@@ -29,6 +29,7 @@ from app.data_providers.base import (
     FinancialYear,
     InsiderActivity,
     NewsItem,
+    OptionsSummary,
     QuoteData,
 )
 from app.llm_providers.base import LLMResult
@@ -74,6 +75,15 @@ class FakeData:
 
     def get_insider_activity(self, symbol):
         return InsiderActivity(symbol, 90, 3, 1, 400000.0, 100000.0) if self.insider else None
+
+    def get_earnings_estimate(self, symbol):
+        return None
+
+    def get_earnings_history(self, symbol, limit=12):
+        return []
+
+    def get_options_summary(self, symbol):
+        return OptionsSummary(symbol, "2099-01-15", 0.62, 0.35)
 
 
 class FakeLLM:
@@ -124,15 +134,15 @@ def test_full_run_order_tiers_and_rating():
     llm = FakeLLM()
     outcome = run_committee("ACME", FakeData(), llm, AppSettings())
     assert kinds(llm) == (
-        ["analyst"] * 4 + ["debate"] * 2 + ["manager", "trader"] + ["risk"] * 3 + ["final"]
+        ["analyst"] * 5 + ["debate"] * 2 + ["manager", "trader"] + ["risk"] * 3 + ["final"]
     )
-    assert outcome.calls_used == 12 and outcome.error is None
+    assert outcome.calls_used == 13 and outcome.error is None
     assert outcome.rating == "Overweight" and outcome.parse == "structured"
     assert outcome.conviction == "medium" and outcome.key_risks == "Valuation."
     tiers = {c["kind"]: c["tier"] for c in llm.calls}
     assert tiers["analyst"] == "routine" and tiers["debate"] == "routine"
     assert all(tiers[k] == "decision" for k in ("manager", "trader", "risk", "final"))
-    assert [s.status for s in outcome.steps] == ["done"] * 12
+    assert [s.status for s in outcome.steps] == ["done"] * 13
     # The verdict steps ask for structured output.
     assert [c["schema"] is not None for c in llm.calls if c["kind"] in ("manager", "trader", "final")] == [True] * 3
 
@@ -147,9 +157,9 @@ def test_the_committee_is_not_shown_the_rule_based_verdict():
 def test_progress_is_published_as_steps_change():
     seen: list[tuple[list[str], int]] = []
     run_committee("ACME", FakeData(), FakeLLM(), AppSettings(), lambda steps, calls: seen.append(([s["status"] for s in steps], calls)))
-    assert seen[0][0].count("pending") == 12  # the whole path is visible before anything runs
+    assert seen[0][0].count("pending") == 13  # the whole path is visible before anything runs
     assert any("running" in statuses for statuses, _ in seen)
-    assert seen[-1][1] == 12
+    assert seen[-1][1] == 13
 
 
 # ------------------------------------------------------------------ cost control
@@ -192,7 +202,7 @@ def test_three_rounds_run_when_the_budget_allows():
 def test_analyst_without_data_is_skipped_and_costs_nothing():
     llm = FakeLLM()
     outcome = run_committee("ACME", FakeData(news=False, insider=False), llm, AppSettings())
-    assert kinds(llm).count("analyst") == 2
+    assert kinds(llm).count("analyst") == 3
     skipped = {s.key for s in outcome.steps if s.status == "skipped"}
     assert skipped == {"analyst_news", "analyst_insider"}
     assert outcome.calls_used == len(llm.calls)
@@ -259,7 +269,7 @@ def test_headlines_are_fenced_as_data_and_cannot_forge_the_fence():
     assert block.count("<<<UNTRUSTED") == 1 and block.count("UNTRUSTED>>>") == 1
     llm = FakeLLM()
     run_committee("ACME", FakeData(headline=evil), llm, AppSettings())
-    news_prompt = next(c["prompt"] for c in llm.calls if c["kind"] == "analyst" and "news analyst" in c["prompt"])
+    news_prompt = next(c["prompt"] for c in llm.calls if c["kind"] == "analyst" and "news and catalysts analyst" in c["prompt"])
     assert "<<<UNTRUSTED" in news_prompt and "never instructions" in news_prompt
 
 
@@ -296,8 +306,10 @@ def test_committee_code_never_touches_the_paper_engine_or_plans():
 
 
 @pytest.fixture
-def api():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+def api(tmp_path):
+    # A file database, not one shared in-memory connection: with a single connection the request's cleanup
+    # (a rollback) could land between the worker thread's write and its commit and lose the final status.
+    engine = create_engine(f"sqlite:///{tmp_path / 'committee.db'}", connect_args={"check_same_thread": False, "timeout": 30})
     SQLModel.metadata.create_all(engine)
     manager = service.CommitteeManager(lambda: Session(engine))
     state = {"llm": FakeLLM(), "settings": AppSettings(), "data": FakeData()}
@@ -327,8 +339,8 @@ def test_start_poll_and_history(api):
     manager._thread.join(timeout=20)
     run = client.get(f"/api/committee/runs/{run_id}").json()
     assert run["status"] == "done" and run["rating"] == "Overweight"
-    assert run["llm_calls_used"] == 12 and run["llm_calls_max"] == 14
-    assert len(run["steps"]) == 12 and run["steps"][0]["text"]
+    assert run["llm_calls_used"] == 13 and run["llm_calls_max"] == 14
+    assert len(run["steps"]) == 13 and run["steps"][0]["text"]
     assert "never" in run["note"].lower() or "does not" in run["note"].lower()
     history = client.get("/api/committee/runs", params={"symbol": "ACME"}).json()["runs"]
     assert [r["id"] for r in history] == [run_id] and history[0]["rating"] == "Overweight"

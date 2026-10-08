@@ -7,7 +7,7 @@
 # (and published to the live view) the moment it starts and again when it ends.
 """The committee's flow, in order, as one small function.
 
-    analysts (market, fundamentals, news, insider)        routine model, may use web search if the
+    analysts (market, fundamentals, news, smart money, options)  routine model, may use web search if the
         |                                                  user's research mode allows it
     bull / bear debate (a few rounds)                      routine model
         |
@@ -35,6 +35,8 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+
+from sqlmodel import Session
 
 from app.analysis.ground_truth import find_ungrounded_figures
 from app.committee import prompts
@@ -329,11 +331,18 @@ def run_committee(
     llm: LLMProvider,
     settings: AppSettings,
     publish: Publish = lambda steps, calls: None,
+    session: Session | None = None,
+    session_factory: Callable[[], Session] | None = None,
 ) -> CommitteeOutcome:
     """Run the whole committee for one symbol. Never raises for an AI failure: a required step that
     fails ends the run with `error` set and the later steps marked skipped. A price history that
     cannot be fetched raises the data layer's AllProvidersFailedError before any AI call is made."""
-    pack = gather_data(symbol, data_provider)
+    if session is None and session_factory is not None:
+        # Open only while the data is gathered, never across the AI calls that follow.
+        with session_factory() as gather_session:
+            pack = gather_data(symbol, data_provider, gather_session)
+    else:
+        pack = gather_data(symbol, data_provider, session)
     run = _Run(symbol, pack, llm, settings, publish)
     run.publish()
     outcome = CommitteeOutcome(steps=run.steps)
