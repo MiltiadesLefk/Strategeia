@@ -5,6 +5,12 @@ fundamentals & news research → risk/position sizing → an AI-narrated trade p
 execute as a simulated position. Every stat on the dashboard (win rate, return, R:R) is
 computed from real simulated trade history — nothing is hardcoded.
 
+Fixed rules make every decision. A plan's confidence is scored from the chart, fundamentals, news (read by
+AI labels), options, insiders, Congress, followed funds, 5% owners, short volume, filings, valuation, analyst
+consensus and how the stock moves against the market, buying and selling both counting. An optional **AI
+Committee** (analyst reports, a bull/bear debate, a risk debate and a final rating) can read every plan the rules
+approve before it opens: it can only stop a trade, never start one or change its entry, stop or size.
+
 **This is not investment advice, and it does not place real trades.** v1 is analysis +
 paper trading only. Market data comes from free tiers (`yfinance`, `stooq`, optional
 Finnhub) which can be delayed or rate-limited — don't rely on it for time-sensitive
@@ -128,6 +134,14 @@ files or restart. Keys are stored in `backend/runtime/settings.json` (gitignored
 never committed, never echoed back by the API — the Settings GET only reports whether a
 key is set, not its value).
 
+**AI Committee gate.** In Settings, AI tab, "Use the committee as a final gate" is off by default because each
+run costs about a dozen AI calls. When on, auto-scan and the market-open redo run it before a position opens, and
+the Generate button runs it in the background so the reports appear on the plan card as they are written.
+
+**Claude Code CLI in Docker.** The image has its own copy of the CLI but not your login. Run `claude setup-token`
+on your machine and put the result in a gitignored `.env` next to `docker-compose.yml` as
+`CLAUDE_CODE_OAUTH_TOKEN=...`, then `docker compose up -d`. Without it the text falls back to rule-based wording.
+
 The **Claude Code CLI** provider is a novelty option: it shells out to your local
 `claude -p` instead of calling a metered API, so it's free if you already have Claude
 Code — but it has no SLA, meaningfully higher latency than a direct API call, and
@@ -174,6 +188,8 @@ backend/app/
   analysis/         EMA/RSI/support-resistance, trend/momentum classification, scanner scoring
   risk/             position sizing + target derivation
   llm_providers/    pluggable AI narrative layer (none/claude_code_cli/openrouter/openai/gemini)
+  committee/        AI Committee: analyst reports, debates, final rating, and the stop-only gate
+  knowledge/        dated facts (insider trades, Congress, funds, filings, news) read as of a moment
   portfolio/        paper-trading engine + SQLite models + stats
   api/routers/      REST endpoints per screen
   services/         orchestration combining the above per screen
@@ -199,6 +215,12 @@ scripts/            verify.py (tests + type-check + lint in one command) and ui_
   caps at the top. It lists today's members only, so a backtest over past years sees survivors and not the
   companies that have since left the index. Refresh it with `python scripts/refresh_universe.py` (see the
   script's header for the source).
+- The evidence parts added later (Smart Money both ways, valuation, analyst consensus, relative strength, volume
+  trend, options open interest, Fed items and posts) were promoted to real scoring before a backtest could test
+  them. Treat them as unproven until the Portfolio calibration report has 20 or more closed trades. A backtest
+  rebuilds only the two price-only parts.
+- No free source exists for short interest, the balance sheet or cash flow, institutional-ownership totals, or
+  analyst-estimate revisions, so those are not used.
 - Free-tier data can rate-limit or go stale under heavy use; the composite provider falls
   back automatically but surfaces an error rather than fabricating data if everything
   fails.
