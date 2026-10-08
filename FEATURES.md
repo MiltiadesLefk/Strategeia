@@ -63,7 +63,7 @@ fake: no real broker is connected.
      ▼
  TRADE PLAN (per stock: you click Generate, or the auto-scan / auto-trade loop runs it)
      │  chart + 9 more checks → confidence 0–100 %
-     ├─ no trend, AI veto, or confidence under 30 % ──▶ saved as "no trade", with the reason
+     ├─ no trend, AI veto, or confidence under 16 % ──▶ saved as "no trade", with the reason
      └─ otherwise: entry, stop, TP1, TP2, share count ──▶ saved as "pending"
                                                           │ + Telegram message
      ▼
@@ -190,7 +190,7 @@ and couldn't test.
 - **Generate Trade Plan** for any symbol.
 - **Each plan card shows:**
   - direction, entry, stop, TP1, TP2, **R:R ratio**, share count, money at risk and potential gain,
-  - confidence as a % *and* in points (for example "7/16 pts"), with a chip per scoring part (§5),
+  - confidence as a % *and* in points (for example "7/32 pts"), with a chip per scoring part (§5),
   - the list of reasons behind the score,
   - a muted **Silent signals (not scored)** line: what each new, not-yet-scored signal read and what it would have added (§5),
   - the ATR and how many ATRs away the stop is (amber if it's under 1×, which means it's inside normal
@@ -414,7 +414,7 @@ When a symbol lacks the data a required rule needs, it is shown as **not judged*
 6. **The decision.** It's a **"no trade"** if:
    - the trend is Neutral, *or*
    - the AI overlay vetoes it (with the action set to "cancel"), *or*
-   - confidence is under the bar (30% by default).
+   - confidence is under the bar (16% by default, which is 5 of 32 points).
 
    A "no trade" is saved with its reason, and the AI narrative is skipped for it, which saves tokens.
 7. **Otherwise it becomes a plan:** entry, stop, targets and size (§6), an AI narrative (or rule-based
@@ -470,12 +470,12 @@ plans and closed trades were made under it. A position's version is its plan's v
 
 ## 5. The confidence score, part by part
 
-The **confidence** is the points a setup earned out of the **16 achievable points**, as a %.
-Examples: 5/16 = 31%, 9/16 = 56%. Only 17 values are possible (0, 6, 12, 19, 25, 31, …, 100), which is
+The **confidence** is the points a setup earned out of the **32 achievable points**, as a %.
+Examples: 5/32 = 16%, 16/32 = 50%. Only 33 values are possible, which is
 why the card shows the points too. It measures *how much evidence lined up*, **not** the chance of
 winning.
 
-### Parts that can add or subtract (they make up the 16 points)
+### Parts that can add or subtract (they make up the 32 points)
 
 | Part | Points | How it's scored |
 |---|---|---|
@@ -484,7 +484,7 @@ winning.
 | **News** | −2 to +2 | The latest 5 headlines, matched against keyword lists (for example "beats", "upgrade" or "record" vs "miss", "downgrade" or "lawsuit"). Each positive headline counts for a long and against a short. |
 | **Weekly chart and SPY** | −2 to +2 | The weekly trend agrees **+1** or disagrees **−1**. The broad market (SPY) agrees **+1** or disagrees **−1**. A Neutral chart counts 0. |
 | **Options** | −1 to +1 | The put/call volume ratio on the nearest expiry at least 7 days out: under 0.7 is bullish, over 1.0 is bearish. It agrees with the trade **+1**, or goes against it **−1**. |
-| **Insider buying** | −1 to +1 | Open-market insider buying beating selling by at least **$100,000** over **90 days**: **+1** for a long, **−1** for a short. **Selling never counts.** |
+| **Insiders** | −2 to +2 | Buying **and selling** both count. Net open-market buying: $100,000 is 1 point, $1 million is 2 (supports a long, argues against a short). Selling does the reverse: sales by the insider's own choice count in full, sales under a 10b5-1 plan at a quarter of their value, less what insiders bought; $5 million is 1 point, $50 million is 2. |
 | **Earnings surprise record** | −1 to +1 | Needs at least 4 past quarters. If 75% or more beat estimates by at least 1%, that supports a long; if 75% or more missed, that supports a short. |
 
 ### Penalty-only parts (never a bonus, so they aren't counted in the 16)
@@ -496,8 +496,28 @@ winning.
 | **Macro events** | 0 or −1 | A **Fed decision, CPI or jobs report today or tomorrow**. The dates are hand-kept: Fed decisions for **2026 and 2027**, CPI and jobs reports for **2026 only so far** (§14). |
 | **AI overlay** | 0 to −3 | Only if the overlay is on and would not take the trade: **−1** under 45% conviction, **−2** from 45–64%, **−3** at 65% or more |
 
-**The bar:** a plan needs a trend **and** at least **30%** confidence (the `min_confidence_for_trade`
-setting), which is 5 of 16 points.
+**The bar:** a plan needs a trend **and** at least **16%** confidence (the `min_confidence_for_trade`
+setting), which is 5 of 32 points: the same evidence bar the old 30% of 16 meant. A value you saved earlier
+in Settings stays as it is (30% is now 10 points, a much stricter bar).
+
+**Added later (all rule-based, signed for the trade's direction, 15 more points in the maximum; maximum 32).**
+Smart Money, buying and selling, up to 2 points each: *Congress* (net members buying or selling, last 45 days,
+4 is the strong reading), *Funds* (followed funds' 13F net buying or selling, 3 funds is strong), *5% owners*
+(a new Schedule 13D or a raised stake is buying, +2 and +1; a cut stake or one that fell under 5% is selling,
+-1 and -2; last 90 days) and *Short volume* (unusually high FINRA short volume argues against a long and supports
+a short, 1 point). Company: *8-K* (negative-leaning items in the last 3 days, 1), *Financials* (profitable and
+improving supports a long; a loss or sliding profit a short, 1), *Valuation* (up to 2: P/E of 15 or less is cheap,
+over 60 or no earnings is expensive unless revenue grows 30%+, plus one point from the DCF and the peer
+comparison: 25% DCF upside or a P/E 25% under the peer median is cheap), *Consensus* (consensus EPS against the
+last reported EPS: +10% supports a long, -5% a short, 1). Market: *Vs market* (63-day return against SPY, 5
+points ahead or behind, 1), *Volume trend* (volume on up days against down days over 20 days, 1) and *Options
+OI* (put/call ratio of open interest, 1). Two *caution flags* can only subtract and are not in the maximum: a Fed
+statement or Chair speech within a day, and a post naming the company in the last 24 hours. A part with no stored
+data scores 0. They were first recorded silently and promoted on the user's request without a backtest, so treat
+them as unproven until the calibration report has 20+ trades. A backtest scores only the two price-only parts
+(Vs market, Volume trend); the rest are listed as "not in this run". **News is scored by AI labels** when a symbol
+has recent labelled headlines (News cards, on by default; the AI only labels, fixed rules score, cap 2); keyword
+matching is the fallback. The AI Committee is given all of this data too (§25).
 
 ### Does the confidence score predict results? (the calibration report)
 
@@ -611,7 +631,7 @@ those points are never added to the confidence score, never change the direction
 and never change the position size. Once enough plans have piled up, a backtest can show whether plans where
 the signal agreed did better than luck. Only then is it promoted: its points move into real scoring under a
 cap and the strategy version changes (the list of promoted signals, `LIVE_SIGNALS`, is part of the rules in
-the strategy fingerprint, §4). Today that list is empty.
+the strategy fingerprint, §4). Today it holds `congress_buying`, `fund_accumulation`, `ownership_5pct_filing`, `finra_short_volume`, `sec_8k_negative_items`, `news_cards`, `fed_event_window` and `post_mentions`: they were promoted early, at the owner's request, and now score for real (§5, "Added later"). The paragraphs below still describe how each one reads. The Silent signals line on a plan card lists only signals still waiting for promotion.
 
 The Trade Plans page shows a muted **Silent signals (not scored)** line on each plan card, with the reading
 and "would have added +1" (or "-1", or "no data yet"). A signal with no stored data, or whose newest data is
@@ -1306,8 +1326,7 @@ companies mentioned, a one-line summary and whether the headline is mainly about
   a missing or extra field, a repeated or out-of-range headline number): if any part does not, **nothing**
   from that batch is saved and those headlines stay unlabelled for next time. An AI error saves nothing
   either.
-- **What a label does:** it is shown as chips on the News tab and recorded as the silent signal `news_cards`
-  (§5). It changes no score, direction or trade today.
+- **What a label does:** it is shown as chips on the News tab and is how news is scored (§5): fixed rules turn the labels into up to 2 points, signed for the trade's direction, with keyword matching as the fallback when a symbol has no recent labelled headline. The AI never sees the trade, and a label changes no direction, level or size.
 - **Not point-in-time (an honest limit).** A label is saved with the time it was **made**, not the time the
   headline was published, and each label records the model and the moment (`label_model`, `labelled_at`).
   A model asked about an old headline may already know how the story ended, so its label can quietly carry
@@ -1316,7 +1335,7 @@ companies mentioned, a one-line summary and whether the headline is mainly about
 - **Switched on in Settings** (News cards card; off by default because it spends AI calls). **Label now** on
   the News tab, or `POST /api/news/label/{symbol}` (20-second cooldown per symbol), runs one labelling pass.
 
-**FINRA short-sale volume (a silent signal, §5 "Silent signals").** The Analysis page's Overview tab shows a "Short volume (FINRA)" card for the symbol (recent vs baseline ratio, last 10 days) with a Refresh button. FINRA posts one free file per
+**FINRA short-sale volume (scored, up to 1 point, §5).** The Analysis page's Overview tab shows a "Short volume (FINRA)" card for the symbol (recent vs baseline ratio, last 10 days) with a Refresh button. FINRA posts one free file per
 trading day listing, for every US stock, how much of that day's volume was a short sale. The app
 downloads those files for your watchlist symbols only (`backend/app/data_providers/finra_provider.py`),
 keeps each downloaded file under `runtime/finra/` (a posted file never changes, so it is fetched once),
@@ -1393,7 +1412,7 @@ downloaded to classify it (`backend/app/data_providers/sec_8k.py`). Each filing 
 - **Reading it back:** `filings_8k_as_of(session, symbol, as_of, window_days, items)` returns the filings
   accepted in the window as they were known at that moment, optionally only those listing given item codes.
   A filing accepted after the moment is invisible.
-- **Scoring:** none yet. The only use is the silent signal in §5 ("Silent signals").
+- **Scoring:** yes, up to 2 points either way (§5, "Added later"). The AI Committee reads it too (§25).
 
 **House trade reports (Congress).** Members of the House must report stock trades within 45 days. The House Clerk publishes a
 yearly index (a zip with the filing type, date and document number of every disclosure) and one PDF per trade report; both
@@ -1439,7 +1458,7 @@ dated fact of kind `fed_speech`, market-wide (no symbol):
 - **Tone is not read.** Whether a speech is hawkish or dovish needs a language model, and such a reading can only
   be tested honestly on speeches made after the model's training cut-off. It is a planned, separate step. Nothing
   here uses an AI.
-- **Scoring:** none. The only use is the silent signal in §5.
+- **Scoring:** yes, up to 2 points either way (§5, "Added later"). The AI Committee reads it too (§25).
 
 **Posts (Donald Trump, Truth Social).** Truth Social refuses scripts (HTTP 403), so the posts are read from
 **trumpstruth.org, an unofficial third-party archive** that republishes them as an RSS feed
@@ -1461,7 +1480,7 @@ posting times to the second, but nothing guarantees that. Each post is stored as
   because they say nothing about how the live feed behaves.
 - **No AI reads a post.** An AI may only ever extract facts from words; what a post means for a stock is decided
   by rules (§19, "The posts watcher"). Nothing here uses an AI.
-- **Scoring:** none. The only use is the silent signal in §5.
+- **Scoring:** yes, up to 2 points either way (§5, "Added later"). The AI Committee reads it too (§25).
 
 Other planned sources (Congress trades and big funds' holdings) will use the same table, and each new signal is
 backtested on these dates before it may earn points.
@@ -1523,10 +1542,10 @@ Every call the app makes to a source is counted once, in one place, since the se
 | Count disagreement in the confidence score | on | The overlay can cost 0 to −3 points |
 | Overlay objection action | cancel | cancel, hold or none (§9) |
 | Research mode | Our data only | Our data only, or Allow web search for research calls (§9). Never affects narration or the overlay |
-| Minimum confidence for a trade | 30% | The trade / no-trade bar |
+| Minimum confidence for a trade | 16% | The trade / no-trade bar (5 of 32 points) |
 | Telegram bot token, and chat ID | empty | Messages (§10) |
 | Scan universe size | 50 | How many symbols from the top of the watchlist to scan (25, 50, 100 or 200 in the app) |
-| News cards on / off (`news_cards_enabled`) | off | Lets the AI label saved headlines (§11, "News cards"). Spends AI calls, so it is off until you switch it on |
+| News cards on / off (`news_cards_enabled`) | on | The AI labels each new headline and the labels score the news part (§5, §11). Spends up to 3 AI calls per symbol evaluated, only for unlabelled headlines. Off = keyword news scoring |
 | Most headlines labelled per run (`news_card_batch_limit`) | 20 | 1 to 30. A run also never makes more than 3 AI calls |
 | Watchlist | the bundled list | The symbols to scan, saved separately in `runtime/universe.json` (§11), not in `settings.json` |
 | Starting cash | $100,000 | Only applies to a fresh or reset account |
@@ -1556,6 +1575,9 @@ Every call the app makes to a source is counted once, in one place, since the se
 | Thesis alerts | on | One Telegram message when an open position's thesis first becomes broken |
 | AI Committee: most AI calls per run | 14 (6 to 40) | A hard cap on the AI calls of one committee run (§25) |
 | AI Committee: bull / bear rounds, risk debate rounds | 1 and 1 (each 1 to 3) | How many rounds each debate may run. Never more than 3, whatever is saved |
+| Committee gate (`committee_gate_enabled`) | off | Send every plan the rules approved to the committee at the moment a position would open; an objection stops it (§25) |
+| Committee gate action (`committee_gate_action`) | cancel | `cancel` saves the plan as a no-trade; `hold` leaves it pending for you |
+| Committee runs per scan (`committee_gate_max_per_scan`) | 5 (1 to 20) | Caps the committee runs one auto-scan or redo pass may spend |
 
 ### On the server (the `backend/.env` file, or Docker environment variables)
 
@@ -1829,7 +1851,7 @@ Every route except login, auth status and health needs you logged in (or an API 
 | **Discounted earnings estimate** | A rough value today of a company's projected future profits |
 | **Put/call ratio** | Bets on a fall vs bets on a rise in the options market |
 | **Implied move** | The size of move the options market expects |
-| **Silent signal** | A new signal that is recorded on every plan with the points it would have added, but is not scored until a backtest shows it beats luck (§5) |
+| **Silent signal** | A new signal that is recorded on every plan with the points it would have added, but is not scored until a backtest shows it beats luck (§5). The Smart Money, filing, Fed and posts signals were promoted early, at the owner's request |
 | **Short volume** | The share of a day's trading volume that was a short sale. Not the same as short interest, the number of shares currently sold short (§11) |
 | **8-K** | The SEC form a company files within four business days of a material event (results, a major contract, an officer leaving, a delisting notice). It lists numbered item codes (§11) |
 | **Form 4** | The SEC filing an insider must submit within 2 business days of trading their company's stock |
@@ -1899,13 +1921,14 @@ Only the parts built from prices can be rebuilt for past days:
 | Weekly chart and SPY agreeing | **Yes**, up to 2 points |
 | VIX regime | **Yes**, a penalty only |
 | Fundamentals (revenue growth, nearness to the 52-week high or low) | **Only if switched on for the run**, up to 2 points (see below); otherwise 0 |
-| Insider buying | **Only if switched on**, up to 1 point; otherwise 0 |
+| Insiders (buying and selling) | **Only if switched on**, up to 2 points; otherwise 0 |
 | Earnings surprise record | **Only if switched on**, up to 1 point; otherwise 0 |
-| News, options | **No**: 0 |
+| Return against SPY, accumulation or distribution (from prices and volume) | **Yes**, 1 point each |
+| News, options, Smart Money, filings, valuation, consensus, Fed items and posts | **No**: 0 |
 | Expected-move and macro-event penalties, the earnings-date penalty, the AI overlay | **No**: 0 |
 
-With nothing switched on, a backtested plan can earn at most **7 of the 16 points** (44%), not 16. The **confidence bar is not
-changed**: the live bar of 30% still means 5 points, which here is 5 of the 7 that can be earned, a
+With nothing switched on, a backtested plan can earn at most **9 of the 32 points** (28%), not 32. The **confidence bar is not
+changed**: the live bar of 16% still means 5 points, which here is 5 of the 9 that can be earned, a
 tougher bar than live. Every run stores this explanation (its **coverage**) next to its results: the
 bar as a percentage and as points of the achievable maximum. A run may override the bar (see below);
 the override is recorded beside the live value. The coverage also lists which dated parts the run
@@ -1941,8 +1964,8 @@ How the dates are handled:
 - **A symbol with nothing stored scores 0 for that part.** A finished run's summary has a `dated_data`
   block per switched-on part: how many lookups were made, how many found data, and for how many symbols.
   Check it: a part that was switched on but never downloaded looks like "no signal", not like an error.
-- With everything on, a plan can earn up to **11 of the 16 points** (69%), and the live bar of 5 points
-  is then 5 of 11.
+- With everything on, a plan can earn up to **14 of the 32 points** (44%), and the live bar of 5 points
+  is then 5 of 14.
 
 Filling the facts in (each is safe to repeat; run it from the repository folder):
 - `backend/.venv/Scripts/python scripts/backfill_fundamentals.py AAPL MSFT` downloads annual revenue from
@@ -2038,7 +2061,7 @@ value and **pass**, **fail** or **not enough data**. The defaults (change them i
 costs (not judged when the run charged no costs); positive in most full calendar years (needs two); max
 drawdown under 20% (a yardstick only, no cap is applied anywhere); beats SPY on return and on Sharpe; at or
 above the 75th percentile of the random runs. Standing banners are shown for every run: probably optimistic
-(today's index members only), price-only core (how many of the 16 points the run could earn, from its
+(today's index members only), price-only core (how many of the 32 points the run could earn, from its
 coverage), how the trade count compares with the sample size wanted, and that daily bars flatter fills.
 
 ### How to read the Lab
@@ -2342,8 +2365,7 @@ A filing only appears from the moment it was accepted.
 withholding are left out because they are not market decisions. A row flagged as made under a pre-arranged
 **10b5-1 plan** carries a chip. Roles show as badges (CEO, CFO, Officer, Director, 10% owner).
 
-**How it relates to the score (§5).** Only open-market **buys** can ever add a point, at most one, and only when net
-buying is large enough. **Sells are never scored.** The page says so on its face. The Analysis page's Overview tab has
+**How it relates to the score (§5).** Buying and selling both count, up to 2 points either way: net buying of $100,000 is 1 point and $1 million is 2; sales count too, in full when the insider chose them and at a quarter of their value under a 10b5-1 plan ($5 million weighted is 1 point, $50 million is 2). The page says so on its face. The Analysis page's Overview tab has
 a compact "Insider activity" card for the shown symbol: 90-day buy and sell counts and values, cluster count, what
 today's rules would add to a long (for information only, it changes nothing), and the latest trades.
 
@@ -2398,10 +2420,7 @@ ignoring capitals and punctuation. Following nobody in list mode means no member
 click, looking back 60 days, and asks you to click again while reports are waiting. It answers `429` if used in the last
 60 seconds. The backfill script is resumable: stored reports are skipped without a request.
 
-**How it relates to the score (section 5).** One silent signal, `congress_buying`, is recorded on every trade plan with 0
-points: the number of different members who bought minus those who sold the symbol in reports filed over the last 45 days.
-It needs a net of at least 2 members to score at all, is signed by the trade direction, and is capped at plus or minus 1.
-Until a backtest shows it beats luck it adds nothing to confidence. With no Congress data stored it reads "not available".
+**How it relates to the score (section 5).** `congress_buying` scores every trade plan, both ways: the number of different members who bought minus those who sold the symbol in reports filed over the last 45 days. A net of at least 2 members is 1 point and 4 or more is 2, signed by the trade direction (net buying supports a long and argues against a short; net selling does the reverse). With no Congress data stored it reads "not available" and scores 0.
 
 ### The Funds tab (13F holdings)
 
@@ -2444,11 +2463,7 @@ funds themselves. It answers `429` if used in the last 60 seconds and the button
 resumable: stored filings are skipped without a request. Requests share the SEC client (section 11), so the contact address
 for SEC (`SEC_EDGAR_USER_AGENT`) matters; the tab warns when it is still the placeholder.
 
-**How it relates to the score (section 5).** One silent signal, `fund_accumulation`, is recorded on every trade plan with 0
-points: among the followed funds with a filing accepted in the last 120 days that report the symbol, how many newly hold it
-or hold more than the quarter before, minus how many hold less or have sold out. It is signed by the trade direction (net
-buying supports a long and argues against a short) and capped at plus or minus 1. With no filings stored it reads "not
-available"; with filings but no fund holding the symbol it reads "none".
+**How it relates to the score (section 5).** `fund_accumulation` scores every trade plan, both ways: among the followed funds with a filing accepted in the last 120 days that report the symbol, how many newly hold it or hold more than the quarter before, minus how many hold less or have sold out. A net of 1 or 2 funds is 1 point and 3 or more is 2, signed by the trade direction (net buying supports a long and argues against a short; net selling does the reverse). With no filings stored it reads "not available"; with filings but no fund holding the symbol it reads "none".
 
 The SEC also publishes a quarterly bulk file of every manager's 13F data. The app does not use it; it is a possible later
 source for covering the whole market.
@@ -2476,9 +2491,7 @@ Only the **structured filings (2024 onward)** are read; older free-text filings 
 guessed. Filings by the **funds you follow** are loaded too (for example a 13D from an activist fund), with the company's
 ticker looked up from SEC's company list.
 
-**How it relates to the score (section 5).** One silent signal, `ownership_5pct_filing`, is recorded on every trade plan with
-0 points: a **new Schedule 13D** (not an amendment, and not a 13G) filed in the last 30 days. A new 13D is a stake being
-built, so it would add 1 to a long and subtract 1 from a short; with no clear direction it reads 0.
+**How it relates to the score (section 5).** `ownership_5pct_filing` scores every trade plan, both ways, from the Schedule 13D and 13G filings of each 5% holder in the last 90 days: a new Schedule 13D (an activist crossing 5%) is buying worth 2 points, a later filing that shows the stake up by a point or more is buying worth 1, one that shows it down by a point or more is selling worth 1, and one that shows it under the 5% line (the holder has left) is selling worth 2. A new passive 13G is routine and counts for nothing. The net is signed by the trade direction (buying supports a long and argues against a short), up to 2 points; with no clear direction it reads 0.
 
 ## 21. Market Terminal
 
@@ -2667,6 +2680,10 @@ The **AI Committee** page (`/committee`) gives a second, written opinion on one 
 | 6 | Portfolio manager | decision | The final rating: **Buy, Overweight, Hold, Underweight or Sell**, with a conviction (low, medium, high), a summary and the key risks |
 
 The "routine" and "decision" models are the ones set in Settings (a blank decision model means the routine one). With the research mode set to "Allow web search" the analysts (and only they) may search the web if the provider can; otherwise everything stays on the app's own data.
+
+**What it is given.** One data pack, built by the app with no AI, for every analyst: price and indicators (market); company size, P/E, revenue growth and net margin by year, the next earnings date, the consensus for it and the last quarters' earnings surprises (fundamentals); headlines plus recent 8-K filings (news and catalysts); insider Form 4 totals, Congress net buyers, followed funds' 13F changes, new 13D stakes and FINRA short volume (smart money and insiders); put/call, implied volatility and the implied move (options). A source that was never loaded says so instead of reading as "nothing happened". With Research mode set to allow web search the analysts may add to this; they are never required to search.
+
+**As a gate (Settings, AI Committee, "Use the committee as a final gate").** Off by default. The rules scan and score every symbol with no AI. Only a plan every rule approved, when a position would really open (market open, auto-execute on, a free slot), goes to the committee, in auto-scan and the market-open redo (inline: nobody is watching, and the result decides whether the position opens), and for a manual Generate click, which returns the plan at once and runs the committee in the background: each report appears on the plan card as it is written, the Execute button waits for the verdict, and a plan made for a person is never opened automatically (a backing rating just says "you can execute it"). Never in a backtest. A plan you execute by hand is still read, and the card shows the rating with a link to the full debate. Buy or Overweight backs a long, Sell or Underweight backs a short; any other rating is an objection. The action setting turns an objection into a no-trade (the levels the rules computed stay on the record) or leaves the plan pending. It can only stop a trade: it never starts one or changes direction, entry, stop or size. A committee that cannot run, fails, or gives no readable rating records no objection and says so on the plan. Cost: at most `committee_gate_max_per_scan` runs per pass, each capped by the call limit. The gate is part of the strategy fingerprint only while on. Not built yet: ranking survivors before spending the allowance (it takes them in scan order), and a separate sleeve to compare gated and ungated results (compare strategy versions instead).
 
 **Live view.** The page shows the whole path as soon as a run starts. Each step turns from "waiting" to "writing" to "done" and its text appears the moment it is finished. The page asks the server every second and a half; there is no push connection.
 
