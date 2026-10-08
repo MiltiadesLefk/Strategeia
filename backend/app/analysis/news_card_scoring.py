@@ -83,15 +83,49 @@ def score_news_cards(direction: str | None, cards: list[dict]) -> tuple[int, str
     return points, f"AI-labelled news in the last {RECENT_WINDOW_DAYS} days leans {lean} ({value}), which {verb} a {direction}.", value
 
 
-def build_news_card_signal(direction: str | None, session: Session | None, symbol: str) -> ShadowSignal:
-    if session is None:
-        return ShadowSignal(SIGNAL_NAME, None, 0, "No database session to read news cards from.", available=False)
+def recent_cards(session: Session, symbol: str) -> list[dict]:
+    """The labelled headlines for `symbol` published in the recent window, as known now."""
     cutoff = current_as_of() - timedelta(days=RECENT_WINDOW_DAYS)
     recent = []
     for fact in cards_for_symbol(session, symbol):
         published = _news_time(fact.payload)
         if published is not None and published >= cutoff:
             recent.append(dict(fact.payload))
+    return recent
+
+
+def ai_news_score(
+    session: Session | None, symbol: str, direction: str | None, cap: int
+) -> tuple[bool, int, list[str]]:
+    """(available, points, reasons) for the news part of the score, read from the AI's labels.
+
+    The AI only labelled each headline (event, sentiment, materiality); these fixed rules turn the labels
+    into points: every NET_THRESHOLD of net weighted sentiment is one point, up to `cap`, signed for the
+    trade's direction. `available` is False when no recent headline has been labelled, and then the caller
+    keeps the keyword score instead. Labelled but not material is available with 0 points.
+    """
+    if session is None:
+        return False, 0, []
+    recent = recent_cards(session, symbol)
+    if not recent:
+        return False, 0, []
+    net, counted = net_news_weight(recent)
+    if direction not in ("long", "short") or counted == 0 or abs(net) < NET_THRESHOLD:
+        return True, 0, []
+    bullish = net > 0
+    magnitude = min(cap, abs(net) // NET_THRESHOLD)
+    supports = bullish == (direction == "long")
+    points = magnitude if supports else -magnitude
+    lean = "positive" if bullish else "negative"
+    verb = "supports" if supports else "argues against"
+    value = f"net {net:+d} from {counted} material item{'s' if counted != 1 else ''}"
+    return True, points, [f"AI-labelled news leans {lean} ({value}), which {verb} a {direction}"]
+
+
+def build_news_card_signal(direction: str | None, session: Session | None, symbol: str) -> ShadowSignal:
+    if session is None:
+        return ShadowSignal(SIGNAL_NAME, None, 0, "No database session to read news cards from.", available=False)
+    recent = recent_cards(session, symbol)
     if not recent:
         return ShadowSignal(
             SIGNAL_NAME, None, 0, f"No labelled news for this symbol in the last {RECENT_WINDOW_DAYS} days.", available=False

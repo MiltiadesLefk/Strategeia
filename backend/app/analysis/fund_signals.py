@@ -45,8 +45,17 @@ from app.knowledge.fund_holdings import (
 FUNDS_SIGNAL_NAME = "fund_accumulation"
 OWNERSHIP_SIGNAL_NAME = "ownership_5pct_filing"
 # Largest swing either signal would add in either direction.
-FUND_SCORE_CAP = 1
-OWNERSHIP_SCORE_CAP = 1
+FUND_SCORE_CAP = 2
+OWNERSHIP_SCORE_CAP = 2
+# A net of this many followed funds buying (or selling) is the strong reading: the second point.
+STRONG_NET_FUNDS = 3
+# How far back a stake change still counts, and how far back its earlier filings are looked up for comparison.
+OWNERSHIP_CHANGE_DAYS = 90
+OWNERSHIP_HISTORY_DAYS = 365
+# A holder's stake moving by at least this many percentage points is a real buy or sell, not rounding.
+MIN_STAKE_CHANGE_PP = 1.0
+# Falling under this share is leaving the 5% club altogether.
+OWNERSHIP_REPORTING_FLOOR_PCT = 5.0
 # A filing older than this is the previous quarter's picture: the next one is due.
 FUND_SIGNAL_MAX_AGE_DAYS = 120
 # A new 13D counts as news for this long.
@@ -81,7 +90,7 @@ def build_fund_accumulation_signal(direction: str | None, session: Session | Non
     value = f"{buying} buying, {selling} selling"
     if direction not in ("long", "short"):
         return ShadowSignal(name, value, 0, f"{value} among followed funds, but there is no clear direction to sign it by.", available=True)
-    points = _sign(direction, net) * FUND_SCORE_CAP
+    points = _sign(direction, net) * (FUND_SCORE_CAP if abs(net) >= STRONG_NET_FUNDS else 1)
     if net == 0:
         reason = f"Followed funds are split ({value}) for {symbol} at their latest quarter end."
     else:
@@ -91,30 +100,64 @@ def build_fund_accumulation_signal(direction: str | None, session: Session | Non
     return ShadowSignal(name, value, points, reason, available=True)
 
 
+def ownership_net_change(records: list, now) -> tuple[int, list[str]]:
+    """The net buying (+) or selling (-) by 5% holders in the last OWNERSHIP_CHANGE_DAYS, from their Schedule 13D and
+    13G filings, and one line per move. Per filer, oldest first:
+      * a new Schedule 13D (an activist crossing 5% and saying it may want influence): +2
+      * a later filing that shows a higher stake (at least MIN_STAKE_CHANGE_PP more): +1
+      * a later filing that shows a lower stake (at least that much less): -1
+      * a later filing that shows the stake under the 5% floor (the holder has left): -2
+    A new Schedule 13G is the routine passive form and does not move it."""
+    cutoff = now - timedelta(days=OWNERSHIP_CHANGE_DAYS)
+    by_filer: dict[str, list] = {}
+    for record in records:
+        by_filer.setdefault(record.filer_cik or record.filer_name or record.accession, []).append(record)
+    net = 0
+    lines: list[str] = []
+    for filings in by_filer.values():
+        filings.sort(key=lambda r: r.known_at)
+        for index, record in enumerate(filings):
+            if record.known_at < cutoff:
+                continue
+            who = record.filer_name or "a holder"
+            previous = filings[index - 1] if index > 0 else None
+            if not record.is_amendment and record.schedule == "13D":
+                net += 2
+                pct = f" ({record.percent:g}%)" if record.percent is not None else ""
+                lines.append(f"{who} filed a new Schedule 13D{pct}")
+            elif record.percent is not None and record.percent < OWNERSHIP_REPORTING_FLOOR_PCT and (previous is not None or record.is_amendment):
+                net -= 2
+                lines.append(f"{who} now reports {record.percent:g}%, under the {OWNERSHIP_REPORTING_FLOOR_PCT:g}% line")
+            elif previous is not None and previous.percent is not None and record.percent is not None:
+                delta = record.percent - previous.percent
+                if delta >= MIN_STAKE_CHANGE_PP:
+                    net += 1
+                    lines.append(f"{who} raised its stake from {previous.percent:g}% to {record.percent:g}%")
+                elif delta <= -MIN_STAKE_CHANGE_PP:
+                    net -= 1
+                    lines.append(f"{who} cut its stake from {previous.percent:g}% to {record.percent:g}%")
+    return net, lines
+
+
 def build_ownership_signal(direction: str | None, session: Session | None, symbol: str) -> ShadowSignal:
     name = OWNERSHIP_SIGNAL_NAME
     if session is None:
         return ShadowSignal(name, None, 0, "No database session to read ownership filings from.", available=False)
     if not facts_known_as_of(session, FactKind.OWNERSHIP_FILING, symbol=symbol, limit=1):
         return ShadowSignal(name, None, 0, "No 13D/13G filings stored for this symbol.", available=False)
-    new_13d = [
-        r
-        for r in ownership_filings_as_of(session, symbol, window_days=OWNERSHIP_WINDOW_DAYS, schedule="13D")
-        if not r.is_amendment
-    ]
-    if not new_13d:
-        return ShadowSignal(name, "none", 0, f"No new Schedule 13D in the last {OWNERSHIP_WINDOW_DAYS} days.", available=True)
-    first = new_13d[0]
-    who = first.filer_name or "a holder"
-    pct = f" ({first.percent:g}%)" if first.percent is not None else ""
-    value = f"13D: {who}{pct}"
-    if direction not in ("long", "short"):
-        return ShadowSignal(name, value, 0, f"{who} filed a new 13D{pct}, but there is no clear direction to sign it by.", available=True)
-    points = OWNERSHIP_SCORE_CAP if direction == "long" else -OWNERSHIP_SCORE_CAP
-    verb = "supports" if points > 0 else "argues against"
-    return ShadowSignal(
-        name, value, points, f"{who} filed a new Schedule 13D{pct} in the last {OWNERSHIP_WINDOW_DAYS} days: a stake being built {verb} a {direction}.", available=True
-    )
+    records = ownership_filings_as_of(session, symbol, window_days=OWNERSHIP_HISTORY_DAYS)
+    net, lines = ownership_net_change(records, current_as_of())
+    if not lines:
+        return ShadowSignal(name, "none", 0, f"No 5% holder bought or sold in the last {OWNERSHIP_CHANGE_DAYS} days.", available=True)
+    value = f"net {net:+d}: " + "; ".join(lines[:3])
+    if direction not in ("long", "short") or net == 0:
+        return ShadowSignal(name, value, 0, f"5% holders: {'; '.join(lines[:3])}. No clear direction to sign it by or it nets out.", available=True)
+    buying = net > 0
+    supports = buying == (direction == "long")
+    points = max(-OWNERSHIP_SCORE_CAP, min(OWNERSHIP_SCORE_CAP, abs(net))) * (1 if supports else -1)
+    verb = "supports" if supports else "argues against"
+    lean = "buying" if buying else "selling"
+    return ShadowSignal(name, value, points, f"5% holders are net {lean} ({'; '.join(lines[:3])}), which {verb} a {direction}.", available=True)
 
 
 @shadow_signal(FUNDS_SIGNAL_NAME)

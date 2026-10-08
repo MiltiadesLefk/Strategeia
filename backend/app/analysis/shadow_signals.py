@@ -44,10 +44,20 @@ from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 
-# Signals promoted to real scoring. Empty on purpose: every signal ships silent.
+# Signals promoted to real scoring (analysis/live_evidence.py, news_card_scoring.ai_news_score), on the
+# user's explicit request and before a backtest could test them. New signals still ship silent.
 # Part of the strategy fingerprint (app/strategy/snapshot.py), so promoting one
 # starts a new strategy version.
-LIVE_SIGNALS: set[str] = set()
+LIVE_SIGNALS: set[str] = {
+    "congress_buying",
+    "fund_accumulation",
+    "ownership_5pct_filing",
+    "finra_short_volume",
+    "sec_8k_negative_items",
+    "news_cards",
+    "fed_event_window",
+    "post_mentions",
+}
 
 # A silent signal's "would have added" points are never larger than this, so
 # the future promotion cannot surprise anyone with a bigger swing than shown.

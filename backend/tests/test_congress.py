@@ -250,7 +250,10 @@ def test_a_dead_index_raises_so_the_runner_can_back_off(session):
 def test_score_is_signed_by_direction_and_capped():
     assert score_congress_net("long", 3, 0)[0] == 1
     assert score_congress_net("short", 3, 0)[0] == -1
-    assert score_congress_net("long", 0, 4)[0] == -1
+    assert score_congress_net("long", 0, 4)[0] == -2  # a net of 4 members is the strong reading
+    assert score_congress_net("long", 0, 3)[0] == -1
+    assert score_congress_net("short", 5, 0)[0] == -2
+    assert score_congress_net("short", 0, 4)[0] == 2
     assert score_congress_net("long", 1, 0)[0] == 0  # one member is noise
     assert score_congress_net(None, 5, 0)[0] == 0
 

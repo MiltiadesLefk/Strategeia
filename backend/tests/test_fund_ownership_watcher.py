@@ -223,7 +223,8 @@ def test_fund_accumulation_is_signed_by_direction(session):
         flat = fund_signals.build_fund_accumulation_signal("long", session, "KO")
         no_direction = fund_signals.build_fund_accumulation_signal(None, session, "AAPL")
         unheld = fund_signals.build_fund_accumulation_signal("long", session, "ZZZZ")
-    assert (long_aapl.would_score, short_aapl.would_score) == (fund_signals.FUND_SCORE_CAP, -fund_signals.FUND_SCORE_CAP)
+    assert (long_aapl.would_score, short_aapl.would_score) == (1, -1)  # one fund: the first point (3 funds are the strong reading)
+    assert fund_signals.FUND_SCORE_CAP == 2
     assert long_aapl.available and long_aapl.value == "1 buying, 0 selling" and "45 days" in long_aapl.reason
     assert long_msft.would_score == -1  # trimmed: net selling argues against a long
     assert long_amzn.would_score == -1  # sold out
@@ -245,7 +246,7 @@ def test_fund_accumulation_reports_unavailable_when_nothing_was_ever_loaded_and_
     assert first_only.would_score == 0
 
 
-def test_a_new_13d_counts_once_and_neither_amendments_nor_13g_do(session):
+def test_a_new_13d_counts_and_neither_a_first_amendment_nor_13g_do(session):
     ingest_ownership_filing(session, stored_filing("0000000009-26-000030", datetime(2026, 9, 10, 21, 0), "SCHEDULE 13G"), "AAPL", xml=G_XML)
     ingest_ownership_filing(session, stored_filing("0000000009-26-000031", datetime(2026, 9, 12, 21, 0), "SCHEDULE 13D/A"), "AAPL", xml=D_AMENDMENT_XML)
     with as_of(datetime(2026, 9, 25, 0, 0)):
@@ -257,9 +258,9 @@ def test_a_new_13d_counts_once_and_neither_amendments_nor_13g_do(session):
         up = fund_signals.build_ownership_signal("long", session, "AAPL")
         down = fund_signals.build_ownership_signal("short", session, "AAPL")
         none = fund_signals.build_ownership_signal(None, session, "AAPL")
-    assert (up.would_score, down.would_score, none.would_score) == (1, -1, 0)
-    assert up.value.startswith("13D: Pershing Square") and "(46.7%)" in up.value
-    with as_of(datetime(2026, 11, 1, 0, 0)):  # news for 30 days only
+    assert (up.would_score, down.would_score, none.would_score) == (2, -2, 0)  # a new 13D is a strong buy
+    assert "Pershing Square" in up.value and "46.7%" in up.value
+    with as_of(datetime(2026, 12, 31, 0, 0)):  # a stake change counts for 90 days
         assert fund_signals.build_ownership_signal("long", session, "AAPL").value == "none"
     with as_of(datetime(2026, 9, 15, 0, 0)):  # accepted later than this moment
         assert fund_signals.build_ownership_signal("long", session, "AAPL").value == "none"

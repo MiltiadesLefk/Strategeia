@@ -35,11 +35,13 @@ from app.knowledge.congress_trades import has_congress_data, net_buyers_as_of
 
 SIGNAL_NAME = "congress_buying"
 # Largest swing this signal would add in either direction.
-CONGRESS_SCORE_CAP = 1
+CONGRESS_SCORE_CAP = 2
 # How far back reports count (days before now, on the filing date).
 WINDOW_DAYS = 45
 # Net distinct members needed (buyers minus sellers) before the signal scores.
 MIN_NET_MEMBERS = 2
+# A net of this many different members is a strong reading: the second point.
+STRONG_NET_MEMBERS = 4
 
 
 def score_congress_net(direction: str | None, buyers: int, sellers: int) -> tuple[int, str]:
@@ -51,7 +53,8 @@ def score_congress_net(direction: str | None, buyers: int, sellers: int) -> tupl
     if direction not in ("long", "short"):
         return 0, f"{counts}, but there is no clear direction to sign it by."
     supports_long = net > 0
-    points = CONGRESS_SCORE_CAP if supports_long == (direction == "long") else -CONGRESS_SCORE_CAP
+    size = CONGRESS_SCORE_CAP if abs(net) >= STRONG_NET_MEMBERS else 1
+    points = size if supports_long == (direction == "long") else -size
     verb = "supports" if points > 0 else "argues against"
     leaning = "net buying" if supports_long else "net selling"
     return points, f"{counts}: {leaning} {verb} a {direction}."
