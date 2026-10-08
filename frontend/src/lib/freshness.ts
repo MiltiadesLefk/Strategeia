@@ -1,4 +1,4 @@
-import { getDisplayTimeZone } from './timezone';
+import { getDisplayTimeZone } from './timezone.ts';
 /**
  * Text and tone for the "as of 14:32 · 3 min ago" label (components/DataFreshness.tsx).
  * Pure and import-free so it can be unit-tested with plain Node
