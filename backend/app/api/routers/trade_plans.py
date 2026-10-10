@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import delete, update
 from sqlmodel import Session, select
 
 from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_auth
@@ -10,11 +11,13 @@ from app.analysis.shadow_signals import shadow_signals_from_json
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
-from app.portfolio.models import Sleeve, TradePlanRecord
+from app.portfolio.missed_trade_models import MissedTradeOutcome
+from app.portfolio.models import DeferredEvaluation, PaperPosition, Sleeve, TradePlanRecord
+from app.portfolio.thesis_models import ThesisRecord
 from app.portfolio.sleeves import CORE_SLEEVE_KEY, SleeveError, get_sleeve
 from app.schemas.trade_plan_schemas import TradePlanGenerateRequest, TradePlanResponse
 from app.services.deferred_evaluation_service import pending_redo_for_plan, pending_redo_times
-from app.analysis.live_evidence import extra_scores_from_json
+from app.analysis.live_evidence import extra_notes_from_json, extra_scores_from_json
 from app.committee.gate import CommitteeGateBudget
 from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE, clamp_points, generate_trade_plan
 
@@ -53,6 +56,20 @@ def list_trade_plans(session: Session = Depends(get_session)) -> list[TradePlanR
     redo_times = pending_redo_times(session)
     keys = _sleeve_keys(session)
     return [trade_plan_to_response(r, redo_at=redo_times.get(r.id), sleeve_keys=keys) for r in records]
+
+
+@router.delete("")
+def clear_trade_plans(session: Session = Depends(get_session)) -> dict[str, int]:
+    """Deletes every stored trade plan (the History list). Positions and theses keep existing: they only lose
+    their link to the plan they came from. Plan-derived rows (missed-trade outcomes, queued redos) go with it."""
+    removed = len(session.exec(select(TradePlanRecord.id)).all())
+    session.exec(delete(MissedTradeOutcome))
+    session.exec(delete(DeferredEvaluation))
+    session.exec(update(PaperPosition).values(trade_plan_id=None))
+    session.exec(update(ThesisRecord).values(trade_plan_id=None))
+    session.exec(delete(TradePlanRecord))
+    session.commit()
+    return {"removed": removed}
 
 
 @router.get("/{plan_id}", response_model=TradePlanResponse)
@@ -109,6 +126,7 @@ def trade_plan_to_response(
         options_score=record.options_score,
         insider_score=record.insider_score,
         extra_scores=extra_scores_from_json(record.extra_scores),
+        extra_notes=extra_notes_from_json(record.extra_scores),
         committee_run_id=record.committee_run_id,
         committee_rating=record.committee_rating,
         committee_note=record.committee_note,

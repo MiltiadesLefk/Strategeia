@@ -209,6 +209,8 @@ export interface TradePlan {
   insider_score?: number | null;
   // Points by part for Smart Money, 8-K filings, financials and valuation (absent on older plans).
   extra_scores?: Record<string, number> | null;
+  /** Why each of those parts scored what it did; null on plans made before these were kept. */
+  extra_notes?: Record<string, string> | null;
   // The AI Committee run that read this plan and its rating (absent when it did not run).
   committee_run_id?: number | null;
   committee_rating?: string | null;

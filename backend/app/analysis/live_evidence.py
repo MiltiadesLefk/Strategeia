@@ -84,13 +84,19 @@ PRICE_ONLY_PARTS = ("relative_strength", "volume_trend")
 class ExtraEvidence:
     points: dict[str, int] = field(default_factory=dict)
     reasons: list[str] = field(default_factory=list)
+    # Why each part scored what it did, including the zeros ("no data" and "checked, nothing there" differ).
+    notes: dict[str, str] = field(default_factory=dict)
 
     @property
     def total(self) -> int:
         return sum(self.points.values())
 
     def to_json(self) -> str:
-        return json.dumps(self.points, separators=(",", ":"))
+        # Notes ride along under one key; readers of the points skip it (it is not an int).
+        data: dict = dict(self.points)
+        if self.notes:
+            data["_why"] = self.notes
+        return json.dumps(data, separators=(",", ":"))
 
 
 def extra_scores_from_json(raw: str | None) -> dict[str, int] | None:
@@ -104,6 +110,20 @@ def extra_scores_from_json(raw: str | None) -> dict[str, int] | None:
     if not isinstance(data, dict):
         return None
     return {str(k): int(v) for k, v in data.items() if isinstance(v, int)}
+
+
+def extra_notes_from_json(raw: str | None) -> dict[str, str] | None:
+    """The stored per-part explanations, or None for a plan made before they were kept."""
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    notes = data.get("_why") if isinstance(data, dict) else None
+    if not isinstance(notes, dict):
+        return None
+    return {str(k): str(v) for k, v in notes.items()}
 
 
 def evaluate_extra_evidence(
@@ -133,15 +153,21 @@ def evaluate_extra_evidence(
     def shadow_part(key: str, build) -> None:
         try:
             signal = build()
+            out.notes[key] = signal.reason if signal.available else f"No data: {signal.reason}"
             if signal.available and signal.would_score:
                 record(key, signal.would_score, [f"{EXTRA_LABELS[key].lower()}: {signal.reason}"])
         except Exception:  # noqa: BLE001 - one part must never break a plan
+            out.notes[key] = "Could not be computed (see the backend log)."
             logger.exception("evidence part %s failed for %s", key, symbol)
 
     def rule_part(key: str, scorer) -> None:
         try:
-            record(key, *scorer())
+            points, reasons = scorer()
+            if reasons:
+                out.notes[key] = "; ".join(reasons)
+            record(key, points, reasons)
         except Exception:  # noqa: BLE001
+            out.notes[key] = "Could not be computed (see the backend log)."
             logger.exception("evidence part %s failed for %s", key, symbol)
 
     if session is not None:

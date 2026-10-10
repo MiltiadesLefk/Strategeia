@@ -473,6 +473,26 @@ def _committee_skip_reason(settings, llm_provider, committee_gate, market_closed
     return "Not read by the committee."
 
 
+def _news_zero_note(*, ai_news_available: bool, news, settings, usable: bool, direction, label_run) -> str:
+    """Why the news part scored 0, saying so plainly when the AI did not read the headlines."""
+    if not news:
+        return "No recent headlines were fetched."
+    if ai_news_available:
+        return "The AI read the recent headlines: nothing material enough to move the score."
+    keyword = "The keyword read was used instead, and found nothing clearly bullish or bearish."
+    if not settings.news_cards_enabled:
+        why = "AI news reading is switched off (Settings)."
+    elif not usable:
+        why = "No working AI provider, so the AI did not read the news."
+    elif direction is None:
+        why = "No trade direction yet, so the AI was not asked to label the news."
+    elif label_run is not None and label_run.errors:
+        why = f"The AI was asked but did not label any headline ({label_run.errors[0]})"
+    else:
+        why = "No headline from the last 3 days has an AI label (the fetched headlines are older, or none were new to label)."
+    return f"{why} {keyword}"
+
+
 def generate_trade_plan(
     symbol: str,
     account_size: float,
@@ -548,9 +568,10 @@ def generate_trade_plan(
     # News by AI: the provider labels each new headline (event, sentiment, materiality) and fixed rules turn
     # the labels into points. The keyword score above stays only as the fallback for a symbol whose headlines
     # could not be labelled (no provider, a failed call, nothing recent). The AI never sees the trade.
+    news_label_run = None
     if provisional_direction is not None and settings.news_cards_enabled and llm_is_usable(llm_provider):
         try:
-            label_new_items(
+            news_label_run = label_new_items(
                 session, symbol, llm_provider, settings.news_card_batch_limit,
                 company_name=overview.name if overview else None,
             )
@@ -617,6 +638,52 @@ def generate_trade_plan(
         ohlcv=ohlcv, earnings_history=earnings_history, **extra_inputs,
     )
 
+    def _note(reasons: list[str], when_zero: str) -> str:
+        return "; ".join(reasons) if reasons else when_zero
+
+    # Why each part scored what it did, zeros included, so the plan card never has to guess.
+    if not settings.watchers_enabled:
+        # These stores are filled by the background watchers, which are idle until the master switch is on.
+        for key, note in list(extra.notes.items()):
+            if note.startswith("No data"):
+                extra.notes[key] = f"{note} The Watchers switch is off (Settings), so nothing is collecting this data."
+    extra.notes.update({
+        "fundamentals": _note(fundamental_reasons, "No company overview was available." if not overview else "No fundamental rule fired."),
+        "news": _note(news_reasons, _news_zero_note(
+            ai_news_available=ai_news_available, news=news, settings=settings, usable=llm_is_usable(llm_provider),
+            direction=provisional_direction, label_run=news_label_run,
+        )),
+        "confluence": _note(
+            market_confirmation_reasons,
+            "No weekly or market (SPY) chart was available." if weekly_chart is None or market_chart is None
+            else "The weekly chart and the broad market neither confirm nor contradict the trade.",
+        ),
+        "vix": _note(
+            vix_regime_reasons,
+            f"VIX is {vix_level:.1f}, below the 25 line where a penalty starts." if vix_level is not None else "No VIX reading was available.",
+        ),
+        "options": _note(
+            options_reasons,
+            "No options data for this symbol." if options_summary is None else "Put/call volume skew is too small to count.",
+        ),
+        "insider": _note(
+            insider_reasons,
+            "No insider data for this symbol." if not insider_activity else "No net insider buying or selling large enough to score.",
+        ),
+        "expected_move": _note(
+            expected_move_reasons,
+            "No options data for this symbol." if options_summary is None else "Options are not pricing an unusually large move.",
+        ),
+        "earnings_track": _note(
+            earnings_surprise_reasons,
+            "No earnings history available." if not earnings_history else "No consistent beat or miss streak.",
+        ),
+        "macro_event": _note(
+            macro_event_reasons,
+            "Not checked in a simulated run." if is_simulated() else "No FOMC decision, CPI release or jobs report today or tomorrow.",
+        ),
+    })
+
     rule_based_score = (
         scan_result.score + fundamental_score + news_score + market_confirmation_score
         + vix_regime_score + options_score + insider_score
@@ -673,6 +740,11 @@ def generate_trade_plan(
         score_ai_overlay(provisional_direction, opinion.stance, opinion.trade_verdict, opinion.score)
         if settings.ai_overlay_scores_confidence
         else (0, [])
+    )
+    extra.notes["ai_overlay"] = (
+        "; ".join(ai_overlay_reasons) if ai_overlay_reasons
+        else "AI overlay scoring is off (Settings, AI)." if not settings.ai_overlay_scores_confidence
+        else "The AI raised no objection."
     )
     combined_score = rule_based_score + ai_overlay_score
     confidence_score = _confidence_score(combined_score)

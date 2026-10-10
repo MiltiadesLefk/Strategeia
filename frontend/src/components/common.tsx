@@ -75,7 +75,7 @@ export function AiNoteCard({
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="text-muted" style={{ padding: '32px 16px', textAlign: 'center' }}>
+    <div className="text-muted" style={{ padding: '20px 16px', textAlign: 'center' }}>
       {children}
     </div>
   );

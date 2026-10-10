@@ -50,7 +50,7 @@ def build_8k_signal(direction: str | None, session: Session | None, symbol: str)
     if session is None:
         return ShadowSignal(SIGNAL_NAME, None, 0, "No database session to read 8-K filings from.", available=False)
     if not has_8k_data(session, symbol):
-        return ShadowSignal(SIGNAL_NAME, None, 0, "No 8-K filings stored for this symbol.", available=False)
+        return ShadowSignal(SIGNAL_NAME, None, 0, "No 8-K filings stored for this symbol yet. The watcher only keeps filings from the days around when it was switched on, and only the last 3 days count here, so this is normal if the company has not filed one lately.", available=False)
     filings = filings_8k_as_of(session, symbol, window_days=RECENT_WINDOW_DAYS)
     points, reason, matched = score_negative_8k(direction, filings)
     return ShadowSignal(SIGNAL_NAME, ",".join(matched) if matched else "none", points, reason, available=True)

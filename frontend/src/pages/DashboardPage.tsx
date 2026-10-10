@@ -131,6 +131,7 @@ export function DashboardPage() {
       </div>
 
       <div className="split-row">
+       <div className="plan-col">
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h3>Top Setups Today</h3>
@@ -170,16 +171,6 @@ export function DashboardPage() {
           )}
         </div>
 
-        {topPick ? (
-          <TopPickChart symbol={topPick.symbol} />
-        ) : (
-          <div className="card" style={{ height: '100%' }}>
-            <EmptyState>No top-ranked setup to chart yet.</EmptyState>
-          </div>
-        )}
-      </div>
-
-      <div className="split-row">
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h3>Latest Trade Plan</h3>
@@ -242,8 +233,16 @@ export function DashboardPage() {
             </>
           )}
         </div>
-
-        <div className="card">
+       </div>
+       <div className="plan-col">
+        {topPick ? (
+          <TopPickChart symbol={topPick.symbol} />
+        ) : (
+          <div className="card" style={{ height: '100%' }}>
+            <EmptyState>No top-ranked setup to chart yet.</EmptyState>
+          </div>
+        )}
+               <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <h3>Top Pick</h3>
           </div>
@@ -310,6 +309,8 @@ export function DashboardPage() {
             </div>
           )}
         </div>
+       </div>
+
       </div>
     </div>
   );

@@ -194,6 +194,17 @@ export function useGenerateTradePlan() {
   });
 }
 
+export function useClearTradePlans() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<{ removed: number }>('/api/trade-plans'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
+      queryClient.invalidateQueries({ queryKey: qk.dashboard });
+    },
+  });
+}
+
 export function useStrategyVersions() {
   return useQuery({ queryKey: qk.strategyVersions, queryFn: () => api.get<StrategyHistory>('/api/strategy/versions') });
 }
