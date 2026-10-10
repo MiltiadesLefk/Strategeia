@@ -75,6 +75,7 @@ from app.knowledge.fund_holdings import (
     ownership_filings_as_of,
 )
 from app.knowledge.research_library import grounded_context, library_entries_as_of
+from app.catalyst.scoring import read_catalysts
 from app.knowledge.insider_trades import insider_activity_as_of, insider_clusters_as_of, insider_trades_as_of
 from app.knowledge.point_in_time import SEC_EDGAR_TZ
 from app.knowledge.store import fact_stats, latest_known
@@ -579,6 +580,7 @@ READERS: list[Reader] = [
     Reader(congress_trades_as_of, lambda s, sym, t: congress_trades_as_of(s, sym, t, 60)),
     Reader(congress_clusters_as_of, lambda s, sym, t: congress_clusters_as_of(s, sym, t, 120)),
     Reader(net_buyers_as_of, lambda s, sym, t: net_buyers_as_of(s, sym, t, 60)),
+    Reader(read_catalysts, lambda s, sym, t: read_catalysts(s, sym, t, window_days=30)),
     Reader(congress_filings_as_of, lambda s, sym, t: congress_filings_as_of(s, t, 120)),
     Reader(congress_member_summaries_as_of, lambda s, sym, t: congress_member_summaries_as_of(s, t, 120)),
     Reader(known_members_as_of, lambda s, sym, t: known_members_as_of(s, t)),
