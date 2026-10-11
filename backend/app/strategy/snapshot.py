@@ -68,6 +68,12 @@ DECISION_SETTINGS: dict[str, str] = {
     "max_holding_days": "max holding days",
     "auto_execute_trade_plans": "auto-execute",
     "ai_trading_overlay_enabled": "AI overlay",
+    "smart_money_followed_member_multiplier": "smart-money followed-member multiplier",
+    "smart_money_scope": "smart-money scope",
+    "smart_money_min_score": "smart-money min score",
+    "smart_money_max_open_positions": "smart-money max open positions",
+    "smart_money_max_new_per_week": "smart-money max new per week",
+    "smart_money_max_holding_days": "smart-money max holding days",
 }
 
 # Only meaningful while the overlay is on (see module docstring).
@@ -137,6 +143,19 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     # Which silent signals have been promoted into real scoring (none yet).
     "app.analysis.shadow_signals": ("LIVE_SIGNALS",),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),
+    "app.smartmoney.scoring": (
+        "WINDOW_DAYS", "RECENT_DAYS", "OLD_RECENCY_FACTOR", "INSIDER_SCORE_CAP", "INSIDER_PER_BUYER",
+        "INSIDER_CEO_CFO_EXTRA", "INSIDER_SIZE_TIERS", "HOUSE_BRACKET_POINTS", "HOUSE_EXTRA_MEMBER_POINTS",
+        "HOUSE_SELLER_POINTS", "INSIDER_CLUSTER_MIN_BUYERS",
+        "INSIDER_CLUSTER_BONUS", "HOUSE_SCORE_CAP", "OWNERSHIP_13D_POINTS", "OWNERSHIP_13G_POINTS",
+        "FUND_NEW_POINTS", "FUND_ADD_POINTS", "FUND_SCORE_CAP", "NEGATIVE_8K_POINTS", "SMART_MONEY_MIN_SCORE",
+        "REFLAG_DAYS", "REFLAG_SCORE_RISE", "LIQUIDITY_MIN_PRICE", "LIQUIDITY_MIN_DOLLAR_VOLUME",
+        "REVIEW_EXPIRY_DAYS",
+    ),
+    # The pipeline's own rules: which bars the liquidity floor reads, the new-per-week window, the exit-scan window.
+    "app.smartmoney.pipeline_rules": (
+        "NEW_POSITION_WINDOW_DAYS", "SMART_MONEY_EXIT_SCAN_PERIOD", "LIQUIDITY_LOOKBACK_BARS", "LIQUIDITY_MIN_BARS",
+    ),
 }
 
 # Recorded under `overlay`, only while the overlay is on.

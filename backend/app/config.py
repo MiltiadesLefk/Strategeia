@@ -690,6 +690,16 @@ class AppSettings(BaseModel):
     smart_money_follow_congress: Literal["all", "list"] = "all"
     smart_money_followed_members: list[str] = []
 
+    # Smart-money tracker (NEW_PLAN.md). The score weights are module constants in
+    # app/smartmoney/scoring.py; these are the knobs. scope: "universe" = only symbols in
+    # the effective universe, "market_wide" = any listed stock that passes the liquidity floor.
+    smart_money_followed_member_multiplier: float = Field(default=1.5, ge=1.0, le=3.0)
+    smart_money_scope: Literal["universe", "market_wide"] = "universe"
+    smart_money_min_score: float = Field(default=3.0, ge=0, le=30)
+    smart_money_max_open_positions: int = Field(default=5, ge=1, le=50)
+    smart_money_max_new_per_week: int = Field(default=2, ge=0, le=20)
+    smart_money_max_holding_days: int = Field(default=120, ge=0, le=200)  # the exit scan reads 1y of bars
+
     # Portfolio-level risk, as opposed to the per-trade risk default_risk_pct
     # already covers. Five 1%-risk positions is only "5% at risk" if the five
     # are independent — five semis on the same tape is one 5% bet. max_positions
