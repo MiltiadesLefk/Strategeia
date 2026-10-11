@@ -78,6 +78,7 @@ from app.knowledge.research_library import grounded_context, library_entries_as_
 from app.catalyst.scoring import read_catalysts
 from app.knowledge.insider_trades import insider_activity_as_of, insider_clusters_as_of, insider_trades_as_of
 from app.knowledge.point_in_time import SEC_EDGAR_TZ
+from app.smartmoney.tracker import smart_money_score_as_of
 from app.knowledge.store import fact_stats, latest_known
 from app.markets import is_daily_bar_final, is_us_trading_day, to_market_time, us_early_closes, us_session_bounds
 from app.services.archive_service import archived_news, latest_fundamentals_snapshot
@@ -590,6 +591,7 @@ READERS: list[Reader] = [
     Reader(fund_changes_as_of, lambda s, sym, t: fund_changes_as_of(s, "111", t)),
     Reader(fund_holders_of_symbol, lambda s, sym, t: fund_holders_of_symbol(s, sym, t)),
     Reader(ownership_filings_as_of, lambda s, sym, t: ownership_filings_as_of(s, sym, t, 60)),
+    Reader(smart_money_score_as_of, lambda s, sym, t: smart_money_score_as_of(s, sym, t)),
     Reader(archived_news, lambda s, sym, t: archived_news(s, sym, t)),
     Reader(latest_fundamentals_snapshot, lambda s, sym, t: latest_fundamentals_snapshot(s, sym, t)),
     Reader(library_entries_as_of, lambda s, sym, t: library_entries_as_of(s, sym, t)),
