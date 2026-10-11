@@ -484,6 +484,12 @@ export interface AppSettings {
   smart_money_followed_funds: string[];
   smart_money_follow_congress: CongressFollowMode;
   smart_money_followed_members: string[];
+  smart_money_followed_member_multiplier: number;
+  smart_money_scope: SmartMoneyScope;
+  smart_money_min_score: number;
+  smart_money_max_open_positions: number;
+  smart_money_max_new_per_week: number;
+  smart_money_max_holding_days: number;
   max_concurrent_positions: number;
   /** Trading days before a stalled position is closed at the close; 0 = no limit. */
   max_holding_days: number;
@@ -565,6 +571,12 @@ export interface SettingsUpdateRequest {
   smart_money_followed_funds?: string[];
   smart_money_follow_congress?: CongressFollowMode;
   smart_money_followed_members?: string[];
+  smart_money_followed_member_multiplier?: number;
+  smart_money_scope?: SmartMoneyScope;
+  smart_money_min_score?: number;
+  smart_money_max_open_positions?: number;
+  smart_money_max_new_per_week?: number;
+  smart_money_max_holding_days?: number;
   max_concurrent_positions?: number;
   max_holding_days?: number;
   liquidity_slippage_enabled?: boolean;
@@ -1394,6 +1406,40 @@ export interface SmartMoneyStatus {
   ingest_command: string;
 }
 
+export interface SmartMoneyCandidateComponent {
+  source: string;
+  points: number;
+  reason: string;
+  delay_note: string | null;
+}
+
+export interface SmartMoneyCandidate {
+  id: number;
+  symbol: string;
+  score: number;
+  components: SmartMoneyCandidateComponent[];
+  status: string;
+  reason: string | null;
+  scope: string | null;
+  scored_at: string;
+  first_trigger_known_at: string | null;
+  created_at: string;
+  expires_at: string | null;
+  plan_id: number | null;
+  sleeve_key: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  notes: string | null;
+}
+
+export interface SmartMoneyCandidates {
+  scope: string;
+  min_score: number;
+  total: number;
+  candidates: SmartMoneyCandidate[];
+  disclaimer: string;
+}
+
 export interface SmartMoneyRefreshResponse {
   symbols_requested: number;
   symbols_processed: number;
@@ -1407,6 +1453,7 @@ export interface SmartMoneyRefreshResponse {
 
 // ---- Smart Money: Congress trades (GET /api/smart-money/congress/...) ----
 
+export type SmartMoneyScope = 'universe' | 'market_wide';
 export type CongressFollowMode = 'all' | 'list';
 
 export interface CongressTrade {
@@ -2629,4 +2676,131 @@ export interface SleevePause {
   paused_at: string;
   resolved_at: string | null;
   alert_sent: boolean;
+}
+
+export type ReviewStatus = 'needs_review' | 'bought' | 'skipped' | 'expired' | 'auto_bought';
+
+export interface ReviewPlanSummary {
+  status: string;
+  direction: string | null;
+  entry: number | null;
+  stop: number | null;
+  tp1: number | null;
+  rr1: number | null;
+  suggested_shares: number | null;
+  auto_execute_note: string | null;
+  created_at: string;
+}
+
+export interface ReviewItem {
+  id: number;
+  symbol: string;
+  status: ReviewStatus;
+  score: number;
+  components: { source: string; points: number; reason: string; delay_note?: string | null }[];
+  plan_id: number | null;
+  rating: {
+    confidence_score: number;
+    confidence_points: number | null;
+    confidence_points_max: number | null;
+    verdict_text: string;
+  } | null;
+  reasons_declined: string[];
+  expires_at: string | null;
+  created_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  note: string | null;
+  delay_note: string;
+  market_open: boolean;
+  plan?: ReviewPlanSummary | null;
+  sleeve_key?: string | null;
+  position_id?: number | null;
+  /** Machine reason the item was queued or decided (e.g. "not_bought_by_auto_sleeve", "skipped_by_user"). */
+  reason?: string | null;
+  /** The Buy is queued for the next open and will fill from fresh data. */
+  buy_queued?: boolean;
+  scored_at?: string | null;
+}
+
+export interface HindsightGroup {
+  key: 'user_skipped' | 'expired' | 'undecided' | string;
+  label: string;
+  n: number;
+  resolved: number;
+  open: number;
+  awaiting: number;
+  not_simulated: number;
+  wins: number;
+  win_rate: number | null;
+  avg_r: number | null;
+  avg_r_low: number | null;
+  avg_r_high: number | null;
+  small_sample: boolean;
+}
+
+export interface Hindsight {
+  groups: HindsightGroup[];
+  min_trades_for_reading: number;
+  note: string;
+}
+
+export interface ReviewList {
+  items: ReviewItem[];
+  disclaimer: string;
+  hindsight?: Hindsight | null;
+}
+
+/** position_id is null while a Buy waits for the market to open (HTTP 200 all the same). */
+export type ReviewBuyResponse = ReviewItem & { position_id: number | null };
+
+// --- GET /api/smart-money/sleeve-report (read-only) ---
+export interface SleeveGroupStats {
+  label: string;
+  n: number;
+  wins: number;
+  win_rate: number | null;
+  win_rate_low: number | null;
+  win_rate_high: number | null;
+  avg_r: number | null;
+  avg_r_low: number | null;
+  avg_r_high: number | null;
+  small_sample: boolean;
+}
+
+export interface SleeveComparison {
+  label: string;
+  available: boolean;
+  compared: number;
+  of: number;
+  reason: string | null;
+  mean_excess_pct: number | null;
+  low: number | null;
+  high: number | null;
+  reference_mean_pct: number | null;
+  beats: boolean | null;
+}
+
+export interface SleeveReportRow {
+  key: string;
+  name: string;
+  exists: boolean;
+  closed_trades: number;
+  min_closed_trades: number;
+  verdict: 'not_enough_data' | 'beats_both' | 'beats_one' | 'beats_neither';
+  candidate_to_disable: boolean;
+  headline: string;
+  reason: string | null;
+  trade_stats: SleeveGroupStats;
+  groups: SleeveGroupStats[];
+  vs_spy: SleeveComparison | null;
+  vs_random: SleeveComparison | null;
+}
+
+export interface SleeveReport {
+  sleeves: SleeveReportRow[];
+  caveats: string[];
+  random_draws: number;
+  random_seed: number;
+  universe_size: number;
 }

@@ -10,6 +10,9 @@ import type { ApiError } from '../api/client';
 import type { SmartMoneyInsiderCluster, SmartMoneySide, SmartMoneyStatus } from '../api/types';
 import { StatCard } from '../components/StatCard';
 import { TickerLink } from '../components/TickerLink';
+import { ReviewQueueTab } from '../components/smartmoney/ReviewQueueTab';
+import { SleeveReportTab } from '../components/smartmoney/SleeveReportTab';
+import { CandidatesTab } from '../components/smartmoney/CandidatesTab';
 import { CongressTab } from '../components/smartmoney/CongressTab';
 import { ActivistsTab } from '../components/smartmoney/ActivistsTab';
 import { FundsTab } from '../components/smartmoney/FundsTab';
@@ -30,12 +33,15 @@ const SIDE_OPTIONS: { value: SmartMoneySide; label: string }[] = [
   { value: 'sells', label: 'Sells only' },
 ];
 
-type SourceTab = 'insiders' | 'congress' | 'funds' | 'activists';
+type SourceTab = 'review' | 'sleeves' | 'candidates' | 'insiders' | 'congress' | 'funds' | 'activists';
 
 const PLANNED_TABS: { label: string; why: string }[] = [];
 
 function SourceTabs({ tab, onTab }: { tab: SourceTab; onTab: (tab: SourceTab) => void }) {
   const tabs: { id: SourceTab; label: string }[] = [
+    { id: 'review', label: 'Review queue' },
+    { id: 'sleeves', label: 'Sleeve report' },
+    { id: 'candidates', label: 'Candidates' },
     { id: 'insiders', label: 'Insiders' },
     { id: 'congress', label: 'Congress' },
     { id: 'funds', label: 'Funds' },
@@ -288,6 +294,9 @@ export function SmartMoneyPage() {
         </div>
       </div>
       <SourceTabs tab={tab} onTab={setTab} />
+      {tab === 'review' && <ReviewQueueTab />}
+      {tab === 'sleeves' && <SleeveReportTab />}
+      {tab === 'candidates' && <CandidatesTab />}
       {tab === 'congress' && <CongressTab />}
       {tab === 'funds' && <FundsTab />}
       {tab === 'activists' && <ActivistsTab />}

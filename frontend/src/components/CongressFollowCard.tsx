@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useCongressMemberNames, useSettings, useUpdateSettings } from '../api/hooks';
-import type { CongressFollowMode } from '../api/types';
+import type { CongressFollowMode, SmartMoneyScope } from '../api/types';
 
 const MAX_FOLLOWED_MEMBERS = 50;
 const MAX_NAME_LENGTH = 80;
@@ -12,6 +12,8 @@ export function CongressFollowCard() {
   const update = useUpdateSettings();
   const [mode, setMode] = useState<CongressFollowMode>('all');
   const [members, setMembers] = useState<string[]>([]);
+  const [multiplier, setMultiplier] = useState(1.5);
+  const [scope, setScope] = useState<SmartMoneyScope>('universe');
   const [query, setQuery] = useState('');
   const [saved, setSaved] = useState(false);
   const names = useCongressMemberNames(query.trim());
@@ -20,6 +22,8 @@ export function CongressFollowCard() {
     if (!settings) return;
     setMode(settings.smart_money_follow_congress);
     setMembers(settings.smart_money_followed_members);
+    setMultiplier(settings.smart_money_followed_member_multiplier ?? 1.5);
+    setScope(settings.smart_money_scope ?? 'universe');
   }, [settings]);
 
   const has = (name: string) => members.some((m) => m.toLowerCase() === name.toLowerCase());
@@ -34,7 +38,12 @@ export function CongressFollowCard() {
 
   function save() {
     update.mutate(
-      { smart_money_follow_congress: mode, smart_money_followed_members: members },
+      {
+        smart_money_follow_congress: mode,
+        smart_money_followed_members: members,
+        smart_money_followed_member_multiplier: Math.min(3, Math.max(1, multiplier || 1)),
+        smart_money_scope: scope,
+      },
       {
         onSuccess: () => {
           setSaved(true);
@@ -119,6 +128,28 @@ export function CongressFollowCard() {
           </div>
         </>
       )}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div>
+          <label htmlFor="sm-multiplier">Followed-member weight in the smart-money score (1.0 = no extra weight, up to 3.0)</label>
+          <input
+            id="sm-multiplier"
+            type="number"
+            min={1}
+            max={3}
+            step={0.1}
+            value={multiplier}
+            onChange={(e) => setMultiplier(Number(e.target.value))}
+            style={{ width: 90 }}
+          />
+        </div>
+        <div>
+          <label htmlFor="sm-scope">Smart-money tracker scope</label>
+          <select id="sm-scope" value={scope} onChange={(e) => setScope(e.target.value as SmartMoneyScope)}>
+            <option value="universe">Only symbols in my universe</option>
+            <option value="market_wide">Any listed stock that passes the liquidity floor</option>
+          </select>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <button className="btn btn-secondary" onClick={save} disabled={update.isPending}>
           {update.isPending ? 'Saving…' : 'Save'}

@@ -33,6 +33,7 @@ import type {
 import type { CalibrationReport } from './types';
 import type { CalendarResponse, EarningsPreview } from './types';
 import type { MissedTradeRefresh, MissedTradeReport } from './types';
+import type { ReviewBuyResponse, ReviewItem, ReviewList, SleeveReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
 import type { DataSourceProbeResult, DataSourcesResponse, MacroSeriesData, MacroSeriesInfo } from './types';
@@ -40,6 +41,7 @@ import type {
   SmartMoneyInsiderClusters,
   SmartMoneyInsiderSummary,
   SmartMoneyInsiderTrades,
+  SmartMoneyCandidates,
   SmartMoneyRefreshResponse,
   SmartMoneySide,
   SmartMoneyStatus,
@@ -730,6 +732,61 @@ export function useSmartMoneySummary(symbol: string) {
     queryKey: smartMoneyKeys.summary(symbol),
     queryFn: () => api.get<SmartMoneyInsiderSummary>(`/api/smart-money/insiders/summary/${encodeURIComponent(symbol)}`),
     enabled: !!symbol,
+  });
+}
+
+/** Smart-money candidates (read-only; the tracker watcher creates them). */
+export function useSmartMoneyCandidates(status?: string) {
+  const q = new URLSearchParams();
+  if (status) q.set('status', status);
+  return useQuery({
+    queryKey: ['smart-money', 'candidates', status ?? 'all'] as const,
+    queryFn: () => api.get<SmartMoneyCandidates>(`/api/smart-money/candidates${q.size ? `?${q}` : ''}`),
+  });
+}
+
+/** Smart-money review queue (needs_review items, plus decided ones when a status is given). */
+export function useSmartMoneyReview(status?: string) {
+  const q = new URLSearchParams();
+  if (status) q.set('status', status);
+  return useQuery({
+    queryKey: ['smart-money', 'review', status ?? 'all'] as const,
+    queryFn: () => api.get<ReviewList>(`/api/smart-money/review${q.size ? `?${q}` : ''}`),
+    refetchInterval: 60_000,
+  });
+}
+
+/** Per-sleeve review report (read-only; no writes happen on GET). */
+export function useSleeveReport() {
+  return useQuery({
+    queryKey: ['smart-money', 'sleeve-report'] as const,
+    queryFn: () => api.get<SleeveReport>('/api/smart-money/sleeve-report'),
+  });
+}
+
+function invalidateReview(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['smart-money', 'review'] });
+  queryClient.invalidateQueries({ queryKey: ['smart-money', 'candidates'] });
+}
+
+export function useBuyReviewItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.post<ReviewBuyResponse>(`/api/smart-money/review/${id}/buy`),
+    onSuccess: () => {
+      invalidateReview(queryClient);
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['positions'] });
+    },
+  });
+}
+
+export function useSkipReviewItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: number; note?: string }) =>
+      api.post<ReviewItem>(`/api/smart-money/review/${id}/skip`, note ? { note } : {}),
+    onSuccess: () => invalidateReview(queryClient),
   });
 }
 
