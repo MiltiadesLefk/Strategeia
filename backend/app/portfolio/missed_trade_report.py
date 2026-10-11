@@ -149,6 +149,9 @@ class MissedTradeItem:
     exit_date: date | None
     trade_source: str | None
     note: str | None
+    # Who asked for the evaluation behind this plan ("smart_money" / "smart_money_review"; None = the ordinary
+    # scan or a click), so a report can keep the smart-money plans apart from the rest.
+    source: str | None = None
 
 
 @dataclass
@@ -359,6 +362,7 @@ def build_missed_trade_report(session: Session) -> MissedTradeReport:
                     exit_date=row.exit_date if has_result else None,
                     trade_source=row.trade_source if has_result else None,
                     note=row.note if row is not None else None,
+                    source=plan.source,
                 )
             )
     items.sort(key=lambda item: item.created_at, reverse=True)

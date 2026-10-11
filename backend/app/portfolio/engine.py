@@ -223,6 +223,7 @@ class PaperTradingEngine:
         scale_out_fraction: float | None = None,
         scale_out_stop_mode: str = "breakeven",
         scale_out_trail_r: float = 1.0,
+        exit_scan_period: str = EXIT_SCAN_PERIOD,
     ):
         self._session = session
         # Only plain values are kept (not the ORM object, whose attributes expire
@@ -255,6 +256,9 @@ class PaperTradingEngine:
         # bars for the simulated dates (a backtest) turns it off and keeps the plain
         # daily rules, rather than asking for bars it cannot get on every step.
         self._intraday_exits = intraday_exits
+        # How much daily history the exit scan reads. The core's 3 months suit its 60-day limit at most; a
+        # sleeve with a longer time limit (smart money, 120 days) passes a longer one. Nothing else changes.
+        self._exit_scan_period = exit_scan_period
 
     def now(self) -> datetime:
         """The engine's current moment (naive UTC): real time, or a simulated
@@ -643,7 +647,7 @@ class PaperTradingEngine:
                 # inside the holding period. fresh_data_only: a stale bar set would
                 # silently understate the range.
                 with fresh_data_only():
-                    bars = self._data_provider.get_ohlcv(position.symbol, period=EXIT_SCAN_PERIOD, interval="1d")
+                    bars = self._data_provider.get_ohlcv(position.symbol, period=self._exit_scan_period, interval="1d")
                 if bars.empty or not self._entry_bar_in_window(bars, position.opened_at):
                     return  # the entry bar isn't in the window: the early bars are unknowable
                 held_bars, last_bar = self._bars_after_entry(bars, position.opened_at), "complete"
@@ -1246,7 +1250,7 @@ class PaperTradingEngine:
                 # stale-data failure the multi-bar rewrite above exists to
                 # prevent. A failed fetch skips the position instead.
                 with fresh_data_only():
-                    bars = self._data_provider.get_ohlcv(position.symbol, period=EXIT_SCAN_PERIOD, interval="1d")
+                    bars = self._data_provider.get_ohlcv(position.symbol, period=self._exit_scan_period, interval="1d")
             except AllProvidersFailedError:
                 continue
             if bars.empty:

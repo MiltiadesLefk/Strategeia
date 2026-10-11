@@ -35,6 +35,8 @@ from app.committee.service import recover_on_startup as recover_interrupted_comm
 from app.api.routers import watchers as watchers_router
 from app.api.routers import watchlist as watchlist_router
 from app.api.routers import smart_money as smart_money_router
+from app.api.routers import smart_money_candidates as smart_money_candidates_router
+from app.api.routers import smart_money_review as smart_money_review_router
 from app.api.routers import funds as funds_router
 from app.api.routers import congress as congress_router
 from app.config import get_infra_settings
@@ -47,6 +49,7 @@ from app.watchers.fed_watcher import register_fed_watcher
 from app.watchers.posts_watcher import register_posts_watcher
 from app.watchers.fund_watcher import register_fund_watcher
 from app.watchers.house_watcher import register_house_watcher
+from app.watchers.smart_money_watcher import register_smart_money_watcher
 from app.watchers.finra_watcher import register_finra_watcher
 
 
@@ -62,6 +65,7 @@ async def lifespan(app: FastAPI):
     register_fund_watcher()  # fund_watcher: 13F reports of followed funds and 13D/13G 5% owner filings
     register_finra_watcher()  # finra_watcher: daily FINRA short-volume files (quiet, never alerts)
     register_house_watcher()  # house_watcher: House members' stock-trade reports
+    register_smart_money_watcher()  # smart_money: the market-wide tracker (candidates only, never trades)
     start_scheduler()
     yield
     stop_scheduler()
@@ -143,6 +147,8 @@ app.include_router(backtests_router.router)
 app.include_router(missed_trades_router.router)
 app.include_router(replay_router.router)
 app.include_router(smart_money_router.router)
+app.include_router(smart_money_candidates_router.router)
+app.include_router(smart_money_review_router.router)
 app.include_router(funds_router.router)
 app.include_router(congress_router.router)
 app.include_router(terminal_router.router)

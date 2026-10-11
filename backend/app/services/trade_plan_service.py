@@ -70,6 +70,7 @@ from app.services.news_card_service import label_new_items, llm_is_usable
 from app.services.valuation_service import get_valuation
 from app.services.deferred_evaluation_service import queue_market_open_redo
 from app.services.lesson_notes import past_lessons_block
+from app.services.sleeve_service import sleeve_position_cap
 from app.services.telegram_service import notify_trade_plan
 from app.strategy.service import current_strategy_version
 
@@ -507,6 +508,8 @@ def generate_trade_plan(
     settings: AppSettings | None = None,
     sleeve: Sleeve | None = None,
     committee_gate: CommitteeGateBudget | None = None,
+    long_only: bool = False,
+    confidence_bar_override: int | None = None,
 ) -> TradePlanResponse:
     """Fully evaluates `symbol` (price/volume/technicals + fundamentals +
     news + earnings) and either returns a tradeable plan or an explicit
@@ -524,8 +527,16 @@ def generate_trade_plan(
     changes the real settings file. `sleeve` is the paper account the plan is
     for (default: the core sleeve): it is recorded on the plan, sizing reads that
     sleeve's cash, and executing the plan opens the position in it. The analysis
-    and the decision are identical whichever sleeve asks."""
+    and the decision are identical whichever sleeve asks.
+
+    Two keyword switches exist for the smart-money pipeline and are OFF for every other caller:
+    `long_only` makes a bearish trend a no-trade (a spot, long-only account has no short to take; the
+    analysis is otherwise untouched), and `confidence_bar_override` replaces `min_confidence_for_trade`
+    for ONE evaluation: a review-queue Buy, where a person has read the rating and chosen to buy anyway.
+    It lowers only that bar. A neutral trend, an AI-overlay or ML objection and the engine's own checks
+    (session, caps, cash, sector, stale price) all still apply."""
     settings = settings if settings is not None else load_app_settings()
+    confidence_bar = settings.min_confidence_for_trade if confidence_bar_override is None else confidence_bar_override
     in_core = sleeve is None or sleeve.key == CORE_SLEEVE_KEY
     sleeve_id = plan_sleeve_id(session, sleeve)
     sleeve_scope = read_scope(session, None) if in_core else scope_of(sleeve)
@@ -780,7 +791,8 @@ def generate_trade_plan(
     # already approve, and it can only STOP it. Direction, entry, stop and size are
     # never read from it. None when the style is not in play.
     ml_opinion = None
-    if chart.trend != "Neutral" and not overlay_vetoes_trade and confidence_score >= settings.min_confidence_for_trade:
+    short_blocked = long_only and chart.trend == "Bearish"
+    if chart.trend != "Neutral" and not short_blocked and not overlay_vetoes_trade and confidence_score >= confidence_bar:
         ml_opinion = ml_opinion_for_plan(
             session,
             settings,
@@ -802,8 +814,10 @@ def generate_trade_plan(
         )
     ml_stops_trade = ml_opinion is not None and ml_opinion.stops_trade
 
-    if chart.trend == "Neutral" or overlay_vetoes_trade or ml_stops_trade or confidence_score < settings.min_confidence_for_trade:
-        if chart.trend == "Neutral":
+    if chart.trend == "Neutral" or short_blocked or overlay_vetoes_trade or ml_stops_trade or confidence_score < confidence_bar:
+        if short_blocked:
+            reason = "Long-only (spot) evaluation: the trend is bearish, so there is no long trade to take."
+        elif chart.trend == "Neutral":
             reason = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
         elif overlay_vetoes_trade:
             # Named ahead of the confidence bar deliberately: when the
@@ -829,7 +843,7 @@ def generate_trade_plan(
             reason = ml_stop_reason(ml_opinion, provisional_direction)
         else:
             reason = (
-                f"Confidence too low ({confidence_score}%, needs {settings.min_confidence_for_trade}%+) "
+                f"Confidence too low ({confidence_score}%, needs {confidence_bar}%+) "
                 f"despite a {chart.trend.lower()} trend."
             )
         record = TradePlanRecord(
@@ -915,7 +929,7 @@ def generate_trade_plan(
         session,
         data_provider,
         account_size if in_core else sleeve.starting_cash,
-        settings.max_concurrent_positions,
+        sleeve_position_cap(settings, sleeve),
         slippage_bps=settings.slippage_bps,
         commission_per_trade=settings.commission_per_trade,
         max_positions_per_sector=settings.max_positions_per_sector,

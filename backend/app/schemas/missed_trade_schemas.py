@@ -79,6 +79,7 @@ class MissedTradeItemSchema(_FromAttributes):
     exit_date: date | None
     trade_source: str | None
     note: str | None
+    source: str | None = None  # "smart_money" | "smart_money_review" | None (see TradePlanRecord.source)
 
 
 class MissedTradeReportSchema(_FromAttributes):

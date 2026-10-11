@@ -135,6 +135,14 @@ class TradePlanRecord(SQLModel, table=True):
     # Null reads as the core sleeve, so plans from before sleeves existed need no
     # backfill. Executing the plan opens its position in this sleeve.
     sleeve_id: Optional[int] = Field(default=None, index=True)
+    # Who asked for this plan when it was not the ordinary scan or a click: "smart_money" (a tracker candidate's
+    # evaluation) or "smart_money_review" (a Buy from the review queue). Null = every other plan. The candidate id
+    # and the score that earned the evaluation are kept so a later report can say which source and score band made
+    # money. They describe WHY the symbol was looked at; they never entered the decision.
+    source: Optional[str] = None
+    smart_money_candidate_id: Optional[int] = Field(default=None, index=True)
+    smart_money_score: Optional[float] = None
+    smart_money_components: Optional[str] = None  # JSON [{"source","points","reason"}]
 
 
 class PaperPosition(SQLModel, table=True):
@@ -269,6 +277,9 @@ class DeferredEvaluation(SQLModel, table=True):
     # The sleeve the redo should trade in (null = core), so a plan made for one
     # sleeve is redone for that sleeve and not for the default one.
     sleeve_id: Optional[int] = None
+    # The smart-money candidate this evaluation is for (null = none): the redo is then handed to
+    # services/smart_money_pipeline_service, which evaluates or buys for that candidate.
+    candidate_id: Optional[int] = Field(default=None, index=True)
 
 
 class EquitySnapshot(SQLModel, table=True):

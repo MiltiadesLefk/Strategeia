@@ -21,7 +21,9 @@ from app.markets import (
     us_holiday_name,
 )
 from app.knowledge.point_in_time import is_simulated
+from app.services import smart_money_event_review_service, smart_money_pipeline_service
 from app.services.sleeve_service import mark_all_sleeves
+from app.timeutil import utcnow_naive
 from app.portfolio.missed_trades import refresh_missed_trades
 from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_auto_scan, run_market_open_redos
@@ -267,6 +269,38 @@ def _watchers_job() -> None:
         logger.exception("Scheduled watchers tick failed")
 
 
+# Smart-money pipeline: every few minutes the candidates the tracker flagged are evaluated (liquidity floor,
+# the ordinary full evaluation, routing to auto-buy or the review queue), review items past their expiry are
+# closed, and held smart-money positions get their event-exit review (an alert, never a sale). A tick with
+# nothing to do is a couple of reads. Evaluations wait for the open, so nothing here fills at a stale price.
+SMART_MONEY_PIPELINE_INTERVAL_MINUTES = 10
+SMART_MONEY_EVENT_REVIEW_INTERVAL_MINUTES = 30
+
+
+def _smart_money_pipeline_job() -> None:
+    try:
+        if is_simulated():
+            return
+        settings = load_app_settings()
+        data_provider = get_data_provider(settings)
+        llm_provider = get_llm_provider(settings)
+        with Session(engine) as session:
+            smart_money_pipeline_service.expire_review_items(session, utcnow_naive())
+            smart_money_pipeline_service.run_pipeline(session, settings, data_provider, llm_provider)
+    except Exception:
+        logger.exception("Scheduled smart-money pipeline tick failed")
+
+
+def _smart_money_event_review_job() -> None:
+    try:
+        settings = load_app_settings()
+        data_provider = get_data_provider(settings)
+        with Session(engine) as session:
+            smart_money_event_review_service.run_event_review(session, settings, data_provider)
+    except Exception:
+        logger.exception("Scheduled smart-money event review failed")
+
+
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -347,6 +381,23 @@ def start_scheduler() -> BackgroundScheduler:
         "interval",
         minutes=THESIS_SWEEP_INTERVAL_MINUTES,
         id="thesis_sweep",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _smart_money_pipeline_job,
+        "interval",
+        minutes=SMART_MONEY_PIPELINE_INTERVAL_MINUTES,
+        jitter=WATCHER_TICK_JITTER_SECONDS,
+        id="smart_money_pipeline",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _smart_money_event_review_job,
+        "interval",
+        minutes=SMART_MONEY_EVENT_REVIEW_INTERVAL_MINUTES,
+        id="smart_money_event_review",
         max_instances=1,
         coalesce=True,
     )

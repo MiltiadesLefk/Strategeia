@@ -16,6 +16,7 @@ from app.portfolio.engine import Clock, resolve_clock
 from app.portfolio.models import DeferredEvaluation, PaperPosition, Sleeve, TradePlanRecord
 from app.portfolio.sleeves import read_scope, scope_clause
 from app.services.deferred_evaluation_service import MAX_REDO_ATTEMPTS, PENDING, due_redos, redo_window_open
+from app.services import smart_money_pipeline_service
 from app.services.telegram_service import notify
 from app.services.trade_plan_service import generate_trade_plan
 
@@ -106,10 +107,12 @@ class RedoOutcome:
     skipped: list[str] = field(default_factory=list)
     retrying: list[str] = field(default_factory=list)
     failed: list[str] = field(default_factory=list)
+    # Smart-money candidates (an evaluation or a queued review Buy) handed to the smart-money pipeline.
+    smart_money: list[str] = field(default_factory=list)
 
     @property
     def handled(self) -> int:
-        return sum(len(group) for group in (self.executed, self.pending, self.no_trade, self.skipped, self.failed))
+        return sum(len(group) for group in (self.executed, self.pending, self.no_trade, self.skipped, self.failed, self.smart_money))
 
 
 def _resolve(deferral: DeferredEvaluation, status: str, outcome: str, now: datetime) -> None:
@@ -162,6 +165,18 @@ def run_market_open_redos(
         symbol = deferral.symbol
         if not redo_window_open(symbol, now):
             continue  # a holiday, before 09:45, or after the close: wait for the next tick
+
+        if deferral.candidate_id is not None:
+            # A smart-money candidate waiting for the open (its evaluation, or a Buy queued from the review
+            # queue): the pipeline redoes it from fresh data with its own routing and caps.
+            line = smart_money_pipeline_service.handle_redo(
+                session, settings, data_provider, llm_provider, deferral, clock=clock, gate=gate_budget
+            )
+            logger.info("Smart-money redo for %s: %s", symbol, line)
+            session.refresh(deferral)
+            if deferral.status != PENDING:
+                outcome.smart_money.append(symbol)
+            continue
 
         plan = session.get(TradePlanRecord, deferral.trade_plan_id) if deferral.trade_plan_id else None
         # The redo trades in the sleeve it was queued for (no sleeve = core), so
@@ -266,6 +281,7 @@ def run_market_open_redos(
                 ("no trade", outcome.no_trade),
                 ("skipped", outcome.skipped),
                 ("failed", outcome.failed),
+                ("smart money", outcome.smart_money),
             )
             if symbols
         ]

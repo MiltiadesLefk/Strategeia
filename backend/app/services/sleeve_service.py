@@ -14,7 +14,24 @@ from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.portfolio.engine import Clock, PaperTradingEngine
 from app.portfolio.models import PaperPosition, Sleeve
-from app.portfolio.sleeves import CORE_SLEEVE_KEY
+from app.portfolio.sleeves import CORE_SLEEVE_KEY, DEFAULT_SLEEVE_STARTING_CASH, SLEEVE_COLORS, SleeveError, list_sleeves
+from app.smartmoney.pipeline_rules import (
+    AUTO_SLEEVE_KEY,
+    AUTO_SLEEVE_NAME,
+    MANUAL_SLEEVE_KEY,
+    MANUAL_SLEEVE_NAME,
+    SMART_MONEY_EXIT_SCAN_PERIOD,
+    SMART_MONEY_SLEEVE_KEYS,
+    SMART_MONEY_STYLE,
+)
+
+
+def sleeve_position_cap(settings: AppSettings, sleeve: Sleeve | None) -> int:
+    """The open-position cap of `sleeve`: the smart-money sleeves have their own
+    (`smart_money_max_open_positions`), every other sleeve shares `max_concurrent_positions`."""
+    if sleeve is not None and sleeve.key in SMART_MONEY_SLEEVE_KEYS:
+        return settings.smart_money_max_open_positions
+    return settings.max_concurrent_positions
 
 
 def build_sleeve_engine(
@@ -29,22 +46,25 @@ def build_sleeve_engine(
     Only the starting cash differs by sleeve: core follows Settings -> Paper
     Account, any other sleeve is seeded with its own starting cash."""
     is_core = sleeve is None or sleeve.key == CORE_SLEEVE_KEY
+    is_smart_money = sleeve is not None and sleeve.key in SMART_MONEY_SLEEVE_KEYS
     return PaperTradingEngine(
         session,
         data_provider,
         settings.paper_starting_cash if is_core else sleeve.starting_cash,
-        settings.max_concurrent_positions,
+        sleeve_position_cap(settings, sleeve),
         slippage_bps=settings.slippage_bps,
         commission_per_trade=settings.commission_per_trade,
         max_positions_per_sector=settings.max_positions_per_sector,
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         clock=clock,
-        max_holding_days=settings.max_holding_days,
+        # The smart-money sleeves hold longer (their own time limit) and so read a longer bar window.
+        max_holding_days=settings.smart_money_max_holding_days if is_smart_money else settings.max_holding_days,
         liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
         scale_out_fraction=settings.scale_out_fraction if settings.scale_out_enabled else None,
         scale_out_stop_mode=settings.scale_out_stop_mode,
         scale_out_trail_r=settings.scale_out_trail_r,
         sleeve=None if is_core else sleeve,
+        **({"exit_scan_period": SMART_MONEY_EXIT_SCAN_PERIOD} if is_smart_money else {}),
     )
 
 
@@ -61,3 +81,33 @@ def mark_all_sleeves(
     for sleeve in sleeves:
         closed.extend(build_sleeve_engine(session, data_provider, settings, sleeve).mark_to_market(snapshot=snapshot))
     return closed
+
+
+def ensure_smart_money_sleeves(session: Session) -> tuple[Sleeve, Sleeve]:
+    """The `smart-money-auto` and `smart-money-manual` sleeves, created if missing. An explicit
+    write (the pipeline's first evaluation, a review Buy, or POST /api/smart-money/sleeves): a GET
+    must never call this. Each is its own paper account with its own starting cash; the combined
+    equity of the three sleeves is never shown (see notes/Decisions.md)."""
+    out: list[Sleeve] = []
+    for key, name, note in (
+        (AUTO_SLEEVE_KEY, AUTO_SLEEVE_NAME, "Tracker candidates the full evaluation rated tradeable: bought automatically."),
+        (MANUAL_SLEEVE_KEY, MANUAL_SLEEVE_NAME, "Tracker candidates the evaluation rated badly that you chose to buy from the review queue."),
+    ):
+        sleeve = session.exec(select(Sleeve).where(Sleeve.key == key)).first()
+        if sleeve is None:
+            existing = list_sleeves(session)
+            if any(s.name.lower() == name.lower() for s in existing):
+                raise SleeveError(f"A sleeve named '{name}' already exists with another key", 409)
+            sleeve = Sleeve(
+                key=key,
+                name=name,
+                style=SMART_MONEY_STYLE,
+                starting_cash=DEFAULT_SLEEVE_STARTING_CASH,
+                color=SLEEVE_COLORS[len(existing) % len(SLEEVE_COLORS)],
+                notes=note,
+            )
+            session.add(sleeve)
+            session.commit()
+            session.refresh(sleeve)
+        out.append(sleeve)
+    return out[0], out[1]

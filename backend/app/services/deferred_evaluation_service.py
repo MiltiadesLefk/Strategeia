@@ -72,6 +72,7 @@ def queue_market_open_redo(
     account_size: float | None = None,
     risk_pct: float | None = None,
     sleeve_id: int | None = None,
+    candidate_id: int | None = None,
 ) -> DeferredEvaluation:
     """Queue (or refresh) the redo for `symbol`. One pending row per symbol
     per sleeve (`sleeve_id`; None = core: two sleeves each waiting on the same
@@ -97,6 +98,8 @@ def queue_market_open_redo(
         existing.account_size = account_size
         existing.risk_pct = risk_pct
         existing.reason = reason
+        if candidate_id is not None:
+            existing.candidate_id = candidate_id
         existing.due_at = max(existing.due_at, due_at)
         deferral = existing
     else:
@@ -110,6 +113,7 @@ def queue_market_open_redo(
             account_size=account_size,
             risk_pct=risk_pct,
             sleeve_id=sleeve_id,
+            candidate_id=candidate_id,
         )
     session.add(deferral)
     session.commit()
