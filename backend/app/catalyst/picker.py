@@ -1,4 +1,4 @@
-"""Month-end "picker" scoring (internal_knowledge/TODO.md, PICKER TEST v2, step 3). READ-ONLY study code.
+"""Month-end "picker" scoring (picker test, step 3; rules were written down before running). READ-ONLY study code.
 
 Three parts per stock, each turned into a percentile rank across the stocks that have it, SCORE = the plain
 average of the available ranks (equal weights, no tuning). A stock lacking a part is scored on its other parts
@@ -68,16 +68,36 @@ def _congress_net_ignoring_small(session: Session, symbol: str, moment: datetime
     return len(buyers) - len(sellers)
 
 
-def catalyst_value(session: Session, symbol: str, moment: datetime, kind_cap: int = DEFAULT_KIND_CAP) -> float | None:
+def catalyst_value(
+    session: Session, symbol: str, moment: datetime, kind_cap: int = DEFAULT_KIND_CAP, kinds: tuple[str, ...] = ALL_KINDS
+) -> float | None:
     """Net catalyst points over 30 days from `read_catalysts`, with the $1,001-$15,000 House bracket ignored.
-    None when no catalyst kind had any stored data at all (silence is not the same as no data)."""
+    Only the `kinds` listed count. None when none of them had any stored data at all (silence is not the same
+    as no data)."""
     reading = read_catalysts(session, symbol, moment, window_days=CATALYST_WINDOW_DAYS, kind_cap=kind_cap)
-    if not any(reading.covered.get(k) for k in ALL_KINDS):
+    if not any(reading.covered.get(k) for k in kinds):
         return None
-    net = reading.net - reading.by_kind.get(KIND_CONGRESS, 0)
-    if reading.covered.get(KIND_CONGRESS):
+    net = sum(points for kind, points in reading.by_kind.items() if kind in kinds and kind != KIND_CONGRESS)
+    if KIND_CONGRESS in kinds and reading.covered.get(KIND_CONGRESS):
         net += max(-kind_cap, min(kind_cap, _congress_net_ignoring_small(session, symbol, moment, CATALYST_WINDOW_DAYS)))
     return float(net)
+
+
+def catalyst_by_kind(
+    session: Session, symbol: str, moment: datetime, kind_cap: int = DEFAULT_KIND_CAP
+) -> dict[str, float | None]:
+    """The catalyst value of each kind separately (None = that kind has no stored data), House $1,001-$15,000 ignored."""
+    reading = read_catalysts(session, symbol, moment, window_days=CATALYST_WINDOW_DAYS, kind_cap=kind_cap)
+    out: dict[str, float | None] = {}
+    for kind in ALL_KINDS:
+        if not reading.covered.get(kind):
+            out[kind] = None
+        elif kind == KIND_CONGRESS:
+            net = _congress_net_ignoring_small(session, symbol, moment, CATALYST_WINDOW_DAYS)
+            out[kind] = float(max(-kind_cap, min(kind_cap, net)))
+        else:
+            out[kind] = float(reading.by_kind.get(kind, 0))
+    return out
 
 
 def percentile_ranks(values: dict[str, float]) -> dict[str, float]:
@@ -96,9 +116,15 @@ def percentile_ranks(values: dict[str, float]) -> dict[str, float]:
     return out
 
 
-def score_stocks(parts: dict[str, dict[str, float | None]]) -> list[PickScore]:
-    """`parts[symbol][part]` -> value or None (missing). Deterministic: sorted by (-score, symbol)."""
-    ranks = {p: percentile_ranks({s: v[p] for s, v in parts.items() if v.get(p) is not None}) for p in PARTS}
+def score_stocks(
+    parts: dict[str, dict[str, float | None]], use: tuple[str, ...] = PARTS
+) -> list[PickScore]:
+    """`parts[symbol][part]` -> value or None (missing). Only the parts in `use` are scored (the rest count as
+    missing). Deterministic: sorted by symbol."""
+    ranks = {
+        p: percentile_ranks({s: v[p] for s, v in parts.items() if v.get(p) is not None}) if p in use else {}
+        for p in PARTS
+    }
     out = []
     for sym in sorted(parts):
         got = {p: ranks[p][sym] for p in PARTS if sym in ranks[p]}
@@ -117,6 +143,25 @@ def score_stocks(parts: dict[str, dict[str, float | None]]) -> list[PickScore]:
 def top_picks(scores: list[PickScore], n: int = TOP_N) -> list[PickScore]:
     scored = [s for s in scores if s.score is not None]
     return sorted(scored, key=lambda s: (-s.score, s.symbol))[:n]
+
+
+def read_parts(
+    session: Session, series: dict[str, SymbolSeries], month_end: date, kinds: tuple[str, ...] = ALL_KINDS
+) -> dict[str, dict[str, float | None]]:
+    """The three raw part values of every stock at the close of `month_end` (facts known then, prices through that day)."""
+    moment = close_moment(month_end)
+    parts: dict[str, dict[str, float | None]] = {}
+    with as_of(moment):
+        for sym, s in series.items():
+            idx = s.bar_index_on(month_end)
+            if idx is None:
+                continue
+            parts[sym] = {
+                "quality": quality_value(session, sym, moment),
+                "momentum": momentum_value(s, idx),
+                "catalyst": catalyst_value(session, sym, moment, kinds=kinds),
+            }
+    return parts
 
 
 def score_month_end(
@@ -143,6 +188,6 @@ def congress_present(session: Session, month_end: date) -> bool:
 
 
 __all__ = [
-    "PARTS", "PickScore", "TOP_N", "catalyst_value", "momentum_value", "percentile_ranks",
-    "quality_value", "score_month_end", "score_stocks", "top_picks",
+    "PARTS", "PickScore", "TOP_N", "catalyst_by_kind", "catalyst_value", "momentum_value", "percentile_ranks",
+    "quality_value", "read_parts", "score_month_end", "score_stocks", "top_picks",
 ]

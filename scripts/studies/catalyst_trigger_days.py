@@ -1,6 +1,6 @@
 """Measure the catalyst idea on past days (plan.md section 8, step 1). Read-only on the app's data.
 
-    backend/.venv/Scripts/python scripts/catalyst_study.py VST NVDA --start 2025-03-01 --end 2026-10-07 --db runtime/catalyst_study.db
+    backend/.venv/Scripts/python scripts/studies/catalyst_trigger_days.py VST NVDA --start 2025-03-01 --end 2026-10-07 --db runtime/catalyst_study.db
 
 Facts come from a scratch database filled beforehand by the backfill scripts (--db on each of them); prices come
 from runtime/history.db (scripts/preload_history.py). Nothing is written. The report gives the trigger days'
@@ -14,7 +14,7 @@ from datetime import date
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from sqlalchemy import create_engine  # noqa: E402

@@ -1,6 +1,6 @@
-"""PICKER TEST v2 (internal_knowledge/TODO.md). Read-only study; every number is printed by this script.
+"""PICKER TEST v2 (rules were written down before running; kept privately). Read-only study; every number is printed by this script.
 
-    backend/.venv/Scripts/python scripts/picker_study.py --db runtime/picker_study.db
+    backend/.venv/Scripts/python scripts/studies/picker_top6_60stocks.py --db runtime/picker_study.db
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 import numpy as np  # noqa: E402
