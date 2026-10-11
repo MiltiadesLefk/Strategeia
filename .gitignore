@@ -32,3 +32,6 @@ frontend/*.local
 # added). Was previously tracked by accident.
 *_dev.log
 *_dev_err.log
+
+# Local tool settings
+.claude/
