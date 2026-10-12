@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LIMIT = 5
 DAYS = 7
-TOP_UP_FETCH = 20
+TOP_UP_FETCH = 40  # only about 4 in 10 of a per-ticker feed name the company, so look at more than we need
 
 _google = GoogleNewsProvider()
 
