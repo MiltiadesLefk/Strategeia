@@ -19,7 +19,7 @@ from app.data_providers.base import (
     QuoteData,
 )
 from app.data_providers.cache import cached
-from app.timeutil import utc_from_timestamp_naive, utc_iso_from_timestamp
+from app.timeutil import utc_iso_from_timestamp
 
 # Deliberately short, and deliberately the same as QUOTE_TTL. This was 24h,
 # which quietly broke the exit engine: mark_to_market runs every 15 min but

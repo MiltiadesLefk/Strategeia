@@ -9,11 +9,6 @@ class EstimateSchema(BaseModel):
     revenue_estimate: float | None = None
 
 
-class ReactionSchema(BaseModel):
-    report_date: str
-    move_pct: float
-
-
 class ScenarioSchema(BaseModel):
     name: str  # Bull | Base | Bear
     percentile: int

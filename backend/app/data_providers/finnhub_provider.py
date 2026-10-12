@@ -15,7 +15,7 @@ from app.data_providers.base import (
     QuoteData,
 )
 from app.data_providers.cache import cached
-from app.timeutil import utc_from_timestamp_naive, utc_iso_from_timestamp
+from app.timeutil import utc_iso_from_timestamp
 
 BASE_URL = "https://finnhub.io/api/v1"
 QUOTE_TTL = 15 * 60

@@ -9,10 +9,6 @@ def utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def utc_from_timestamp_naive(ts: float) -> datetime:
-    return datetime.fromtimestamp(ts, tz=timezone.utc).replace(tzinfo=None)
-
-
 def utc_iso_from_timestamp(ts: float) -> str:
     """Unix timestamp -> ISO-8601 string with an explicit Z.
 

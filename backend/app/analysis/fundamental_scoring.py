@@ -32,13 +32,6 @@ EARNINGS_IMMINENT_DAYS = 3
 FUNDAMENTAL_SCORE_CAP = 3
 
 
-@dataclass
-class FundamentalSignal:
-    news_score: int
-    fundamental_score: int
-    reasons: list[str] = field(default_factory=list)
-
-
 def _direction_sign(direction: str | None) -> int:
     """+1 for a long, -1 for a short, +1 when there's no direction yet.
 

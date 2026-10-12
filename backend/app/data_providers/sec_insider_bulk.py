@@ -63,10 +63,6 @@ class BulkReport:
     errors: list[str] = field(default_factory=list)
 
 
-def quarter_label(day: date) -> str:
-    return f"{day.year}q{(day.month - 1) // 3 + 1}"
-
-
 def quarters_between(since: date, until: date) -> list[str]:
     """Every quarter label from `since` to `until`, oldest first."""
     out: list[str] = []

@@ -45,10 +45,6 @@ class CommitteeNotConfiguredError(RuntimeError):
     """No real AI provider is configured: the committee has nothing to ask."""
 
 
-class CommitteeNotFoundError(LookupError):
-    pass
-
-
 def recover_interrupted_runs(session_factory: Callable[[], Session]) -> int:
     with session_factory() as session:
         stuck = session.exec(select(CommitteeRun).where(CommitteeRun.status.in_(ACTIVE_RUN_STATUSES))).all()

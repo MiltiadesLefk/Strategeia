@@ -20,7 +20,7 @@ from app.catalyst.scoring import (
     KIND_CONGRESS,
     read_catalysts,
 )
-from app.knowledge.congress_trades import EQUITY_ASSET_TYPES, congress_trades_as_of, has_congress_data
+from app.knowledge.congress_trades import EQUITY_ASSET_TYPES, congress_trades_as_of
 from app.knowledge.point_in_time import as_of
 
 PARTS = ("quality", "momentum", "catalyst")
@@ -181,10 +181,6 @@ def score_month_end(
                 "catalyst": catalyst_value(session, sym, moment),
             }
     return score_stocks(parts)
-
-
-def congress_present(session: Session, month_end: date) -> bool:
-    return has_congress_data(session, close_moment(month_end))
 
 
 __all__ = [

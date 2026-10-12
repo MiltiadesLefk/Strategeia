@@ -20,14 +20,6 @@ class ScanResponse(BaseModel):
     errors: list[str] = []
 
 
-class ScanJobStatus(BaseModel):
-    job_id: str
-    status: str
-    progress: int
-    total: int
-    results: list[ScanResultSchema] | None = None
-
-
 class AutoScanResponse(BaseModel):
     generated: list[str]
     no_trade: list[str] = []
