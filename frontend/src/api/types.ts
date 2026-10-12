@@ -458,10 +458,6 @@ export interface AppSettings {
   committee_gate_enabled: boolean;
   committee_gate_action: 'cancel' | 'hold';
   committee_gate_max_per_scan: number;
-  /** First-run questionnaire answers (empty = not answered). Stored only; a suggestion changes nothing until Apply. */
-  onboarding_risk_tolerance: string;
-  onboarding_time_horizon: string;
-  onboarding_experience: string;
   /** Kill switches: pause a sleeve's new positions after a drawdown or when live results drift from the backtest. */
   kill_switch_enabled: boolean;
   kill_switch_drawdown_pct: number;
@@ -551,9 +547,6 @@ export interface SettingsUpdateRequest {
   committee_gate_enabled?: boolean;
   committee_gate_action?: 'cancel' | 'hold';
   committee_gate_max_per_scan?: number;
-  onboarding_risk_tolerance?: string;
-  onboarding_time_horizon?: string;
-  onboarding_experience?: string;
   kill_switch_enabled?: boolean;
   kill_switch_drawdown_pct?: number;
   kill_switch_drift_psi?: number;
@@ -2658,19 +2651,6 @@ export interface FinraSymbolResponse {
   latest_trade_date: string | null;
   days: FinraDay[];
   signal: ShadowSignal | null;
-}
-
-export interface OnboardingAnswers {
-  risk_tolerance: string;
-  time_horizon: string;
-  experience: string;
-}
-
-export interface OnboardingSuggestion {
-  style: string;
-  style_description: string;
-  risk_pct: number;
-  reasons: string[];
 }
 
 /** One pause a kill switch or drift alarm placed on a sleeve; resolved_at null means it is in force. */

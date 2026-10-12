@@ -49,9 +49,6 @@ class SettingsUpdateRequest(BaseModel):
     committee_gate_enabled: bool | None = None
     committee_gate_action: Literal["cancel", "hold"] | None = None
     committee_gate_max_per_scan: int | None = Field(default=None, ge=1, le=20)
-    onboarding_risk_tolerance: Literal["", "low", "medium", "high"] | None = None
-    onboarding_time_horizon: Literal["", "days", "weeks", "months"] | None = None
-    onboarding_experience: Literal["", "beginner", "intermediate", "advanced"] | None = None
     scan_universe_size: int | None = Field(default=None, gt=0)
     news_cards_enabled: bool | None = None
     news_card_batch_limit: int | None = Field(default=None, ge=1, le=30)

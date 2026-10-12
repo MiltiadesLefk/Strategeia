@@ -15,7 +15,6 @@ import { CongressFollowCard } from '../components/CongressFollowCard';
 import { FundFollowCard } from '../components/FundFollowCard';
 import { NewsCardsSettingsCard } from '../components/NewsCardsSettingsCard';
 import { KillSwitchSettingsCard } from '../components/KillSwitchSettingsCard';
-import { OnboardingCard } from '../components/OnboardingCard';
 import { CommitteeSettingsCard } from '../components/CommitteeSettingsCard';
 import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
@@ -832,7 +831,6 @@ export function SettingsPage() {
 
       {tab === 'trading' && (
         <>
-          <OnboardingCard />
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>Paper Account</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>

@@ -630,12 +630,6 @@ class AppSettings(BaseModel):
     committee_gate_action: Literal["cancel", "hold"] = "cancel"
     committee_gate_max_per_scan: int = Field(default=5, ge=1, le=20)
 
-    # First-run questionnaire answers ("" = not answered). Stored only; the suggestion they
-    # produce changes no setting until the user presses Apply.
-    onboarding_risk_tolerance: str = ""
-    onboarding_time_horizon: str = ""
-    onboarding_experience: str = ""
-
     scan_universe_size: int = 50
 
     # News cards: an AI (the configured provider's routine model) labels each
