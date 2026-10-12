@@ -1,3 +1,5 @@
+import { trackWrite } from '../lib/activity';
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 // Only relevant if the backend's matching InfraSettings.api_shared_secret
 // (API_SHARED_SECRET in backend/.env) is set — see api/deps.py's
@@ -16,7 +18,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function rawRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     // The session cookie AuthGate's login sets is what actually
@@ -42,6 +44,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new ApiError(res.status, detail);
   }
   return res.json() as Promise<T>;
+}
+
+function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const method = (options?.method ?? 'GET').toUpperCase();
+  return method === 'GET' ? rawRequest<T>(path, options) : trackWrite(path, () => rawRequest<T>(path, options));
 }
 
 export const api = {

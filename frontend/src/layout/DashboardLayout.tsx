@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { ActivityToasts } from '../components/ActivityToasts';
 import { CommandPalette } from '../components/CommandPalette';
 import { RouteBoundary } from '../components/RouteBoundary';
 import { usePaletteShortcut } from '../lib/paletteShortcut';
@@ -20,6 +21,7 @@ export function DashboardLayout() {
   return (
     <div className="app-shell">
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onOpenPalette={() => setPaletteOpen(true)} />
+      <ActivityToasts />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       {mobileOpen && <div className="sidebar-scrim" onClick={() => setMobileOpen(false)} />}
       <div className="app-main-col">
