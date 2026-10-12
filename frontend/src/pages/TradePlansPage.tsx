@@ -11,6 +11,7 @@ import {
   useClearTradePlans,
   useGenerateTradePlan,
   useMarketSession,
+  useNewsCards,
   useOpenPosition,
   useSettings,
   useTradePlans,
@@ -23,10 +24,11 @@ import { PipelineSteps } from '../components/PipelineSteps';
 import { MissedTradesCard } from '../components/MissedTradesCard';
 import { ReplayCard } from '../components/ReplayCard';
 import { StrategyHistoryCard } from '../components/StrategyHistoryCard';
+import { NewsCardChips } from '../components/NewsCardChips';
 import { TickerLink } from '../components/TickerLink';
 import { IconBadge } from '../components/IconBadge';
 import { CandlestickChart, type PriceLevel } from '../components/chart/CandlestickChart';
-import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber } from '../components/common';
+import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatRelativeTime, isSafeHttpUrl } from '../components/common';
 import { isAlwaysOpenSymbol, marketStateLabel, timeUntilNextTransition } from '../lib/marketHours';
 import { useNow } from '../lib/useNow';
 import type { ApiError } from '../api/client';
@@ -169,25 +171,31 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
     return (
       <div className="card" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         <IconBadge variant="info" size={44} />
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <TickerLink symbol={plan.symbol} iconSize={24} fontWeight={700} style={{ fontSize: 16 }} />
-            <span className="badge badge-neutral">No Trade Plan</span>
-            <StrategyVersionChip version={plan.strategy_version} />
-          </div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{plan.reason ?? 'No trade plan generated'}</div>
-          <div className="text-muted" style={{ fontSize: 13, maxWidth: 480 }}>
-            This isn't an error — {plan.symbol} was fully evaluated (price, volume, indicators, fundamentals, news,
-            earnings) and just didn't clear the bar for a trade plan this time. Quality over quantity: pick a
-            different symbol from the dropdown above, or check back after the next scan.
-          </div>
-          {plan.signal_reasons && (
-            <div className="text-muted" style={{ fontSize: 12, marginTop: 8, marginBottom: plan.ai_opinion_text ? 12 : 0 }}>
-              Confidence {plan.confidence_score}% — {plan.signal_reasons}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <TickerLink symbol={plan.symbol} iconSize={24} fontWeight={700} style={{ fontSize: 16 }} />
+              <span className="badge badge-neutral">No Trade Plan</span>
+              <StrategyVersionChip version={plan.strategy_version} />
             </div>
-          )}
-          <SilentSignals signals={plan.shadow_signals} />
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{plan.reason ?? 'No trade plan generated'}</div>
+            <div className="text-muted" style={{ fontSize: 13, maxWidth: 560 }}>
+              This isn't an error — {plan.symbol} was fully evaluated (price, volume, indicators, fundamentals, news,
+              earnings) and just didn't clear the bar for a trade plan this time. Quality over quantity: pick a
+              different symbol from the dropdown above, or check back after the next scan.
+            </div>
+          </div>
+          <DecisionChecklist plan={plan} minConfidence={settings?.min_confidence_for_trade} />
           <AiOpinionBlock plan={plan} />
+          <PlanNews plan={plan} />
+          <SilentSignals signals={plan.shadow_signals} />
+          <div>
+            <h3 style={{ marginBottom: 4 }}>Score breakdown</h3>
+            <div className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+              Every part of the evidence, what it scored and why. Parts with no signal are dimmed.
+            </div>
+            <ScoreTable parts={buildScoreParts(plan)} direction={null} />
+          </div>
         </div>
       </div>
     );
@@ -206,31 +214,7 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
   const executed = plan.status === 'executed' || isSuccess;
   const blockedReason = committeeBusy ? 'The AI Committee is still reading this plan.' : executeBlockedReason(plan, session, now);
 
-  const val = (v: number | null | undefined) => v ?? 0;
-  const parts: ScorePart[] = [
-    { label: 'Technical', value: val(plan.technical_score), unsigned: true, help: 'Trend, momentum, structure and volume from the price chart.' },
-    { label: 'Fundamentals', note: plan.extra_notes?.fundamentals, value: val(plan.fundamental_score), help: 'Revenue growth, margins and balance-sheet health, signed for the trade direction.' },
-    { label: 'News', note: plan.extra_notes?.news, value: val(plan.news_score), help: 'Tone of recent headlines. Bullish news supports a long and argues against a short.' },
-    { label: 'Confluence', note: plan.extra_notes?.confluence, value: val(plan.market_confirmation_score), help: 'Weekly-timeframe and broad market (SPY) agreement with the trade.' },
-    { label: 'VIX', note: plan.extra_notes?.vix, value: val(plan.vix_regime_score), penaltyOnly: true, help: 'VIX regime. Only ever a penalty when elevated (25 or more), never a bonus.' },
-    { label: 'Options', note: plan.extra_notes?.options, value: val(plan.options_score), help: 'Options put/call volume skew agreement (no chain data for most crypto and thin names).' },
-    {
-      label: 'Insider',
-      value: val(plan.insider_score),
-      help: 'SEC Form 4, last 90 days, up to 2 points either way. Net open-market buying supports a long ($100k net is 1 point, $1M is 2). Selling argues against a long: sales by choice count in full, sales under a 10b5-1 plan at a quarter of their value.',
-    },
-    ...EXTRA_PARTS.map(([key, label, help]) => ({
-      label,
-      help,
-      value: val(plan.extra_scores?.[key]),
-      note: plan.extra_notes?.[key],
-      penaltyOnly: key === 'fed_window' || key === 'post_mentions' || key === 'short_volume',
-    })),
-    { label: 'Earnings Track', note: plan.extra_notes?.earnings_track, value: val(plan.earnings_surprise_score), help: 'Consistent beat or miss streak on reported consensus EPS over the last quarters. Real history, not a forecast of the next print.' },
-    { label: 'Expected Move', note: plan.extra_notes?.expected_move, value: val(plan.expected_move_score), penaltyOnly: true, help: "Options market pricing a move larger than this stock's own recent range. A magnitude read, not a direction call: it penalizes a long and a short the same." },
-    { label: 'Macro Event', note: plan.extra_notes?.macro_event, value: val(plan.macro_event_score), penaltyOnly: true, help: 'A scheduled FOMC decision, CPI release or jobs report today or tomorrow. Market-wide event risk, hand-maintained from federalreserve.gov and bls.gov.' },
-    { label: 'AI Overlay', note: plan.extra_notes?.ai_overlay, value: val(plan.ai_overlay_score), penaltyOnly: true, help: 'The AI second opinion, scored. Only ever a penalty (0 to -3) and never a bonus, so the AI cannot talk the engine into a trade the rules rejected.' },
-  ];
+  const parts = buildScoreParts(plan);
 
   const executePanel = (
       <div
@@ -436,8 +420,10 @@ function TradePlanCard({ plan }: { plan: TradePlan }) {
           {openError && <ErrorBanner message={(openError as ApiError).message} />}
           {executePanel}
           <CommitteeNote plan={plan} />
+          <DecisionChecklist plan={plan} minConfidence={settings?.min_confidence_for_trade} />
           <SilentSignals signals={plan.shadow_signals} />
           <AiOpinionBlock plan={plan} />
+          <PlanNews plan={plan} />
         </div>
       </div>
 
@@ -553,6 +539,141 @@ const EXTRA_PARTS: [string, string, string][] = [
   ['fed_window', 'Fed window', 'Caution flag: a Fed statement or Chair speech within a day. Only ever subtracts, whichever way the trade goes.'],
   ['post_mentions', 'Posts', 'Caution flag: a post naming this company in the last 24 hours (an unofficial archive). Only ever subtracts.'],
 ];
+
+/** Each saved headline for the symbol with the AI's rating of it (sentiment, materiality, event type, summary). */
+function PlanNews({ plan }: { plan: TradePlan }) {
+  const { data } = useNewsCards(plan.symbol);
+  const note = plan.extra_notes?.news;
+  const items = data?.items ?? [];
+  return (
+    <div className="plan-panel">
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
+        News and how each headline was rated
+        {plan.news_score != null && (
+          <span className="text-muted tabular-nums" style={{ fontWeight: 400, marginLeft: 8 }}>
+            news part: {plan.news_score > 0 ? '+' : ''}
+            {plan.news_score} pts
+          </span>
+        )}
+      </div>
+      {note && (
+        <div className="text-muted" style={{ fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>
+          Why the news part scored this way: {note}
+        </div>
+      )}
+      {items.length === 0 ? (
+        <div className="text-muted" style={{ fontSize: 12 }}>
+          No headlines are saved for {plan.symbol}.
+        </div>
+      ) : (
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {items.slice(0, 10).map((n) => (
+            <li key={n.url || n.headline}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                {isSafeHttpUrl(n.url) ? (
+                  <a href={n.url} target="_blank" rel="noreferrer">
+                    {n.headline}
+                  </a>
+                ) : (
+                  n.headline
+                )}
+              </div>
+              <div className="text-muted" style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>{n.publisher}</span>
+                <span>{formatRelativeTime(n.known_at)}</span>
+                {n.card ? <NewsCardChips card={n.card} /> : <span className="badge badge-neutral">not rated by the AI</span>}
+              </div>
+              {n.card?.one_line_summary && (
+                <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+                  {n.card.one_line_summary}
+                  {!n.card.is_about_this_company && ' (Not mainly about this company.)'}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="text-muted" style={{ fontSize: 11, marginTop: 8, opacity: 0.8 }}>
+        These are the headlines saved now, not a snapshot from when the plan was made. AI labels are written when
+        labelled, so they are only meant to be judged on recent news.
+      </div>
+    </div>
+  );
+}
+
+/** The gates a plan passes or fails, in the order they apply, so "why no trade?" has a visible answer. */
+function DecisionChecklist({ plan, minConfidence }: { plan: TradePlan; minConfidence: number | undefined }) {
+  const rows: { ok: boolean | null; label: string; detail: string }[] = [];
+  if (minConfidence != null && plan.confidence_score != null) {
+    rows.push({
+      ok: plan.confidence_score >= minConfidence,
+      label: 'Confidence bar',
+      detail: `${plan.confidence_score}% against a bar of ${minConfidence}%${
+        plan.confidence_points != null && plan.confidence_points_max != null
+          ? ` (${plan.confidence_points}/${plan.confidence_points_max} evidence points)`
+          : ''
+      }.`,
+    });
+  }
+  if (plan.ai_trade_verdict) {
+    rows.push({
+      ok: plan.ai_trade_verdict !== 'pass',
+      label: 'AI second opinion',
+      detail: `${plan.ai_trade_verdict === 'pass' ? 'Would not take' : 'Would take'} this trade${
+        plan.ai_decision_model ? ` (${plan.ai_decision_model})` : ''
+      }. Cost to confidence: ${plan.ai_overlay_score ?? 0} pts.`,
+    });
+  }
+  if (plan.committee_rating) {
+    rows.push({ ok: null, label: 'AI Committee', detail: `Rated ${plan.committee_rating}${plan.committee_note ? `: ${plan.committee_note}` : '.'}` });
+  }
+  if (plan.auto_execute_note) rows.push({ ok: null, label: 'Auto-execute', detail: plan.auto_execute_note });
+  if (rows.length === 0) return null;
+  return (
+    <div className="plan-panel">
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Decision checklist</div>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13, lineHeight: 1.6 }}>
+        {rows.map((r) => (
+          <li key={r.label}>
+            <span className={r.ok === null ? 'text-muted' : r.ok ? 'text-green' : 'text-red'} style={{ fontWeight: 700 }}>
+              {r.ok === null ? '•' : r.ok ? '✓' : '✗'} {r.label}
+            </span>{' '}
+            <span className="text-muted">{r.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Every scored part of a plan, with the stored reason for each; shared by the tradeable and the no-trade card. */
+function buildScoreParts(plan: TradePlan): ScorePart[] {
+  const val = (v: number | null | undefined) => v ?? 0;
+  return [
+    { label: 'Technical', value: val(plan.technical_score), unsigned: true, help: 'Trend, momentum, structure and volume from the price chart.' },
+    { label: 'Fundamentals', note: plan.extra_notes?.fundamentals, value: val(plan.fundamental_score), help: 'Revenue growth, margins and balance-sheet health, signed for the trade direction.' },
+    { label: 'News', note: plan.extra_notes?.news, value: val(plan.news_score), help: 'Tone of recent headlines. Bullish news supports a long and argues against a short.' },
+    { label: 'Confluence', note: plan.extra_notes?.confluence, value: val(plan.market_confirmation_score), help: 'Weekly-timeframe and broad market (SPY) agreement with the trade.' },
+    { label: 'VIX', note: plan.extra_notes?.vix, value: val(plan.vix_regime_score), penaltyOnly: true, help: 'VIX regime. Only ever a penalty when elevated (25 or more), never a bonus.' },
+    { label: 'Options', note: plan.extra_notes?.options, value: val(plan.options_score), help: 'Options put/call volume skew agreement (no chain data for most crypto and thin names).' },
+    {
+      label: 'Insider',
+      value: val(plan.insider_score),
+      help: 'SEC Form 4, last 90 days, up to 2 points either way. Net open-market buying supports a long ($100k net is 1 point, $1M is 2). Selling argues against a long: sales by choice count in full, sales under a 10b5-1 plan at a quarter of their value.',
+    },
+    ...EXTRA_PARTS.map(([key, label, help]) => ({
+      label,
+      help,
+      value: val(plan.extra_scores?.[key]),
+      note: plan.extra_notes?.[key],
+      penaltyOnly: key === 'fed_window' || key === 'post_mentions' || key === 'short_volume',
+    })),
+    { label: 'Earnings Track', note: plan.extra_notes?.earnings_track, value: val(plan.earnings_surprise_score), help: 'Consistent beat or miss streak on reported consensus EPS over the last quarters. Real history, not a forecast of the next print.' },
+    { label: 'Expected Move', note: plan.extra_notes?.expected_move, value: val(plan.expected_move_score), penaltyOnly: true, help: "Options market pricing a move larger than this stock's own recent range. A magnitude read, not a direction call: it penalizes a long and a short the same." },
+    { label: 'Macro Event', note: plan.extra_notes?.macro_event, value: val(plan.macro_event_score), penaltyOnly: true, help: 'A scheduled FOMC decision, CPI release or jobs report today or tomorrow. Market-wide event risk, hand-maintained from federalreserve.gov and bls.gov.' },
+    { label: 'AI Overlay', note: plan.extra_notes?.ai_overlay, value: val(plan.ai_overlay_score), penaltyOnly: true, help: 'The AI second opinion, scored. Only ever a penalty (0 to -3) and never a bonus, so the AI cannot talk the engine into a trade the rules rejected.' },
+  ];
+}
 
 export function TradePlansPage() {
   // URL-backed, not a hardcoded default — arriving via "Generate Trade Plan"
