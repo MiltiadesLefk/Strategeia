@@ -740,9 +740,9 @@ export function TradePlansPage() {
   }, [history, statusFilter, sleeve]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
-        <h1 style={{ fontSize: 22 }}>Trade Plans</h1>
+        <h1>Trade Plans</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <CompanyDropdown value={symbol ?? ''} onChange={(s) => setParams({ symbol: s })} />
           <button

@@ -8,7 +8,7 @@ import { prefetchRoute } from '../routePages';
 
 function Icon({ path }: { path: string }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d={path} />
     </svg>
   );
@@ -68,75 +68,33 @@ function ServiceStatus({ status }: { status?: SettingsStatus }) {
   ];
   const faults = services.filter((s) => !s.optional && !s.online);
   const show = expanded || faults.length > 0;
+  const dotClass = (s: (typeof services)[number]) => (s.online ? 'on' : s.optional ? '' : 'bad');
 
   return (
-    <div style={{ marginTop: 12 }}>
+    <div>
       <button
         type="button"
+        className={`service-row${faults.length ? ' fault' : ''}`}
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={show}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          width: '100%',
-          padding: '8px 12px',
-          fontSize: 12,
-          fontWeight: 600,
-          borderRadius: 9999,
-          border: `1px solid ${faults.length ? 'rgba(239, 68, 68, 0.35)' : 'var(--border)'}`,
-          background: faults.length ? 'var(--red-bg)' : 'rgba(255,255,255,0.04)',
-          color: faults.length ? 'var(--red)' : 'var(--text-inverse-muted)',
-        }}
       >
-        <span style={{ display: 'flex', gap: 3 }}>
+        <span className="service-dots">
           {services.map((s) => (
-            <span
-              key={s.key}
-              title={s.label}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                display: 'inline-block',
-                background: s.online ? 'var(--green)' : s.optional ? 'var(--text-inverse-muted)' : 'var(--red)',
-              }}
-            />
+            <span key={s.key} title={s.label} className={`service-dot ${dotClass(s)}`} />
           ))}
         </span>
         {faults.length ? `${faults.length} service down` : 'Services'}
       </button>
       {show && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+        <div className="service-list">
           {services.map((s) => (
-            <StatusPill key={s.key} online={s.online} label={s.label} />
+            <div key={s.key}>
+              <span className={`service-dot ${dotClass(s)}`} />
+              {s.label}
+            </div>
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function StatusPill({ online, label }: { online: boolean; label: string }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        padding: '8px 12px',
-        fontSize: 12,
-        fontWeight: 600,
-        color: online ? 'var(--green)' : 'var(--text-inverse-muted)',
-        background: online ? 'var(--green-bg)' : 'rgba(255,255,255,0.04)',
-        border: `1px solid ${online ? 'rgba(16, 185, 129, 0.3)' : 'var(--border)'}`,
-        borderRadius: 9999,
-      }}
-    >
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: online ? 'var(--green)' : 'var(--text-inverse-muted)', display: 'inline-block' }} />
-      {label}
     </div>
   );
 }
@@ -162,41 +120,30 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
     <aside
       className={`sidebar${mobileOpen ? ' open' : ''}`}
       style={{
-        width: 240,
+        width: 224,
         flexShrink: 0,
-        color: 'var(--text-inverse)',
+        color: 'var(--text)',
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px 12px 14px',
+        padding: '16px 10px 12px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 6px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src={logo} alt="Strategeia" style={{ width: 32, height: 32, flexShrink: 0, objectFit: 'contain' }} />
-          <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>Strategeia</span>
+          <img src={logo} alt="Strategeia" style={{ width: 24, height: 24, flexShrink: 0, objectFit: 'contain' }} />
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Strategeia</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button
-            onClick={() => logout()}
-            disabled={loggingOut}
-            aria-label="Log out"
-            title="Log out"
-            style={{ background: 'none', border: 'none', color: 'var(--text-inverse-muted)', padding: 4, cursor: 'pointer' }}
-          >
-            <Icon path="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-          </button>
-          <button
-            onClick={onClose}
-            aria-label="Close menu"
-            className="mobile-only-close"
-            style={{ display: 'none', background: 'none', border: 'none', color: 'var(--text-inverse-muted)', padding: 4 }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close menu"
+          className="mobile-only-close"
+          style={{ display: 'none', background: 'none', border: 'none', color: 'var(--text-muted)', padding: 4 }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       </div>
       {onOpenPalette && (
         <button
@@ -215,37 +162,23 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
         </button>
       )}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-        <div className="sidebar-section">MENU</div>
+        <div className="sidebar-section">Menu</div>
         {NAV_ITEMS.filter((i) => i.to !== '/settings').map(renderItem)}
-        <div className="sidebar-section">SYSTEM</div>
+        <div className="sidebar-section">System</div>
         {NAV_ITEMS.filter((i) => i.to === '/settings').map(renderItem)}
       </nav>
-      {/* The old "Trading Bot Online" pill lived here: unconditional green
-          markup with no state behind it, so it read "Online" with the backend
-          on fire. In a project whose whole claim is that nothing is hardcoded
-          to look good, a decorative status light is the one thing that can't
-          stay. The four pills below are real readings of
-          GET /api/settings/status — they're the honest version of it, and they
-          collapse into one summary row unless something actually needs
-          attention. */}
-      <ServiceStatus status={status} />
-      <div className="sidebar-user">
-        <div className="sidebar-user-avatar">S</div>
-        <div style={{ lineHeight: 1.25, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Operator</div>
-          <div className="text-muted" style={{ fontSize: 11 }}>Paper trading</div>
-        </div>
+      {/* Service dots are real readings of GET /api/settings/status; they collapse into one row unless something needs attention. */}
+      <div className="sidebar-footer">
+        <ServiceStatus status={status} />
+        <button type="button" className="sidebar-action" onClick={() => logout()} disabled={loggingOut}>
+          <Icon path="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          Log out
+        </button>
+        {/* Required attribution for Elbstream's free ticker-logo API (CompanyIcon.tsx) */}
+        <a href="https://elbstream.com/logos" target="_blank" rel="noreferrer" className="text-muted" style={{ fontSize: 11, padding: '4px 10px' }}>
+          Logos by Elbstream
+        </a>
       </div>
-      {/* Required attribution for Elbstream's free ticker-logo API (CompanyIcon.tsx) */}
-      <a
-        href="https://elbstream.com/logos"
-        target="_blank"
-        rel="noreferrer"
-        className="text-muted"
-        style={{ fontSize: 12, textAlign: 'center', marginTop: 10 }}
-      >
-        Logos by Elbstream
-      </a>
     </aside>
   );
 }

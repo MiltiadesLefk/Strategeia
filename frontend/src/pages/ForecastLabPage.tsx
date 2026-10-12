@@ -175,7 +175,7 @@ export function ForecastLabPage() {
   const pickedRows = status.runs.filter((r) => picked.includes(r.id)).reduce((a, r) => a + r.closed_trades, 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
           <h2 style={{ margin: 0, fontSize: 20 }}>Forecast Lab</h2>

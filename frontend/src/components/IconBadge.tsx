@@ -1,7 +1,7 @@
 const VARIANTS = {
   up: { bg: 'var(--green-bg)', color: 'var(--green)', char: '↗' },
   down: { bg: 'var(--red-bg)', color: 'var(--red)', char: '↘' },
-  info: { bg: 'rgba(59, 130, 246, 0.14)', color: 'var(--indigo-light)', char: '◔' },
+  info: { bg: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-muted)', char: '•' },
 } as const;
 
 export function IconBadge({ variant, size = 40 }: { variant: keyof typeof VARIANTS; size?: number }) {
@@ -11,13 +11,13 @@ export function IconBadge({ variant, size = 40 }: { variant: keyof typeof VARIAN
       style={{
         width: size,
         height: size,
-        borderRadius: '50%',
+        borderRadius: 6,
         background: cfg.bg,
         color: cfg.color,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: size * 0.45,
+        fontSize: size * 0.42,
         flexShrink: 0,
       }}
     >

@@ -243,10 +243,10 @@ export function PortfolioPage() {
   const exitMixTotal = exitMix.reduce((sum, [, n]) => sum + n, 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
-          <h1 style={{ fontSize: 22 }}>Portfolio</h1>
+          <h1>Portfolio</h1>
           {/* The older of the two fetches the header cards are built from. */}
           <div style={{ marginTop: 4 }}>
             <DataFreshness updatedAt={statsUpdatedAt && positionsUpdatedAt ? Math.min(statsUpdatedAt, positionsUpdatedAt) : statsUpdatedAt || positionsUpdatedAt} />

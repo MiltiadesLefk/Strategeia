@@ -69,16 +69,14 @@ export function DashboardPage() {
   if (!data) return null;
 
   const { stats, markets_scanned, potential_setups, top_setups, latest_trade_plan, top_pick_trade_plan } = data;
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const equityTrend = equity?.map((p) => p.equity_value);
   const topPick = top_setups[0];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
-          <h1 style={{ fontSize: 22 }}>{greeting}</h1>
+          <h1>Dashboard</h1>
           {/* Was prefixed by a hardcoded green dot implying "healthy" — the
               sidebar's Services indicator is the real reading of that. This
               line is scan activity, so it states scan activity. */}
@@ -233,16 +231,7 @@ export function DashboardPage() {
             </>
           )}
         </div>
-       </div>
-       <div className="plan-col">
-        {topPick ? (
-          <TopPickChart symbol={topPick.symbol} />
-        ) : (
-          <div className="card" style={{ height: '100%' }}>
-            <EmptyState>No top-ranked setup to chart yet.</EmptyState>
-          </div>
-        )}
-               <div className="card">
+        <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <h3>Top Pick</h3>
           </div>
@@ -309,6 +298,15 @@ export function DashboardPage() {
             </div>
           )}
         </div>
+       </div>
+       <div className="plan-col">
+        {topPick ? (
+          <TopPickChart symbol={topPick.symbol} />
+        ) : (
+          <div className="card" style={{ height: '100%' }}>
+            <EmptyState>No top-ranked setup to chart yet.</EmptyState>
+          </div>
+        )}
        </div>
 
       </div>

@@ -496,7 +496,7 @@ export function SettingsPage() {
 
   return (
     <div className="settings-columns">
-      <h1 style={{ fontSize: 22 }}>Settings</h1>
+      <h1>Settings</h1>
 
       <div style={{ columnSpan: 'all', marginBottom: 20 }}>
         <Tabs tabs={SETTINGS_TABS} value={tab} onChange={selectTab} />

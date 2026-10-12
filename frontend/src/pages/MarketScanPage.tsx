@@ -9,6 +9,7 @@ import { Flash } from '../components/Flash';
 import { PresetMatchChips, ScreenPresetBar, useActivePreset } from '../components/ScreenPresetBar';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatPct } from '../components/common';
 import type { ApiError } from '../api/client';
+import { Tabs } from '../components/Tabs';
 import type { ScanResult } from '../api/types';
 
 const WATCHLIST_KEY = 'strategeia.watchlist';
@@ -75,7 +76,7 @@ export function MarketScanPage() {
   }, [data, tab, watchlist, screenPreset, presetRun.data, presetMatches]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -83,7 +84,7 @@ export function MarketScanPage() {
               <circle cx="11" cy="11" r="7" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <h1 style={{ fontSize: 22 }}>Market Scanner</h1>
+            <h1>Market Scanner</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 4 }} className="text-muted">
             <span
@@ -139,25 +140,11 @@ export function MarketScanPage() {
         </div>
       )}
 
-      <div style={{ display: 'inline-flex', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, gap: 2, width: 'fit-content' }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className="btn"
-            style={{
-              padding: '7px 16px',
-              background: tab === t.id ? 'var(--card-alt)' : 'transparent',
-              color: tab === t.id ? 'var(--text)' : 'var(--text-muted)',
-              fontWeight: 600,
-              fontSize: 13,
-            }}
-          >
-            {t.label}
-            {t.id === 'watchlist' && watchlist.length > 0 ? ` (${watchlist.length})` : ''}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        tabs={TABS.map((t) => ({ value: t.id, label: `${t.label}${t.id === 'watchlist' && watchlist.length > 0 ? ` (${watchlist.length})` : ''}` }))}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+      />
 
       <ScreenPresetBar
         selected={screenPreset}

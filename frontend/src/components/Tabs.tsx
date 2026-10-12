@@ -3,29 +3,36 @@ export interface TabItem {
   label: string;
 }
 
+/** Underlined tab row: the selected tab carries an accent line on the container's hairline. */
 export function Tabs({ tabs, value, onChange }: { tabs: TabItem[]; value: string; onChange: (value: string) => void }) {
   return (
-    <div style={{ display: 'inline-flex', flexWrap: 'wrap', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: 9999, padding: 3, gap: 2 }}>
-      {tabs.map((t) => (
-        <button
-          key={t.value}
-          onClick={() => onChange(t.value)}
-          style={{
-            border: 'none',
-            padding: '7px 16px',
-            borderRadius: 9999,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-            background: value === t.value ? 'rgba(255,255,255,0.14)' : 'transparent',
-            color: value === t.value ? 'var(--text)' : 'var(--text-muted)',
-            boxShadow: 'none',
-          }}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div role="tablist" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, borderBottom: '1px solid var(--border)' }}>
+      {tabs.map((t) => {
+        const active = value === t.value;
+        return (
+          <button
+            key={t.value}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.value)}
+            style={{
+              border: 'none',
+              borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+              marginBottom: -1,
+              padding: '8px 12px',
+              borderRadius: 0,
+              fontSize: 13,
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+              background: 'transparent',
+              color: active ? 'var(--text)' : 'var(--text-muted)',
+              transition: 'color 120ms ease, border-color 120ms ease',
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

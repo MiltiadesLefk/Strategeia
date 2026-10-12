@@ -8,21 +8,21 @@ const RANGES = [
 
 export function RangeTabs({ value, onChange }: { value: string; onChange: (range: string) => void }) {
   return (
-    <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: 9999, padding: 3, gap: 2 }}>
+    <div style={{ display: 'inline-flex', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: 6, padding: 2, gap: 2 }}>
       {RANGES.map((r) => (
         <button
           key={r.value}
+          className="range-tab"
+          aria-pressed={value === r.value}
           onClick={() => onChange(r.value)}
           style={{
             border: 'none',
-            padding: '5px 12px',
-            borderRadius: 9999,
+            padding: '3px 10px',
+            borderRadius: 4,
             fontSize: 12,
-            fontWeight: 600,
-            cursor: 'pointer',
-            background: value === r.value ? 'rgba(255,255,255,0.14)' : 'transparent',
+            fontWeight: 500,
+            background: value === r.value ? 'var(--glass-strong)' : 'transparent',
             color: value === r.value ? 'var(--text)' : 'var(--text-muted)',
-            boxShadow: 'none',
           }}
         >
           {r.label}

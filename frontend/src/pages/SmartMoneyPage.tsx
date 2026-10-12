@@ -17,6 +17,7 @@ import { CongressTab } from '../components/smartmoney/CongressTab';
 import { ActivistsTab } from '../components/smartmoney/ActivistsTab';
 import { FundsTab } from '../components/smartmoney/FundsTab';
 import { InsiderTradesTable, RoleBadges, formatAccepted } from '../components/smartmoney/InsiderTradesTable';
+import { Tabs } from '../components/Tabs';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, formatRelativeTime } from '../components/common';
 
 const DAY_OPTIONS = [30, 90, 180, 365];
@@ -35,60 +36,17 @@ const SIDE_OPTIONS: { value: SmartMoneySide; label: string }[] = [
 
 type SourceTab = 'review' | 'sleeves' | 'candidates' | 'insiders' | 'congress' | 'funds' | 'activists';
 
-const PLANNED_TABS: { label: string; why: string }[] = [];
-
 function SourceTabs({ tab, onTab }: { tab: SourceTab; onTab: (tab: SourceTab) => void }) {
-  const tabs: { id: SourceTab; label: string }[] = [
-    { id: 'review', label: 'Review queue' },
-    { id: 'sleeves', label: 'Sleeve report' },
-    { id: 'candidates', label: 'Candidates' },
-    { id: 'insiders', label: 'Insiders' },
-    { id: 'congress', label: 'Congress' },
-    { id: 'funds', label: 'Funds' },
-    { id: 'activists', label: '5% owners' },
+  const tabs: { value: SourceTab; label: string }[] = [
+    { value: 'review', label: 'Review queue' },
+    { value: 'sleeves', label: 'Sleeve report' },
+    { value: 'candidates', label: 'Candidates' },
+    { value: 'insiders', label: 'Insiders' },
+    { value: 'congress', label: 'Congress' },
+    { value: 'funds', label: 'Funds' },
+    { value: 'activists', label: '5% owners' },
   ];
-  return (
-    <div className="card">
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onTab(t.id)}
-            aria-current={tab === t.id ? 'page' : undefined}
-            style={{
-              border: 'none',
-              padding: '7px 16px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: tab === t.id ? 600 : 400,
-              cursor: 'pointer',
-              background: tab === t.id ? 'var(--canvas)' : 'transparent',
-              color: tab === t.id ? 'var(--text)' : 'var(--text-muted)',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-        {PLANNED_TABS.map((t) => (
-          <button
-            key={t.label}
-            type="button"
-            disabled
-            title={t.why}
-            style={{ border: 'none', background: 'transparent', padding: '7px 16px', fontSize: 13, color: 'var(--text-muted)', cursor: 'not-allowed' }}
-          >
-            {t.label} <span style={{ fontSize: 11 }}>(planned)</span>
-          </button>
-        ))}
-      </div>
-      {PLANNED_TABS.length > 0 && (
-        <div className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>
-          {PLANNED_TABS.map((t) => `${t.label}: ${t.why}`).join(' · ')}
-        </div>
-      )}
-    </div>
-  );
+  return <Tabs tabs={tabs} value={tab} onChange={(v) => onTab(v as SourceTab)} />;
 }
 
 function ScoringNote() {
@@ -282,10 +240,10 @@ export function SmartMoneyPage() {
   const [tab, setTab] = useState<SourceTab>('insiders');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
-          <h1 style={{ fontSize: 22 }}>Smart Money</h1>
+          <h1>Smart Money</h1>
           <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
             What people with inside knowledge or deep pockets have done, from public filings.
             {status.data?.has_data &&

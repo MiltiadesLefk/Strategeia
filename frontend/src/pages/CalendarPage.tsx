@@ -221,10 +221,10 @@ export function CalendarPage() {
   const { data, isLoading, error, refetch } = useCalendar(range.from, range.to);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
-          <h1 style={{ fontSize: 22 }}>Calendar</h1>
+          <h1>Calendar</h1>
           <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
             Scheduled economic releases, Fed / CPI / jobs-report dates and earnings for your watchlist and open positions. Times are US Eastern.
           </div>

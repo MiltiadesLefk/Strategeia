@@ -5,7 +5,7 @@ import { SectorHeatmap } from '../components/terminal/SectorHeatmap';
 
 export function MarketTerminalPage() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <h1 style={{ margin: 0 }}>Market Terminal</h1>
         <div className="text-muted" style={{ fontSize: 13 }}>

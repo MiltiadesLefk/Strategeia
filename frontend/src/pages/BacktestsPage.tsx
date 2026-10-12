@@ -1,3 +1,4 @@
+import { Tabs } from '../components/Tabs';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -838,7 +839,7 @@ function RunDetail({ id }: { id: number }) {
   if (run.isError || !data) return <ErrorBanner message={(run.error as ApiError | null)?.message ?? 'Could not load the run'} onRetry={() => run.refetch()} />;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
           <h2 style={{ margin: 0, fontSize: 20 }}>
@@ -971,18 +972,18 @@ export function BacktestsPage() {
     setParams(next);
   };
   const tabs = (
-    <div role="tablist" style={{ display: 'flex', gap: 8 }}>
-      <button role="tab" aria-selected={!validationTab} className={validationTab ? 'btn btn-secondary' : 'btn'} onClick={() => setTab('runs')}>
-        Runs
-      </button>
-      <button role="tab" aria-selected={validationTab} className={validationTab ? 'btn' : 'btn btn-secondary'} onClick={() => setTab('validation')}>
-        Validation
-      </button>
-    </div>
+    <Tabs
+      tabs={[
+        { value: 'runs', label: 'Runs' },
+        { value: 'validation', label: 'Validation' },
+      ]}
+      value={validationTab ? 'validation' : 'runs'}
+      onChange={(v) => setTab(v as 'runs' | 'validation')}
+    />
   );
   if (validationTab) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="page-header">
           <div>
             <h1 style={{ margin: 0 }}>Backtest Lab</h1>
@@ -997,7 +998,7 @@ export function BacktestsPage() {
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
           <h1 style={{ margin: 0 }}>Backtest Lab</h1>

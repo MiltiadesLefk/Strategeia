@@ -26,28 +26,17 @@ export function StatCard({
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div className="text-muted" style={{ fontSize: 13 }}>
+        <div className="text-muted" style={{ fontSize: 12.5 }}>
           {label}
         </div>
-        <span
-          className="stat-chip"
-          aria-hidden="true"
-          style={{
-            background: positive === false ? 'var(--red-bg)' : positive === true ? 'var(--green-bg)' : 'rgba(96, 165, 250, 0.14)',
-            color: positive === false ? 'var(--red)' : positive === true ? 'var(--green)' : 'var(--indigo-light)',
-          }}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 17l6-6 4 4 8-8M15 7h6v6" />
-          </svg>
-        </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
         <div
           className="tabular-nums"
           style={{
-            fontSize: hero ? 34 : 26,
-            fontWeight: 700,
+            fontSize: hero ? 28 : 22,
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
             lineHeight: 1.1,
             color: positive === true ? 'var(--green)' : positive === false ? 'var(--red)' : 'var(--text)',
           }}
@@ -57,7 +46,7 @@ export function StatCard({
         {trend && trend.length >= 2 && <Sparkline values={trend} width={hero ? 84 : 64} height={hero ? 30 : 24} />}
       </div>
       {note && (
-        <div className="text-muted" style={{ fontSize: 11 }}>
+        <div className="text-muted" style={{ fontSize: 11.5 }}>
           {note}
         </div>
       )}

@@ -479,7 +479,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
               </div>
 
               <div className="split-row">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="card">
                     <h3 style={{ marginBottom: 12 }}>Key Financials</h3>
                     {data.financials.length === 0 ? <EmptyState>No financial history available.</EmptyState> : <RevenueChart years={data.financials} />}
@@ -489,7 +489,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
                     <NewsList symbol={data.symbol} news={data.news} />
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <UpcomingEarningsCard data={data} />
                   <div className="card">
                     <h3 style={{ marginBottom: 12 }}>Key Catalysts</h3>
@@ -598,9 +598,9 @@ export function AnalysisPage() {
   const companyName = universe?.find((e) => e.symbol === symbol)?.name;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
-        <h1 style={{ fontSize: 22 }}>Analysis</h1>
+        <h1>Analysis</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <CompanyDropdown value={symbol ?? ''} onChange={(s) => setParams({ symbol: s })} />
           {symbol && (

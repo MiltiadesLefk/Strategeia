@@ -163,7 +163,7 @@ export function CommitteePage() {
   const busy = Boolean(runs.data?.some((r) => r.status === 'queued' || r.status === 'running'));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
           <h1 style={{ margin: 0 }}>AI Committee</h1>
