@@ -32,7 +32,7 @@ import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, for
 import { isAlwaysOpenSymbol, marketStateLabel, timeUntilNextTransition } from '../lib/marketHours';
 import { useNow } from '../lib/useNow';
 import type { ApiError } from '../api/client';
-import type { MarketSession, TradePlan } from '../api/types';
+import type { MarketSession, NewsItemWithCard, TradePlan } from '../api/types';
 
 const STATUS_FILTERS = [
   { value: 'active', label: 'Pending & Executed' },
@@ -540,11 +540,40 @@ const EXTRA_PARTS: [string, string, string][] = [
   ['post_mentions', 'Posts', 'Caution flag: a post naming this company in the last 24 hours (an unofficial archive). Only ever subtracts.'],
 ];
 
+function NewsRow({ n }: { n: NewsItemWithCard }) {
+  return (
+    <li>
+      <div style={{ fontSize: 13, fontWeight: 600 }}>
+        {isSafeHttpUrl(n.url) ? (
+          <a href={n.url} target="_blank" rel="noreferrer">
+            {n.headline}
+          </a>
+        ) : (
+          n.headline
+        )}
+      </div>
+      <div className="text-muted" style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span>{n.publisher}</span>
+        <span>{formatRelativeTime(n.known_at)}</span>
+        {n.card ? <NewsCardChips card={n.card} /> : <span className="badge badge-neutral">not rated by the AI</span>}
+      </div>
+      {n.card?.one_line_summary && (
+        <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+          {n.card.one_line_summary}
+        </div>
+      )}
+    </li>
+  );
+}
+
 /** Each saved headline for the symbol with the AI's rating of it (sentiment, materiality, event type, summary). */
 function PlanNews({ plan }: { plan: TradePlan }) {
   const { data } = useNewsCards(plan.symbol);
   const note = plan.extra_notes?.news;
-  const items = data?.items ?? [];
+  const items = (data?.items ?? []).slice(0, 10);
+  // The AI's own call on each headline: a peer's story or a market roundup is shown apart from the company's own news.
+  const about = items.filter((n) => n.card?.is_about_this_company !== false);
+  const other = items.filter((n) => n.card?.is_about_this_company === false);
   return (
     <div className="plan-panel">
       <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
@@ -566,32 +595,31 @@ function PlanNews({ plan }: { plan: TradePlan }) {
           No headlines are saved for {plan.symbol}.
         </div>
       ) : (
-        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {items.slice(0, 10).map((n) => (
-            <li key={n.url || n.headline}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                {isSafeHttpUrl(n.url) ? (
-                  <a href={n.url} target="_blank" rel="noreferrer">
-                    {n.headline}
-                  </a>
-                ) : (
-                  n.headline
-                )}
-              </div>
-              <div className="text-muted" style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span>{n.publisher}</span>
-                <span>{formatRelativeTime(n.known_at)}</span>
-                {n.card ? <NewsCardChips card={n.card} /> : <span className="badge badge-neutral">not rated by the AI</span>}
-              </div>
-              {n.card?.one_line_summary && (
-                <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
-                  {n.card.one_line_summary}
-                  {!n.card.is_about_this_company && ' (Not mainly about this company.)'}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          {about.length > 0 ? (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {about.map((n) => (
+                <NewsRow key={n.url || n.headline} n={n} />
+              ))}
+            </ul>
+          ) : (
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              None of the saved headlines is mainly about {plan.symbol}.
+            </div>
+          )}
+          {other.length > 0 && (
+            <details style={{ marginTop: 10 }}>
+              <summary className="text-muted" style={{ fontSize: 12, cursor: 'pointer' }}>
+                {other.length} more headline{other.length === 1 ? '' : 's'} not mainly about {plan.symbol} (peers, sector or market)
+              </summary>
+              <ul style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10, opacity: 0.8 }}>
+                {other.map((n) => (
+                  <NewsRow key={n.url || n.headline} n={n} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
       <div className="text-muted" style={{ fontSize: 11, marginTop: 8, opacity: 0.8 }}>
         These are the headlines saved now, not a snapshot from when the plan was made. AI labels are written when
