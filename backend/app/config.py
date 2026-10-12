@@ -38,7 +38,14 @@ _WEB_ADDRESS_RE = re.compile(
 class InfraSettings(BaseSettings):
     """Static, process-lifetime config from .env — never editable at runtime."""
 
-    model_config = SettingsConfigDict(env_file=str(BASE_DIR / ".env"), extra="ignore")
+    # backend/.env for a local run, the repo's .env (the one Docker compose reads) as well.
+    model_config = SettingsConfigDict(env_file=(str(BASE_DIR / ".env"), str(BASE_DIR.parent / ".env")), extra="ignore")
+
+    # Optional credentials that seed the saved settings when those are empty (see seed_settings_from_env):
+    # FINNHUB_API_KEY switches Finnhub on with that key, TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID set Telegram up.
+    finnhub_api_key: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
 
     host: str = "127.0.0.1"
     port: int = 8000
@@ -834,6 +841,24 @@ def _settings_file() -> Path:
     return get_infra_settings().settings_file
 
 
+def seed_settings_from_env(settings: AppSettings, infra: InfraSettings) -> dict:
+    """Changes that make credentials in the environment (.env) act as if they had been typed into Settings.
+
+    Only fills what the saved settings leave empty, so a value entered in the app always wins, and a key in
+    the environment also switches its feature on (Finnhub has an enable switch; Telegram is on once it has a
+    token and chat id). The caller saves the result, so after the first start it is an ordinary saved setting
+    that can be switched off in the app and stays off."""
+    changes: dict = {}
+    if infra.finnhub_api_key.strip() and not settings.finnhub_api_key:
+        changes["finnhub_api_key"] = infra.finnhub_api_key.strip()
+        changes["finnhub_enabled"] = True
+    if infra.telegram_bot_token.strip() and not settings.telegram_bot_token:
+        changes["telegram_bot_token"] = infra.telegram_bot_token.strip()
+    if infra.telegram_chat_id.strip() and not settings.telegram_chat_id:
+        changes["telegram_chat_id"] = infra.telegram_chat_id.strip()
+    return changes
+
+
 def load_app_settings() -> AppSettings:
     global _settings_cache
     with _lock:
@@ -841,9 +866,19 @@ def load_app_settings() -> AppSettings:
             return _settings_cache
         path = _settings_file()
         if path.exists():
-            _settings_cache = AppSettings.model_validate_json(path.read_text(encoding="utf-8"))
+            loaded = AppSettings.model_validate_json(path.read_text(encoding="utf-8"))
         else:
-            _settings_cache = AppSettings()
+            loaded = AppSettings()
+        seeded = seed_settings_from_env(loaded, get_infra_settings())
+        if seeded:
+            loaded = loaded.model_copy(update=seeded)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(loaded.model_dump(), indent=2), encoding="utf-8")
+            except OSError:
+                logger.warning("could not save the settings seeded from the environment; using them in memory")
+            logger.info("settings seeded from the environment: %s", ", ".join(sorted(k for k in seeded if k != "finnhub_enabled")))
+        _settings_cache = loaded
         return _settings_cache
 
 

@@ -28,6 +28,10 @@ os.environ.setdefault("ALLOW_UNAUTHENTICATED_API", "true")
 os.environ["PERSIST_CACHE_DB"] = "false"
 # No test reaches Google News; tests of that path pass their own fake (test_company_news.py).
 os.environ["GOOGLE_NEWS_ENABLED"] = "false"
+# A developer's own .env credentials must not seed the settings the suite reads (an empty OS variable
+# beats the .env file); the seeding itself is tested in test_env_seed.py.
+for _name in ("FINNHUB_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+    os.environ[_name] = ""
 
 import time
 from datetime import datetime, timedelta

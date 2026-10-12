@@ -45,6 +45,12 @@ services:
       # URL in it. Blank = the made-up placeholder, kept for now (plan.md
       # D13); set a separate address before the S&P 500 backtest run.
       - SEC_EDGAR_USER_AGENT=${SEC_EDGAR_USER_AGENT:-}
+      # Optional credentials in the same gitignored `.env`: on start they fill any of these still empty in
+      # Settings and switch the feature on (FINNHUB_API_KEY also enables Finnhub). A value typed into
+      # Settings always wins. TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID go together.
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     restart: unless-stopped
 
   frontend:
