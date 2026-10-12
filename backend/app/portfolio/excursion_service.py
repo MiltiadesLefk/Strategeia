@@ -47,13 +47,13 @@ def _naive_utc_dates(bars: pd.DataFrame) -> pd.Series:
     return pd.to_datetime(bars["date"], utc=True, errors="coerce").dt.tz_localize(None)
 
 
-def live_excursion(position: PaperPosition, data_provider: DataProvider) -> Excursion | None:
+def live_excursion(position: PaperPosition, data_provider: DataProvider, *, period: str = EXIT_SCAN_PERIOD) -> Excursion | None:
     """MFE / MAE so far of an OPEN position, from the bars since its entry bar.
     Read-only: nothing is stored. None when the bars can't be had, or when the
     entry bar is outside the history window (the early part of the trade would be
     missing, so the range would be understated)."""
     try:
-        bars = data_provider.get_ohlcv(position.symbol, period=EXIT_SCAN_PERIOD, interval="1d")
+        bars = data_provider.get_ohlcv(position.symbol, period=period, interval="1d")
     except AllProvidersFailedError:
         return None
     if bars.empty or not PaperTradingEngine._entry_bar_in_window(bars, position.opened_at):

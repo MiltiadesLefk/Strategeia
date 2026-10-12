@@ -56,6 +56,7 @@ class ReviewItemOut(BaseModel):
     reason: str | None = None
     buy_queued: bool = False
     scored_at: UtcDatetime | None = None
+    also_held_in_core: bool = False  # the core sleeve holds this symbol too (separate paper accounts)
 
 
 class HindsightGroupOut(BaseModel):

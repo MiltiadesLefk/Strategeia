@@ -124,6 +124,12 @@ function ReviewCard({ item }: { item: ReviewItem }) {
         </div>
       )}
 
+      {open && item.also_held_in_core && (
+        <div className="text-muted" style={{ fontSize: 12 }} data-testid="also-held-in-core">
+          Also held in the core sleeve (a separate paper account), so a buy here adds a second position in the same stock.
+        </div>
+      )}
+
       {open && item.buy_queued && (
         <div className="card" style={{ background: 'var(--canvas)', border: '1px solid var(--border)', fontSize: 13 }} data-testid="buy-queued">
           <strong>Buy queued.</strong> Waiting for the open: it will be bought from fresh data once the session is under way, if it

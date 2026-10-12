@@ -190,23 +190,40 @@ def _plan_line(plan: TradePlanRecord | None) -> str:
     return f"{(plan.direction or '').upper()} plan, confidence {plan.confidence_score}%"
 
 
-def _alert_review(settings: AppSettings, candidate: SmartMoneyCandidate, plan: TradePlanRecord | None, why: str) -> None:
+CORE_NOTE = "\nAlso held in the core sleeve (a separate paper account)."
+
+
+def _core_note(session: Session | None, symbol: str) -> str:
+    if session is None:
+        return ""
+    from app.services.smart_money_review_service import held_in_core
+
+    return CORE_NOTE if held_in_core(session, symbol) else ""
+
+
+def _alert_review(
+    settings: AppSettings, candidate: SmartMoneyCandidate, plan: TradePlanRecord | None, why: str, session: Session | None = None
+) -> None:
     text = (
         f"Smart-money review: {candidate.symbol} is waiting for your decision.\n"
         f"Reported filings (not a prediction; reports can be days to weeks late), as of {candidate.scored_at:%Y-%m-%d}: "
         f"score {candidate.score:g}\n{alert_text_components(candidate)}\n"
         f"The full evaluation said: {_plan_line(plan)}. {why}\n"
         f"Buy or skip it on the Smart Money page; it expires {candidate.expires_at:%Y-%m-%d}."
+        f"{_core_note(session, candidate.symbol)}"
     )
     notify(settings.telegram_bot_token, settings.telegram_chat_id, text)
 
 
-def _alert_auto_buy(settings: AppSettings, candidate: SmartMoneyCandidate, plan: TradePlanRecord | None) -> None:
+def _alert_auto_buy(
+    settings: AppSettings, candidate: SmartMoneyCandidate, plan: TradePlanRecord | None, session: Session | None = None
+) -> None:
     text = (
         f"Smart-money auto-buy (paper): {candidate.symbol} was bought in the '{candidate.sleeve_key}' sleeve after a full "
         f"evaluation ({_plan_line(plan)}).\n"
         f"Why it was looked at (reported filings, as of {candidate.scored_at:%Y-%m-%d}; not a prediction): score {candidate.score:g}\n"
         f"{alert_text_components(candidate)}"
+        f"{_core_note(session, candidate.symbol)}"
     )
     notify(settings.telegram_bot_token, settings.telegram_chat_id, text)
 
@@ -347,7 +364,7 @@ def route_plan(
         candidate.reason = None
         session.add(candidate)
         session.commit()
-        _alert_auto_buy(settings, candidate, plan)
+        _alert_auto_buy(settings, candidate, plan, session)
         return STATUS_AUTO_BOUGHT
 
     # A bad rating (no trade), or a tradeable plan the auto sleeve did not take: the person decides.
@@ -361,7 +378,7 @@ def route_plan(
         candidate.reason_detail = ((plan.reason if plan is not None else None) or "The evaluation found no trade.")[:500]
     session.add(candidate)
     session.commit()
-    _alert_review(settings, candidate, plan, candidate.reason_detail or "")
+    _alert_review(settings, candidate, plan, candidate.reason_detail or "", session)
     return STATUS_NEEDS_REVIEW
 
 

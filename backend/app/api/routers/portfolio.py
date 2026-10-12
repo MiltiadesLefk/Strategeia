@@ -22,6 +22,7 @@ from app.portfolio.engine import (
     StalePlanError,
 )
 from app.portfolio.excursion_service import live_excursion
+from app.smartmoney.pipeline_rules import SMART_MONEY_EXIT_SCAN_PERIOD, SMART_MONEY_SLEEVE_KEYS
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, Sleeve, TradePlanRecord
 from app.portfolio.sleeves import (
     ALL_SLEEVES,
@@ -128,7 +129,9 @@ def list_positions(
     # never stored; a closed one already carries what was recorded when it closed.
     for position, schema in zip(positions, schemas):
         if position.status == "open":
-            live = live_excursion(position, data_provider)
+            # a smart-money sleeve reads the same longer bar window as its engine, so an old position still has its excursion
+            smart = sleeve_keys.get(position.sleeve_id) in SMART_MONEY_SLEEVE_KEYS
+            live = live_excursion(position, data_provider, period=SMART_MONEY_EXIT_SCAN_PERIOD) if smart else live_excursion(position, data_provider)
             if live is not None:
                 schema.mfe_pct, schema.mae_pct, schema.mfe_r, schema.mae_r = live.mfe_pct, live.mae_pct, live.mfe_r, live.mae_r
     return schemas

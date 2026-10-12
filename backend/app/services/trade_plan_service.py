@@ -1187,7 +1187,8 @@ def generate_trade_plan(
         f"Entry: ${entry:.2f}  Stop: ${stop:.2f}  TP1: ${targets.tp1:.2f}\n"
         f"Confidence: {confidence_score}%{auto_execute_note}"
     )
-    notify_trade_plan(settings.telegram_bot_token, settings.telegram_chat_id, notify_text)
+    if source != "smart_money":  # the smart-money pipeline sends its own alert, with the score and the rating
+        notify_trade_plan(settings.telegram_bot_token, settings.telegram_chat_id, notify_text)
 
     return TradePlanResponse(
         id=record.id,

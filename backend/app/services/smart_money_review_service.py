@@ -23,6 +23,8 @@ from app.data_providers.base import DataProvider
 from app.llm_providers.base import LLMProvider
 from app.markets import is_market_open_for, next_us_open, format_market_time
 from app.portfolio.engine import Clock, resolve_clock
+from app.portfolio.models import PaperPosition
+from app.portfolio.sleeves import CORE_SLEEVE_KEY, read_scope, scope_clause
 from app.portfolio.missed_trade_models import MissedTradeOutcome
 from app.portfolio.missed_trade_report import (
     MIN_TRADES_FOR_READING,
@@ -152,6 +154,20 @@ def _plan_out(plan: TradePlanRecord | None) -> ReviewPlanOut | None:
     )
 
 
+def held_in_core(session: Session, symbol: str) -> bool:
+    """True when the core sleeve has this symbol open: the same stock can sit in core and in a
+    smart-money sleeve (the duplicate rule is per sleeve), so the person is told, not surprised."""
+    scope = read_scope(session, CORE_SLEEVE_KEY)
+    return (
+        session.exec(
+            select(PaperPosition.id).where(
+                PaperPosition.symbol == symbol, PaperPosition.status == "open", scope_clause(PaperPosition.sleeve_id, scope)
+            )
+        ).first()
+        is not None
+    )
+
+
 def item_out(session: Session, row: SmartMoneyCandidate, *, now: datetime | None = None) -> ReviewItemOut:
     plan = session.get(TradePlanRecord, row.plan_id) if row.plan_id else None
     now = now or resolve_clock(None)()  # the engine's notion of now, so market_open agrees with what a Buy would do
@@ -185,6 +201,7 @@ def item_out(session: Session, row: SmartMoneyCandidate, *, now: datetime | None
         reason=row.reason,
         buy_queued=row.buy_queued_at is not None,
         scored_at=row.scored_at,
+        also_held_in_core=held_in_core(session, row.symbol),
     )
 
 

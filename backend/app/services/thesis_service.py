@@ -65,7 +65,8 @@ from app.llm_providers.thesis_review_prompt import (
     untrusted_text,
 )
 from app.markets import to_market_time
-from app.portfolio.models import PaperPosition, TradePlanRecord
+from app.portfolio.models import PaperPosition, Sleeve, TradePlanRecord
+from app.smartmoney.pipeline_rules import SMART_MONEY_SLEEVE_KEYS
 from app.portfolio.thesis_models import (
     ITEM_KINDS,
     KIND_CATALYST,
@@ -209,12 +210,22 @@ def _market_today(now: datetime) -> date:
 # ------------------------------------------------------------------ seeding
 
 
-def holding_window_days(settings: AppSettings) -> int:
+def position_max_holding_days(session: Session, position: PaperPosition, settings: AppSettings) -> int:
+    """The time limit that applies to this position: a smart-money sleeve has its own."""
+    if position.sleeve_id is not None:
+        sleeve = session.get(Sleeve, position.sleeve_id)
+        if sleeve is not None and sleeve.key in SMART_MONEY_SLEEVE_KEYS:
+            return settings.smart_money_max_holding_days
+    return settings.max_holding_days
+
+
+def holding_window_days(settings: AppSettings, max_holding_days: int | None = None) -> int:
     """Calendar days a position is expected to be held: the time limit (trading days) converted,
     or a four-week default when the limit is off."""
-    if settings.max_holding_days <= 0:
+    limit = settings.max_holding_days if max_holding_days is None else max_holding_days
+    if limit <= 0:
         return DEFAULT_CATALYST_WINDOW_DAYS
-    return math.ceil(settings.max_holding_days * TRADING_TO_CALENDAR_DAYS)
+    return math.ceil(limit * TRADING_TO_CALENDAR_DAYS)
 
 
 def _pillar(key: str, text: str, source: str, *, core: bool = False, status: str = PILLAR_INTACT) -> dict:
@@ -360,8 +371,8 @@ def seed_thesis(
         plan,
         earnings_date=_safe_earnings_date(data_provider, position.symbol),
         today=_market_today(when),
-        window_days=holding_window_days(settings),
-        max_holding_days=settings.max_holding_days,
+        window_days=holding_window_days(settings, position_max_holding_days(session, position, settings)),
+        max_holding_days=position_max_holding_days(session, position, settings),
         now=when,
     )
     thesis = ThesisRecord(
@@ -557,7 +568,7 @@ def recheck_thesis(
         return RecheckOutcome("skipped", note="Fresh price history could not be fetched, so nothing was re-checked.")
 
     pillars, catalysts, log = _load(thesis.pillars), _load(thesis.catalysts), _load(thesis.log)
-    changes = apply_recheck(pillars, catalysts, log, position, reads, now=when, window_days=holding_window_days(settings))
+    changes = apply_recheck(pillars, catalysts, log, position, reads, now=when, window_days=holding_window_days(settings, position_max_holding_days(session, position, settings)))
 
     broken_now = any(p.get("core") and p.get("status") == PILLAR_BROKEN for p in pillars)
     was_broken = thesis.thesis_broken

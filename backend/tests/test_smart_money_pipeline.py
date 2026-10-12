@@ -804,3 +804,37 @@ def test_the_watcher_events_keep_symbol_none(session):
 
     row = add_candidate(session)
     assert candidate_event(row).symbol is None
+
+
+def test_an_auto_buy_sends_one_telegram_message_not_two(session, sent, monkeypatch):
+    ordinary: list[str] = []
+    monkeypatch.setattr("app.services.trade_plan_service.notify_trade_plan", lambda token, chat, text: ordinary.append(text))
+    row = add_candidate(session)
+    assert evaluate(session, row) == STATUS_AUTO_BOUGHT
+    assert ordinary == []  # the usual "New trade plan" message is suppressed for this source
+    assert len([m for m in sent if "auto-buy" in m]) == 1
+
+
+def test_thesis_window_uses_the_smart_money_sleeve_time_limit(session):
+    from app.portfolio.models import PaperPosition
+    from app.services.thesis_service import holding_window_days, position_max_holding_days
+
+    ensure_smart_money_sleeves(session)
+    auto = session.exec(select(Sleeve).where(Sleeve.key == AUTO_SLEEVE_KEY)).one()
+    cfg = settings_()
+    held = PaperPosition(symbol="AAA", direction="long", sleeve_id=auto.id)
+    core = PaperPosition(symbol="AAA", direction="long", sleeve_id=None)
+    assert position_max_holding_days(session, held, cfg) == cfg.smart_money_max_holding_days == 120
+    assert position_max_holding_days(session, core, cfg) == cfg.max_holding_days == 20
+    assert holding_window_days(cfg, 120) > holding_window_days(cfg, 20)
+
+
+def test_the_review_item_and_the_alert_say_when_core_also_holds_the_symbol(session, sent):
+    from app.services.smart_money_review_service import held_in_core
+
+    row = add_candidate(session, symbol="AAA")
+    assert held_in_core(session, "AAA") is False
+    session.add(PaperPosition(symbol="AAA", direction="long", status="open", sleeve_id=None, entry_price=10, stop_loss=9, tp1=12, tp2=14, shares=1, opened_at=NOW))
+    session.commit()
+    assert held_in_core(session, "AAA") is True
+    assert held_in_core(session, "BBB") is False
