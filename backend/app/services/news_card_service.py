@@ -22,6 +22,7 @@ What this module never does:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from sqlmodel import Session
@@ -105,13 +106,56 @@ def build_prompt(symbol: str, company_name: str | None, news: list[KnownFact]) -
     )
 
 
-def unlabelled_news(session: Session, symbol: str, limit: int) -> list[KnownFact]:
+# Words that end a company name without being part of what a headline calls it ("Vistra Corp." -> "Vistra").
+_NAME_SUFFIXES = {
+    "inc", "corp", "corporation", "co", "company", "holdings", "holding", "group", "ltd", "limited", "plc", "llc",
+    "lp", "nv", "sa", "ag", "class", "common", "stock", "shares", "ordinary", "trust", "the",
+}
+# First words too common to prove a headline is about the company ("Bank of America", "American Express").
+_GENERIC_FIRST_WORDS = {
+    "american", "bank", "first", "general", "global", "international", "national", "new", "united", "western",
+    "southern", "northern", "eastern", "energy", "power", "united", "service", "services", "capital",
+}
+
+
+def _name_terms(company_name: str | None) -> list[str]:
+    """What a headline would call the company: its name without legal suffixes, and its first word when that
+    word is distinctive. Lower-case. Empty when the name gives nothing usable."""
+    words = [w for w in re.findall(r"[A-Za-z0-9&'.-]+", company_name or "") if w]
+    while words and words[-1].strip(".,").lower() in _NAME_SUFFIXES:
+        words.pop()
+    core = " ".join(w.strip(".,") for w in words).lower()
+    terms = [core] if len(core) >= 3 else []
+    first = words[0].strip(".,").lower() if words else ""
+    if len(first) >= 4 and first not in _GENERIC_FIRST_WORDS and first not in terms:
+        terms.append(first)
+    return terms
+
+
+def names_company(headline: str, symbol: str, company_name: str | None) -> bool:
+    """Whether the headline names the company by its ticker or its name. Plain text matching, no AI: it decides
+    which headlines are worth an AI read at all. A story that names neither (a peer, a sector or market
+    roundup) is skipped. Ticker matching is case-sensitive and needs 3+ letters, since short tickers are
+    ordinary words."""
+    text = headline or ""
+    ticker = symbol.strip().upper()
+    if len(ticker) >= 3 and re.search(rf"(?<![A-Za-z0-9]){re.escape(ticker)}(?![A-Za-z0-9])", text):
+        return True
+    lowered = text.lower()
+    return any(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered) for term in _name_terms(company_name))
+
+
+def unlabelled_news(session: Session, symbol: str, limit: int, company_name: str | None = None) -> list[KnownFact]:
     """The newest archived headlines for `symbol` with no card yet, up to `limit`.
-    A headline is identified by its archive dedupe key."""
+    A headline is identified by its archive dedupe key. With `company_name`, headlines that name neither the
+    company nor its ticker are left out, so no AI call is spent reading a peer's or the market's news."""
     labelled = cards_by_news_key(session, symbol)
     out: list[KnownFact] = []
     for fact in archived_news(session, symbol, limit=CANDIDATE_SCAN_LIMIT):
-        if fact.dedupe_key in labelled or not str(fact.payload.get("headline", "")).strip():
+        headline = str(fact.payload.get("headline", ""))
+        if fact.dedupe_key in labelled or not headline.strip():
+            continue
+        if company_name and not names_company(headline, symbol, company_name):
             continue
         out.append(fact)
         if len(out) >= limit:
@@ -159,7 +203,7 @@ def label_new_items(
     assert llm_provider is not None
 
     limit = max(0, min(int(limit), max_calls * BATCH_SIZE))
-    pending = unlabelled_news(session, symbol, limit)
+    pending = unlabelled_news(session, symbol, limit, company_name)
     schema = news_card_batch_json_schema()
 
     for start in range(0, len(pending), BATCH_SIZE):
@@ -192,7 +236,7 @@ def label_new_items(
             )
             result.labelled += 1
 
-    result.remaining_unlabelled = max(0, len(unlabelled_news(session, symbol, CANDIDATE_SCAN_LIMIT)))
+    result.remaining_unlabelled = max(0, len(unlabelled_news(session, symbol, CANDIDATE_SCAN_LIMIT, company_name)))
     return result
 
 

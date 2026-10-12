@@ -2018,6 +2018,8 @@ export interface NewsItemWithCard {
   published_at: string;
   known_at: string;
   is_press_release: boolean;
+  /** The headline names the company or its ticker; one that does not is never sent to the AI. */
+  names_company: boolean;
   card: NewsCardOut | null;
 }
 

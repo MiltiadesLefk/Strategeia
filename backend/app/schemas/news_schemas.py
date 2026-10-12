@@ -26,6 +26,8 @@ class NewsItemWithCard(BaseModel):
     known_at: UtcDatetime
     # True for items saved from a PR Newswire press release.
     is_press_release: bool
+    # The headline names the company or its ticker. A headline that does not is never sent to the AI.
+    names_company: bool = True
     card: NewsCardOut | None
 
 

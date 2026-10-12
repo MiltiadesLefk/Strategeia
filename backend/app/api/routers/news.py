@@ -21,7 +21,7 @@ from app.schemas.news_schemas import (
     NewsLabelResponse,
 )
 from app.services.archive_service import archived_news
-from app.services.news_card_service import label_new_items, llm_is_usable, unlabelled_news
+from app.services.news_card_service import label_new_items, llm_is_usable, names_company, unlabelled_news
 
 router = APIRouter(prefix="/api/news", tags=["news"], dependencies=[Depends(require_auth)])
 
@@ -40,6 +40,10 @@ UNLABELLED_COUNT_SCAN = 200
 def get_press_release_collector() -> Callable[..., object]:
     """The press-release collector; a test overrides this dependency."""
     return collect_press_releases
+
+
+def _company_name(symbol: str) -> str | None:
+    return next((e.name for e in universe.load_universe() if e.symbol.upper() == symbol), None)
 
 
 def _card_out(payload: dict) -> NewsCardOut:
@@ -65,6 +69,7 @@ def news_with_cards(
     """The symbol's saved headlines (including press releases) with their AI
     label when one exists. Read-only: it never fetches, labels or writes."""
     symbol = symbol.upper()
+    name = _company_name(symbol)
     cards = cards_by_news_key(session, symbol)
     items = []
     for fact in archived_news(session, symbol, limit=NEWS_ITEMS_SHOWN):
@@ -78,6 +83,7 @@ def news_with_cards(
                 published_at=str(p.get("published_at", "")),
                 known_at=fact.known_at,
                 is_press_release=fact.source == SOURCE_LABEL or p.get("data_provider") == SOURCE_LABEL,
+                names_company=names_company(str(p.get("headline", "")), symbol, name) if name else True,
                 card=_card_out(card.payload) if card else None,
             )
         )
@@ -86,7 +92,7 @@ def news_with_cards(
         news_cards_enabled=settings.news_cards_enabled,
         llm_configured=llm_is_usable(llm_provider),
         labelled_count=sum(1 for i in items if i.card is not None),
-        unlabelled_count=len(unlabelled_news(session, symbol, UNLABELLED_COUNT_SCAN)),
+        unlabelled_count=len(unlabelled_news(session, symbol, UNLABELLED_COUNT_SCAN, name)),
         items=items,
     )
 
@@ -147,7 +153,7 @@ def label_news(
             detail=f"{symbol} was just labelled: wait {NEWS_LABEL_COOLDOWN_SECONDS - (now - last):.0f}s before asking again.",
         )
     _last_news_label_monotonic[symbol] = now
-    name = next((e.name for e in universe.load_universe() if e.symbol.upper() == symbol), None)
+    name = _company_name(symbol)
     result = label_new_items(
         session, symbol, llm_provider, limit or settings.news_card_batch_limit, company_name=name
     )

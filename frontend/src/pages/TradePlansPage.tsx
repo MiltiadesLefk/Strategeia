@@ -555,7 +555,11 @@ function NewsRow({ n }: { n: NewsItemWithCard }) {
       <div className="text-muted" style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{n.publisher}</span>
         <span>{formatRelativeTime(n.known_at)}</span>
-        {n.card ? <NewsCardChips card={n.card} /> : <span className="badge badge-neutral">not rated by the AI</span>}
+        {n.card ? (
+          <NewsCardChips card={n.card} />
+        ) : (
+          <span className="badge badge-neutral">{n.names_company ? 'not rated by the AI' : 'skipped: does not name the company'}</span>
+        )}
       </div>
       {n.card?.one_line_summary && (
         <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
@@ -572,8 +576,9 @@ function PlanNews({ plan }: { plan: TradePlan }) {
   const note = plan.extra_notes?.news;
   const items = (data?.items ?? []).slice(0, 10);
   // The AI's own call on each headline: a peer's story or a market roundup is shown apart from the company's own news.
-  const about = items.filter((n) => n.card?.is_about_this_company !== false);
-  const other = items.filter((n) => n.card?.is_about_this_company === false);
+  const isAbout = (n: NewsItemWithCard) => (n.card ? n.card.is_about_this_company : n.names_company);
+  const about = items.filter(isAbout);
+  const other = items.filter((n) => !isAbout(n));
   return (
     <div className="plan-panel">
       <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>

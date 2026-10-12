@@ -443,7 +443,7 @@ def api(session):
 
 def test_get_lists_headlines_with_their_labels_and_press_release_flag(api):
     http, session, state = api
-    _seed_news(session, count=2)
+    _seed_news(session, count=2, prefix="Apple headline")
     archive_news(
         session, "AAPL",
         [NewsItem("Apple Inc. announces dividend", "PR Newswire", "https://www.prnewswire.com/n/1.html", _iso(utcnow_naive()))],
@@ -460,7 +460,7 @@ def test_get_lists_headlines_with_their_labels_and_press_release_flag(api):
 
 def test_get_never_labels_or_writes(api):
     http, session, state = api
-    _seed_news(session, count=2)
+    _seed_news(session, count=2, prefix="Apple headline")
     body = http.get("/api/news/AAPL").json()
     assert body["labelled_count"] == 0 and body["unlabelled_count"] == 2
     assert state["llm"].prompts == []
@@ -485,7 +485,7 @@ def test_label_without_an_ai_reports_why_and_stores_nothing(api):
 
 def test_label_uses_the_batch_limit_setting_and_the_limit_parameter(api):
     http, session, state = api
-    _seed_news(session, count=12)
+    _seed_news(session, count=12, prefix="Apple headline")
     state["settings"] = AppSettings(news_cards_enabled=True, news_card_batch_limit=3)
     assert http.post("/api/news/label/AAPL").json()["labelled"] == 3
     assert http.post("/api/news/label/MSFT?limit=0").status_code == 422
@@ -526,3 +526,30 @@ def test_the_news_card_settings_are_validated_and_default_on():
     with pytest.raises(ValueError):
         SettingsUpdateRequest(news_card_batch_limit=31)
 
+
+
+# --- only the company's own headlines are read ----------------------------------------------
+
+
+def test_names_company_matches_ticker_or_name_and_skips_peers():
+    from app.services.news_card_service import names_company
+
+    assert names_company("Is Vistra Stock Increasing Your Market Risk?", "VST", "Vistra Corp.")
+    assert names_company("VST jumps 5% on a data center deal", "VST", "Vistra Corp.")
+    assert names_company("Apple's iPhone sales rise", "AAPL", "Apple Inc.")
+    assert not names_company("Constellation vs. Talen: which is the better buy?", "VST", "Vistra Corp.")
+    assert not names_company("Jim Cramer sees something worth revisiting in these power stocks", "VST", "Vistra Corp.")
+    # A generic first word alone is not proof ("Bank of America" vs any bank story).
+    assert not names_company("Bank earnings roundup", "BAC", "Bank of America Corporation")
+    # A 1-2 letter ticker is an ordinary word: only the name can match.
+    assert not names_company("V is for volatility", "V", None)
+
+
+def test_headlines_that_do_not_name_the_company_are_never_sent_to_the_ai(session):
+    _seed_news(session, count=2, prefix="Apple posts record quarter")
+    _seed_news(session, count=3, prefix="Peer company rallies")
+    llm = FakeLLM()
+    result = label_new_items(session, "AAPL", llm, 20, company_name="Apple Inc.")
+    assert result.labelled == 2 and result.llm_calls == 1
+    assert "Peer company rallies" not in llm.prompts[0]
+    assert len(unlabelled_news(session, "AAPL", 20, "Apple Inc.")) == 0
