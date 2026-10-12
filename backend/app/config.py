@@ -695,7 +695,7 @@ class AppSettings(BaseModel):
     # app/smartmoney/scoring.py; these are the knobs. scope: "universe" = only symbols in
     # the effective universe, "market_wide" = any listed stock that passes the liquidity floor.
     smart_money_followed_member_multiplier: float = Field(default=1.5, ge=1.0, le=3.0)
-    smart_money_scope: Literal["universe", "market_wide"] = "universe"
+    smart_money_scope: Literal["universe", "market_wide"] = "market_wide"
     smart_money_min_score: float = Field(default=3.0, ge=0, le=30)
     smart_money_max_open_positions: int = Field(default=5, ge=1, le=50)
     smart_money_max_new_per_week: int = Field(default=2, ge=0, le=20)

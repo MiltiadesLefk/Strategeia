@@ -219,7 +219,7 @@ def test_universe_scope_reads_only_the_universe_and_flags_a_candidate(session):
     sec = FakeSec()
     serve_form4(sec, "unh_000140", "unh_000142", "unh_000146")
     watcher = make_watcher(sec, ["UNH"])
-    events = watcher.poll(context(session, UNH_NOW))
+    events = watcher.poll(context(session, UNH_NOW, smart_money_scope="universe"))
     assert watcher.last_scope == "universe" and watcher.last_scored == ["UNH"]
     assert [e.kind for e in events] == ["smart_money_candidate"]
     event = events[0]
@@ -321,7 +321,7 @@ def client(engine):
             yield s
 
     app.dependency_overrides[get_session] = override
-    app.dependency_overrides[get_app_settings] = lambda: AppSettings()
+    app.dependency_overrides[get_app_settings] = lambda: AppSettings(smart_money_scope="universe")
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -379,12 +379,12 @@ def test_a_whole_universe_is_read_in_rounds_of_the_cap_and_a_small_one_in_one_po
 
     monkeypatch.setattr(watcher, "_ingest_companies", fake_ingest)
     for hour in range(3):
-        watcher.poll(context(session, NOW + timedelta(hours=3 * hour), smart_money_max_companies_per_poll=150))
+        watcher.poll(context(session, NOW + timedelta(hours=3 * hour), smart_money_max_companies_per_poll=150, smart_money_scope="universe"))
         session.commit()
     assert len(seen) == 400 and set(seen) == set(big)  # one full round, nobody twice
     assert len(watcher.last_scored) == 400  # scoring still covers the whole universe each poll
     seen.clear()
     small = {1: "AAA", 2: "BBB"}
     monkeypatch.setattr(watcher, "_universe_ciks", lambda client: dict(small))
-    watcher.poll(context(session, NOW + timedelta(days=1), smart_money_max_companies_per_poll=150))
+    watcher.poll(context(session, NOW + timedelta(days=1), smart_money_max_companies_per_poll=150, smart_money_scope="universe"))
     assert sorted(seen) == [1, 2]

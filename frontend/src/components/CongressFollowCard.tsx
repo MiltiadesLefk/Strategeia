@@ -23,7 +23,7 @@ export function CongressFollowCard() {
     setMode(settings.smart_money_follow_congress);
     setMembers(settings.smart_money_followed_members);
     setMultiplier(settings.smart_money_followed_member_multiplier ?? 1.5);
-    setScope(settings.smart_money_scope ?? 'universe');
+    setScope(settings.smart_money_scope ?? 'market_wide');
   }, [settings]);
 
   const has = (name: string) => members.some((m) => m.toLowerCase() === name.toLowerCase());

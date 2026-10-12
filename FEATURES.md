@@ -2504,7 +2504,7 @@ claims anyone "knows" anything.
 - **The score is a starting guess, not a validated signal.** The weights are plain numbers in the code, a candidate needs
   a score of at least 3 (Settings -> `smart_money_min_score`), and no backtest has shown it beats luck. Treat the
   results as unproven until the sleeve report has 100 closed trades per sleeve.
-- **Scope.** Default is your own watchlist. A market-wide scope reads SEC's latest-filings feeds for every company (at
+- **Scope.** Default is market-wide (set it to your own watchlist in Settings to narrow it). Market-wide reads SEC's latest-filings feeds for every company (at
   most `smart_money_max_companies_per_poll`, default 150, per poll; the rest carries to the next poll). A filing whose
   company cannot be matched to a ticker is stored and skipped, never guessed.
 - **The full evaluation still decides.** A candidate goes through the normal trade-plan evaluation (long only), with
