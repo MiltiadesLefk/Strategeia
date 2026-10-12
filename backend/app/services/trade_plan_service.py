@@ -45,6 +45,7 @@ from app.data_providers.base import AllProvidersFailedError, CompanyOverview, Da
 from app.llm_providers.base import LLMProvider
 from app.llm_providers.base import DECISION_TIER
 from app.llm_providers.factory import generate_with_fallback, generate_with_tier
+from app.llm_providers.null_provider import NullLLMProvider
 from app.llm_providers.prompts import AI_OPINION_DATA_MARKER, build_ai_opinion_prompt, build_trade_plan_take_prompt
 from app.knowledge.point_in_time import is_simulated
 from app.markets import format_market_time, us_closure_reason
@@ -976,7 +977,8 @@ def generate_trade_plan(
         symbol, direction, entry, stop, targets.tp1, targets.rr1, confidence_score, chart, volume_ratio,
         signal_reasons=fundamental_reasons + news_reasons,
     )
-    llm_result = generate_with_fallback(llm_provider, prompt, fallback_text)
+    take_provider = llm_provider if settings.ai_plan_take_enabled else NullLLMProvider()
+    llm_result = generate_with_fallback(take_provider, prompt, fallback_text)
 
     # Regenerating for a symbol that already has a pending (not yet executed)
     # plan superseded it rather than piling up duplicate rows in history —

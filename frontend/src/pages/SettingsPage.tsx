@@ -189,6 +189,7 @@ export function SettingsPage() {
   const [scaleOutStopMode, setScaleOutStopMode] = useState<ScaleOutStopMode>('breakeven');
   const [scaleOutTrailR, setScaleOutTrailR] = useState(1);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
+  const [aiPlanTake, setAiPlanTake] = useState(true);
   const [aiOverlayScores, setAiOverlayScores] = useState(true);
   const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
   const [researchMode, setResearchMode] = useState<ResearchMode>('our_data_only');
@@ -266,6 +267,7 @@ export function SettingsPage() {
     setScaleOutStopMode(settings.scale_out_stop_mode ?? 'breakeven');
     setScaleOutTrailR(settings.scale_out_trail_r ?? 1);
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
+    setAiPlanTake(settings.ai_plan_take_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
     setResearchMode(settings.research_mode ?? 'our_data_only');
@@ -413,6 +415,7 @@ export function SettingsPage() {
     update(
       {
         ai_trading_overlay_enabled: aiOverlayEnabled,
+        ai_plan_take_enabled: aiPlanTake,
         ai_overlay_scores_confidence: aiOverlayScores,
         ai_overlay_objection_action: aiOverlayAction,
       },
@@ -484,6 +487,7 @@ export function SettingsPage() {
   function resetAiOverlay() {
     if (!settings) return;
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
+    setAiPlanTake(settings.ai_plan_take_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
   }
@@ -720,6 +724,24 @@ export function SettingsPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <SaveButton pending={saving} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
           <ResetButton onClick={resetLlm} />
+        </div>
+      </div>
+
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h3>AI take on trade plans</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          The short paragraph on each trade plan. It only describes numbers the rules already computed and never changes
+          direction, entry, stop, size or the decision. Off: plans show the rule-based Analyst&apos;s take and no AI call is made
+          for it. Other AI features (news labelling, overlay, committee) have their own switches.
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ToggleSwitch checked={aiPlanTake} onChange={setAiPlanTake} label="Write the AI take on each trade plan" />
+          <span>Write the AI take on each trade plan</span>
+          <OnOffBadge on={aiPlanTake} />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-overlay'} onClick={saveAiOverlay} />
+          <ResetButton onClick={resetAiOverlay} />
         </div>
       </div>
 

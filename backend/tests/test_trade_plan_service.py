@@ -1103,3 +1103,18 @@ def test_an_explicit_new_key_is_never_overridden_by_the_old_ones():
     raw = json.dumps({"ai_overlay_objection_action": "none", "ai_overlay_vetoes_trade": True})
     assert AppSettings.model_validate_json(raw).ai_overlay_objection_action == "none"
 
+
+
+def test_ai_plan_take_setting_off_skips_the_model_for_the_take(session, monkeypatch):
+    """On: the configured provider writes the take. Off: the rule-based take, and no model call for it."""
+    on, off = FakeConfiguredLLMProvider("model take"), FakeConfiguredLLMProvider("model take")
+
+    monkeypatch.setattr("app.services.trade_plan_service.load_app_settings", lambda: AppSettings(ai_plan_take_enabled=True))
+    with_ai = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), on, session)
+    monkeypatch.setattr("app.services.trade_plan_service.load_app_settings", lambda: AppSettings(ai_plan_take_enabled=False))
+    without_ai = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), off, session)
+
+    assert with_ai.ai_take_text == "model take" and with_ai.ai_provider == "fake-llm"
+    assert without_ai.ai_provider == "none" and without_ai.ai_take_text != "model take"
+    assert off.prompts == []
+    assert without_ai.direction == with_ai.direction and without_ai.entry == with_ai.entry

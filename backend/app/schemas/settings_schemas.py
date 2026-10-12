@@ -33,6 +33,7 @@ class SettingsUpdateRequest(BaseModel):
     finnhub_enabled: bool | None = None
     finnhub_api_key: str | None = None
     ai_trading_overlay_enabled: bool | None = None
+    ai_plan_take_enabled: bool | None = None
     # How much the overlay's opinion counts (see AppSettings): whether an
     # objection costs confidence points, and what it does to the trade.
     # Both were previously settable only by hand-editing settings.json.

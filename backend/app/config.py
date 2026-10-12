@@ -530,6 +530,11 @@ class AppSettings(BaseModel):
     # ai_overlay_* setting below does anything. See notes/Decisions.md.
     ai_trading_overlay_enabled: bool = False
 
+    # The short "AI take" paragraph on each trade plan. It only narrates numbers the rules already
+    # computed and never changes a decision, so it is not part of the strategy fingerprint. Off: the
+    # plan carries the rule-based "Analyst's take" template and no model is called for it.
+    ai_plan_take_enabled: bool = True
+
     # Two independent questions about how much the overlay's opinion counts,
     # both meaningful only when ai_trading_overlay_enabled is also on — off,
     # neither changes anything, so a default install behaves exactly as it

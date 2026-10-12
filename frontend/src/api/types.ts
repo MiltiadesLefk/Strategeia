@@ -514,6 +514,8 @@ export interface AppSettings {
   /** "Close to the first target" = within this percentage of the price. */
   price_alert_tp1_pct: number;
   ai_trading_overlay_enabled: boolean;
+  /** The AI-written take paragraph on each trade plan; off = the rule-based Analyst's take. Narration only. */
+  ai_plan_take_enabled: boolean;
   ai_overlay_scores_confidence: boolean;
   ai_overlay_objection_action: AiOverlayObjectionAction;
   min_confidence_for_trade: number;
@@ -589,6 +591,7 @@ export interface SettingsUpdateRequest {
   price_alert_stop_atr?: number;
   price_alert_tp1_pct?: number;
   ai_trading_overlay_enabled?: boolean;
+  ai_plan_take_enabled?: boolean;
   ai_overlay_scores_confidence?: boolean;
   ai_overlay_objection_action?: AiOverlayObjectionAction;
   min_confidence_for_trade?: number;
