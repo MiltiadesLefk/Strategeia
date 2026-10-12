@@ -26,6 +26,8 @@ os.environ.setdefault("ALLOW_UNAUTHENTICATED_API", "true")
 # Assigned, not setdefault: a developer's own PERSIST_CACHE_DB=true must not
 # make the suite touch their real cache file.
 os.environ["PERSIST_CACHE_DB"] = "false"
+# No test reaches Google News; tests of that path pass their own fake (test_company_news.py).
+os.environ["GOOGLE_NEWS_ENABLED"] = "false"
 
 import time
 from datetime import datetime, timedelta

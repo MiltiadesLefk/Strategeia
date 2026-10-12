@@ -8,6 +8,7 @@ from app.analysis.insight_text import research_summary_text
 from app.analysis.trend import analyze_chart
 from app.data_providers.base import AllProvidersFailedError, DataProvider
 from app.llm_providers.base import LLMProvider
+from app.services.company_news import fetch_company_news
 from app.llm_providers.factory import generate_with_fallback
 from app.llm_providers.prompts import build_research_summary_prompt
 from app.schemas.research_schemas import FinancialYearSchema, NewsItemSchema, ResearchResponse
@@ -73,7 +74,7 @@ def get_research(
         financial_years = []
 
     try:
-        news = data_provider.get_news(symbol, limit=5)
+        news = fetch_company_news(symbol, overview.name if overview else None, data_provider, limit=5)
     except AllProvidersFailedError:
         news = []
 

@@ -118,7 +118,7 @@ _GENERIC_FIRST_WORDS = {
 }
 
 
-def _name_terms(company_name: str | None) -> list[str]:
+def name_terms(company_name: str | None) -> list[str]:
     """What a headline would call the company: its name without legal suffixes, and its first word when that
     word is distinctive. Lower-case. Empty when the name gives nothing usable."""
     words = [w for w in re.findall(r"[A-Za-z0-9&'.-]+", company_name or "") if w]
@@ -142,7 +142,7 @@ def names_company(headline: str, symbol: str, company_name: str | None) -> bool:
     if len(ticker) >= 3 and re.search(rf"(?<![A-Za-z0-9]){re.escape(ticker)}(?![A-Za-z0-9])", text):
         return True
     lowered = text.lower()
-    return any(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered) for term in _name_terms(company_name))
+    return any(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered) for term in name_terms(company_name))
 
 
 def unlabelled_news(session: Session, symbol: str, limit: int, company_name: str | None = None) -> list[KnownFact]:

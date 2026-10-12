@@ -66,6 +66,7 @@ from app.risk.position_sizing import calculate_position_size, derive_targets
 from app.schemas.trade_plan_schemas import TradePlanResponse
 from app.services.archive_service import archive_fetched_data
 from app.services.committee_gate_service import start_background_gate
+from app.services.company_news import fetch_company_news
 from app.services.news_card_service import label_new_items, llm_is_usable
 from app.services.valuation_service import get_valuation
 from app.services.deferred_evaluation_service import queue_market_open_redo
@@ -189,7 +190,7 @@ def _fetch_fundamentals_and_news(
     except AllProvidersFailedError:
         financial_years = []
     try:
-        news = data_provider.get_news(symbol, limit=5)
+        news = fetch_company_news(symbol, overview.name if overview else None, data_provider, limit=5)
     except AllProvidersFailedError:
         news = []
     return overview, financial_years, news
