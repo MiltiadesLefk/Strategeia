@@ -475,6 +475,20 @@ def _committee_skip_reason(settings, llm_provider, committee_gate, market_closed
     return "Not read by the committee."
 
 
+def _insider_zero_note(activity, split) -> str:
+    """Why insider activity scored 0, with the figures, so a name with real filings is not left unexplained."""
+    plan_value = split.plan_value if split is not None else None
+    sold = (
+        f"sold ${activity.sell_value:,.0f} in {activity.sell_count} sale{'s' if activity.sell_count != 1 else ''}"
+        + (f" (${plan_value:,.0f} of the sales under 10b5-1 plans, counted at a quarter)" if plan_value else "")
+    )
+    return (
+        f"Last {activity.window_days} days: insiders bought ${activity.buy_value:,.0f} in {activity.buy_count} purchase"
+        f"{'s' if activity.buy_count != 1 else ''} and {sold}. Buying net of all sales is below the $100k needed to score, "
+        "and weighted selling net of buying is below the $5M needed to count as selling."
+    )
+
+
 def _news_zero_note(*, ai_news_available: bool, news, settings, usable: bool, direction, label_run) -> str:
     """Why the news part scored 0, saying so plainly when the AI did not read the headlines."""
     if not news:
@@ -623,9 +637,8 @@ def generate_trade_plan(
     # 0 rather than blocking the evaluation. See analysis/insider_scoring.py
     # for why selling is deliberately never scored.
     insider_activity = data_provider.get_insider_activity(symbol)
-    insider_score, insider_reasons = score_insider_activity(
-        provisional_direction, insider_activity, insider_sell_split(session, symbol)
-    )
+    insider_split = insider_sell_split(session, symbol)
+    insider_score, insider_reasons = score_insider_activity(provisional_direction, insider_activity, insider_split)
 
     # Forward-looking, but on the market's OWN pricing/record, never a guess
     # at unpublished content — see each module's docstring for why this is a
@@ -680,7 +693,7 @@ def generate_trade_plan(
         ),
         "insider": _note(
             insider_reasons,
-            "No insider data for this symbol." if not insider_activity else "No net insider buying or selling large enough to score.",
+            "No insider data for this symbol." if not insider_activity else _insider_zero_note(insider_activity, insider_split),
         ),
         "expected_move": _note(
             expected_move_reasons,

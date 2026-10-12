@@ -44,9 +44,24 @@ from app.analysis.fed_event_window import build_fed_window_signal
 from app.analysis.filing_8k_scoring import build_8k_signal
 from app.analysis.financial_health_scoring import score_financial_health
 from app.analysis.fund_signals import build_fund_accumulation_signal, build_ownership_signal
-from app.analysis.options_consensus_evidence import score_analyst_consensus, score_options_open_interest
+from app.analysis.options_consensus_evidence import (
+    BEARISH_OI_RATIO,
+    BULLISH_OI_RATIO,
+    open_interest_ratio,
+    score_analyst_consensus,
+    score_options_open_interest,
+)
 from app.analysis.post_mentions import build_post_mentions_signal
-from app.analysis.price_evidence import score_relative_strength, score_volume_trend
+from app.analysis.price_evidence import (
+    ACCUMULATION_RATIO,
+    RELATIVE_STRENGTH_DAYS,
+    RELATIVE_STRENGTH_GAP_PCT,
+    VOLUME_TREND_DAYS,
+    relative_strength,
+    score_relative_strength,
+    score_volume_trend,
+    up_down_volume_ratio,
+)
 from app.analysis.short_volume_scoring import build_short_volume_signal
 from app.analysis.valuation_scoring import score_valuation
 from app.data_providers.base import CompanyOverview, EarningsEstimate, EarningsHistoryEntry, FinancialYear, OptionsChain
@@ -97,6 +112,15 @@ class ExtraEvidence:
         if self.notes:
             data["_why"] = self.notes
         return json.dumps(data, separators=(",", ":"))
+
+
+def _zero_note(build) -> str:
+    """The "why 0" text for a part that found nothing; a failure to build it must not lose the part's score."""
+    try:
+        return build()
+    except Exception:  # noqa: BLE001
+        logger.exception("could not build a zero-score note")
+        return "Scored 0: the rule found nothing to score."
 
 
 def extra_scores_from_json(raw: str | None) -> dict[str, int] | None:
@@ -160,15 +184,71 @@ def evaluate_extra_evidence(
             out.notes[key] = "Could not be computed (see the backend log)."
             logger.exception("evidence part %s failed for %s", key, symbol)
 
-    def rule_part(key: str, scorer) -> None:
+    def rule_part(key: str, scorer, when_zero=None) -> None:
         try:
             points, reasons = scorer()
             if reasons:
                 out.notes[key] = "; ".join(reasons)
+            elif when_zero is not None:
+                out.notes[key] = _zero_note(when_zero)
             record(key, points, reasons)
         except Exception:  # noqa: BLE001
             out.notes[key] = "Could not be computed (see the backend log)."
             logger.exception("evidence part %s failed for %s", key, symbol)
+
+    def no_direction(text: str) -> str:
+        return text if direction in ("long", "short") else "No trade direction yet, so this part was not scored."
+
+    def relative_strength_zero() -> str:
+        reading = relative_strength(ohlcv, market_ohlcv)
+        if reading is None:
+            return "Not enough price history for the stock or SPY to compare."
+        stock, market, gap = reading
+        return no_direction(
+            f"{RELATIVE_STRENGTH_DAYS}-day return {stock:+.1f}% against the market's {market:+.1f}%: a gap of {abs(gap):.1f} points, "
+            f"under the {RELATIVE_STRENGTH_GAP_PCT:g} needed to count."
+        )
+
+    def volume_trend_zero() -> str:
+        ratio = up_down_volume_ratio(ohlcv)
+        if ratio is None:
+            return "No volume history to compare up days with down days."
+        return no_direction(
+            f"Up-day volume is {ratio:.2f}x down-day volume over {VOLUME_TREND_DAYS} days: between {1 / ACCUMULATION_RATIO:.2f}x and "
+            f"{ACCUMULATION_RATIO:g}x, so neither accumulation nor distribution."
+        )
+
+    def financial_health_zero() -> str:
+        if len(financial_years) < 2:
+            return f"Needs two reported years of financials; {len(financial_years)} available."
+        latest = financial_years[-1]
+        if not latest.revenue:
+            return f"No revenue reported for {latest.year}, so no margin to judge."
+        margin = latest.net_income / latest.revenue * 100
+        return no_direction(
+            f"{latest.year} net income ${latest.net_income / 1e6:,.0f}M on revenue ${latest.revenue / 1e6:,.0f}M (margin {margin:.1f}%): "
+            "neither clearly healthy and improving nor loss-making or sliding."
+        )
+
+    def options_oi_zero() -> str:
+        reading = open_interest_ratio(options_chain)
+        if reading is None:
+            return "No usable options open-interest data for this symbol."
+        ratio, puts, calls = reading
+        return no_direction(
+            f"Put/call open-interest ratio {ratio:.2f} ({puts:,.0f} puts to {calls:,.0f} calls): between "
+            f"{BULLISH_OI_RATIO:g} and {BEARISH_OI_RATIO:g}, so neither call-heavy nor put-heavy."
+        )
+
+    def valuation_zero() -> str:
+        if overview is None:
+            return "No company overview, so no P/E to judge."
+        return no_direction("P/E, DCF and peer comparison all sit between the cheap and expensive lines, or their inputs were missing.")
+
+    def consensus_zero() -> str:
+        if estimate is None:
+            return "No consensus EPS estimate for the next report."
+        return no_direction("Expected EPS growth is between the lines that count (up 10% or more, down 5% or more).")
 
     if session is not None:
         if direction in ("long", "short"):
@@ -188,12 +268,12 @@ def evaluate_extra_evidence(
             shadow_part("post_mentions", lambda: build_post_mentions_signal(session, symbol))
 
     # Price-only evidence: rebuilt for a past date in a backtest.
-    rule_part("relative_strength", lambda: score_relative_strength(direction, ohlcv, market_ohlcv))
-    rule_part("volume_trend", lambda: score_volume_trend(direction, ohlcv))
+    rule_part("relative_strength", lambda: score_relative_strength(direction, ohlcv, market_ohlcv), relative_strength_zero)
+    rule_part("volume_trend", lambda: score_volume_trend(direction, ohlcv), volume_trend_zero)
 
     if not is_simulated():  # today's company figures, chain, consensus and peers: not rebuilt for a past date
-        rule_part("financial_health", lambda: score_financial_health(direction, financial_years))
-        rule_part("valuation", lambda: score_valuation(direction, overview, financial_years, valuation))
-        rule_part("analyst_consensus", lambda: score_analyst_consensus(direction, estimate, earnings_history or []))
-        rule_part("options_oi", lambda: score_options_open_interest(direction, options_chain))
+        rule_part("financial_health", lambda: score_financial_health(direction, financial_years), financial_health_zero)
+        rule_part("valuation", lambda: score_valuation(direction, overview, financial_years, valuation), valuation_zero)
+        rule_part("analyst_consensus", lambda: score_analyst_consensus(direction, estimate, earnings_history or []), consensus_zero)
+        rule_part("options_oi", lambda: score_options_open_interest(direction, options_chain), options_oi_zero)
     return out

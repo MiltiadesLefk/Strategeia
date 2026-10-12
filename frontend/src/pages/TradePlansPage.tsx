@@ -691,6 +691,7 @@ function buildScoreParts(plan: TradePlan): ScorePart[] {
     { label: 'Options', note: plan.extra_notes?.options, value: val(plan.options_score), help: 'Options put/call volume skew agreement (no chain data for most crypto and thin names).' },
     {
       label: 'Insider',
+      note: plan.extra_notes?.insider,
       value: val(plan.insider_score),
       help: 'SEC Form 4, last 90 days, up to 2 points either way. Net open-market buying supports a long ($100k net is 1 point, $1M is 2). Selling argues against a long: sales by choice count in full, sales under a 10b5-1 plan at a quarter of their value.',
     },
