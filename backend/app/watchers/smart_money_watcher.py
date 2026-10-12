@@ -270,7 +270,7 @@ class SmartMoneyWatcher(Watcher):
         if scope == SCOPE_MARKET_WIDE:
             ciks, unmapped = self._market_wide_ciks(context, client, universe_ciks, events)
         else:
-            ciks, unmapped = dict(universe_ciks), 0
+            ciks, unmapped = self._universe_batch(context, universe_ciks), 0
 
         processed, company_errors, blocked = self._ingest_companies(context, client, ciks)
         errors += company_errors
@@ -296,6 +296,19 @@ class SmartMoneyWatcher(Watcher):
         if errors and not events and not processed and unmapped == 0:
             raise errors[0]
         return events
+
+    @staticmethod
+    def _universe_batch(context: WatcherContext, universe_ciks: dict[int, str]) -> dict[int, str]:
+        """At most `smart_money_max_companies_per_poll` watchlist companies per poll. A longer watchlist is
+        read over several polls (a saved cursor), then the round starts again; scoring still covers all."""
+        cap = context.settings.smart_money_max_companies_per_poll
+        if len(universe_ciks) <= cap:
+            return dict(universe_ciks)
+        state = context.session.get(WatcherState, WATCHER_NAME) or WatcherState(name=WATCHER_NAME)
+        left = [c for c in (state.universe_cursor or []) if c in universe_ciks] or sorted(universe_ciks)
+        batch, state.universe_cursor = left[:cap], left[cap:]
+        context.session.add(state)
+        return {c: universe_ciks[c] for c in batch}
 
     def _market_wide_ciks(
         self, context: WatcherContext, client: SecClient, universe_ciks: dict[int, str], events: list[WatcherEvent]

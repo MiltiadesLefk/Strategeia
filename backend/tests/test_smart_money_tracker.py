@@ -365,3 +365,26 @@ def test_market_wide_poll_is_capped_and_the_rest_carries_over_without_loss_or_re
         session.commit()
     assert len(seen) == 400 and set(seen) == ciks  # none lost, none done twice
     assert session.get(WatcherState, "smart_money").pending_ciks == []
+
+
+def test_a_whole_universe_is_read_in_rounds_of_the_cap_and_a_small_one_in_one_poll(session, monkeypatch):
+    big = {5000 + i: f"U{i}" for i in range(400)}
+    watcher = make_watcher(FakeSec(), list(big.values()))
+    monkeypatch.setattr(watcher, "_universe_ciks", lambda client: dict(big))
+    seen: list[int] = []
+
+    def fake_ingest(context, client, mapped):
+        seen.extend(mapped)
+        return list(mapped.values()), [], False
+
+    monkeypatch.setattr(watcher, "_ingest_companies", fake_ingest)
+    for hour in range(3):
+        watcher.poll(context(session, NOW + timedelta(hours=3 * hour), smart_money_max_companies_per_poll=150))
+        session.commit()
+    assert len(seen) == 400 and set(seen) == set(big)  # one full round, nobody twice
+    assert len(watcher.last_scored) == 400  # scoring still covers the whole universe each poll
+    seen.clear()
+    small = {1: "AAA", 2: "BBB"}
+    monkeypatch.setattr(watcher, "_universe_ciks", lambda client: dict(small))
+    watcher.poll(context(session, NOW + timedelta(days=1), smart_money_max_companies_per_poll=150))
+    assert sorted(seen) == [1, 2]

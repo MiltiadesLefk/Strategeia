@@ -389,11 +389,12 @@ def run_pipeline(
     llm_provider: LLMProvider,
     *,
     clock: Clock | None = None,
-    max_candidates: int = 10,
+    max_candidates: int | None = None,
 ) -> PipelineOutcome:
     """Evaluate every `new` candidate (oldest first, at most `max_candidates` per run). Called by the scheduler."""
     clock = resolve_clock(clock)
     outcome = PipelineOutcome()
+    max_candidates = max_candidates or settings.smart_money_max_evaluations_per_run
     rows = session.exec(
         select(SmartMoneyCandidate)
         .where(SmartMoneyCandidate.status == STATUS_NEW)

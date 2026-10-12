@@ -75,6 +75,7 @@ class SettingsUpdateRequest(BaseModel):
     smart_money_max_new_per_week: int | None = Field(default=None, ge=0, le=20)
     smart_money_max_holding_days: int | None = Field(default=None, ge=0, le=200)
     smart_money_max_companies_per_poll: int | None = Field(default=None, ge=10, le=2000)
+    smart_money_max_evaluations_per_run: int | None = Field(default=None, ge=1, le=100)
     max_concurrent_positions: int | None = Field(default=None, gt=0)
     # Trading days before a stalled position is closed at the close; 0 = no limit.
     # Capped at 60 (about three months): the exit scan reads 3 months of bars

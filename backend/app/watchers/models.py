@@ -31,3 +31,6 @@ class WatcherState(SQLModel, table=True):
     # smart_money (market-wide): issuer CIKs found in the feeds but not yet processed because a poll
     # reached `smart_money_max_companies_per_poll`. Carried to the next poll, never dropped.
     pending_ciks: Optional[list[int]] = Field(default=None, sa_column=Column(JSON, nullable=True))
+    # smart_money (universe scope): companies of the watchlist not yet read in the current round. A watchlist
+    # bigger than `smart_money_max_companies_per_poll` is read over several polls, then the round starts again.
+    universe_cursor: Optional[list[int]] = Field(default=None, sa_column=Column(JSON, nullable=True))

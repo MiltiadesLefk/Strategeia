@@ -491,6 +491,7 @@ export interface AppSettings {
   smart_money_max_new_per_week: number;
   smart_money_max_holding_days: number;
   smart_money_max_companies_per_poll: number;
+  smart_money_max_evaluations_per_run: number;
   max_concurrent_positions: number;
   /** Trading days before a stalled position is closed at the close; 0 = no limit. */
   max_holding_days: number;
@@ -579,6 +580,7 @@ export interface SettingsUpdateRequest {
   smart_money_max_new_per_week?: number;
   smart_money_max_holding_days?: number;
   smart_money_max_companies_per_poll?: number;
+  smart_money_max_evaluations_per_run?: number;
   max_concurrent_positions?: number;
   max_holding_days?: number;
   liquidity_slippage_enabled?: boolean;

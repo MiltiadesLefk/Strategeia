@@ -838,3 +838,12 @@ def test_the_review_item_and_the_alert_say_when_core_also_holds_the_symbol(sessi
     session.commit()
     assert held_in_core(session, "AAA") is True
     assert held_in_core(session, "BBB") is False
+
+
+def test_a_backlog_is_evaluated_a_fixed_number_per_run_and_none_is_dropped(session, sent):
+    for i in range(7):
+        add_candidate(session, f"S{i}")
+    cfg = settings_(smart_money_max_evaluations_per_run=3, auto_execute_trade_plans=False)
+    for expected_left in (4, 1, 0):
+        pipeline.run_pipeline(session, cfg, FakeUniverseProvider(), NullLLMProvider())
+        assert len(session.exec(select(SmartMoneyCandidate).where(SmartMoneyCandidate.status == STATUS_NEW)).all()) == expected_left
