@@ -28,3 +28,6 @@ class WatcherState(SQLModel, table=True):
     last_event_keys: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     # symbol -> ISO time (naive UTC) the last event fired for it: what the cooldown measures from.
     last_fired_at: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    # smart_money (market-wide): issuer CIKs found in the feeds but not yet processed because a poll
+    # reached `smart_money_max_companies_per_poll`. Carried to the next poll, never dropped.
+    pending_ciks: Optional[list[int]] = Field(default=None, sa_column=Column(JSON, nullable=True))

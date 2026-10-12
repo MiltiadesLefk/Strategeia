@@ -303,9 +303,20 @@ class SmartMoneyWatcher(Watcher):
         """Feed CIKs -> tickers. An unmapped CIK becomes a stored info event and is skipped."""
         mapped: dict[int, str] = dict(universe_ciks)
         unmapped = 0
-        for cik in sorted(self._feed_ciks(client, self._since(context))):
-            if cik in mapped:
-                continue
+        # Companies left over from earlier polls come first, then what the feeds name now; at most
+        # `smart_money_max_companies_per_poll` are taken and the rest is saved for the next poll.
+        state = context.session.get(WatcherState, WATCHER_NAME)
+        if state is None:
+            state = WatcherState(name=WATCHER_NAME)
+        queue = list(dict.fromkeys([*(state.pending_ciks or []), *sorted(self._feed_ciks(client, self._since(context)))]))
+        queue = [c for c in queue if c not in universe_ciks]
+        cap = context.settings.smart_money_max_companies_per_poll
+        batch, rest = queue[:cap], queue[cap:]
+        state.pending_ciks = rest
+        context.session.add(state)
+        if rest:
+            logger.info("smart_money: %d companies read this poll, %d carried to the next", len(batch), len(rest))
+        for cik in batch:
             symbol = ticker_for_cik(cik, client=client)
             if not symbol:
                 unmapped += 1

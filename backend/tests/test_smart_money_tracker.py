@@ -342,3 +342,26 @@ def test_the_candidates_endpoint_lists_components_with_delay_notes_and_writes_no
     assert comp["source"] == "insider" and "reported" in comp["delay_note"]
     assert client.get("/api/smart-money/candidates?status=expired").json()["total"] == 0
     assert len(session.exec(select(SmartMoneyCandidate)).all()) == 1
+
+
+def test_market_wide_poll_is_capped_and_the_rest_carries_over_without_loss_or_repeat(session, monkeypatch):
+    ciks = set(range(5000, 5400))  # 400 companies named by the feeds
+    sec = FakeSec()
+    watcher = make_watcher(sec, [])
+    monkeypatch.setattr(SmartMoneyWatcher, "_feed_ciks", staticmethod(lambda client, since: set(ciks)))
+    monkeypatch.setattr(smw, "ticker_for_cik", lambda cik, client=None: f"T{cik}")
+    seen: list[int] = []
+
+    def fake_ingest(context, client, mapped):
+        seen.extend(mapped)
+        return [mapped[c] for c in mapped], [], False
+
+    monkeypatch.setattr(watcher, "_ingest_companies", fake_ingest)
+    for hour in range(3):
+        # later polls see an empty feed: only the carried-over queue remains
+        if hour:
+            monkeypatch.setattr(SmartMoneyWatcher, "_feed_ciks", staticmethod(lambda client, since: set()))
+        watcher.poll(context(session, NOW + timedelta(hours=3 * hour), smart_money_scope="market_wide", smart_money_max_companies_per_poll=150))
+        session.commit()
+    assert len(seen) == 400 and set(seen) == ciks  # none lost, none done twice
+    assert session.get(WatcherState, "smart_money").pending_ciks == []

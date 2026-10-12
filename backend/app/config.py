@@ -699,6 +699,8 @@ class AppSettings(BaseModel):
     smart_money_max_open_positions: int = Field(default=5, ge=1, le=50)
     smart_money_max_new_per_week: int = Field(default=2, ge=0, le=20)
     smart_money_max_holding_days: int = Field(default=120, ge=0, le=200)  # the exit scan reads 1y of bars
+    # Market-wide scope: at most this many feed companies are read per poll; the rest carry over.
+    smart_money_max_companies_per_poll: int = Field(default=150, ge=10, le=2000)
 
     # Portfolio-level risk, as opposed to the per-trade risk default_risk_pct
     # already covers. Five 1%-risk positions is only "5% at risk" if the five
