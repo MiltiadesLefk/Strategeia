@@ -2493,6 +2493,31 @@ ticker looked up from SEC's company list.
 
 **How it relates to the score (section 5).** `ownership_5pct_filing` scores every trade plan, both ways, from the Schedule 13D and 13G filings of each 5% holder in the last 90 days: a new Schedule 13D (an activist crossing 5%) is buying worth 2 points, a later filing that shows the stake up by a point or more is buying worth 1, one that shows it down by a point or more is selling worth 1, and one that shows it under the 5% line (the holder has left) is selling worth 2. A new passive 13G is routine and counts for nothing. The net is signed by the trade direction (buying supports a long and argues against a short), up to 2 points; with no clear direction it reads 0.
 
+### The smart-money tracker (optional, off until you turn watchers on)
+
+A background watcher can follow the same public reports as this page and turn them into **candidates**: symbols that
+deserve a closer look. What it reads: insider purchases (Form 4), House trade reports, 5% holder filings (13D/13G),
+the 13F of the funds you follow, and 8-Ks (which can only lower a score). Every one of these is **reported, up to
+45 days after the trade** (13F holdings are as of a quarter end); the page and every alert say so, and nothing here
+claims anyone "knows" anything.
+
+- **The score is a starting guess, not a validated signal.** The weights are plain numbers in the code, a candidate needs
+  a score of at least 3 (Settings -> `smart_money_min_score`), and no backtest has shown it beats luck. Treat the
+  results as unproven until the sleeve report has 100 closed trades per sleeve.
+- **Scope.** Default is your own watchlist. A market-wide scope reads SEC's latest-filings feeds for every company (at
+  most `smart_money_max_companies_per_poll`, default 150, per poll; the rest carries to the next poll). A filing whose
+  company cannot be matched to a ticker is stored and skipped, never guessed.
+- **The full evaluation still decides.** A candidate goes through the normal trade-plan evaluation (long only), with
+  every normal check. The score only decides which symbol gets looked at.
+- **Three paper accounts (sleeves).** `core` is unchanged. `smart-money-auto` buys by itself when the evaluation
+  approves; `smart-money-manual` holds what you buy yourself from the **Review queue** (Buy or Skip; items expire after
+  14 days; a buy while the market is closed waits for the open and is re-checked from fresh data). The same stock can be
+  held in core and in a smart-money sleeve; the queue and the alert say when it is.
+- **Reports.** A per-sleeve report compares closed trades with SPY and with random picks and says `not enough data`
+  below 100 trades. A position's exit rules are the usual stop and first target, plus a longer time limit
+  (`smart_money_max_holding_days`, default 120 trading days).
+- Nothing here trades real money: it is paper trading only.
+
 ## 21. Market Terminal
 
 The **Market Terminal** page (`/terminal`) is a read-only overview of the market. It places no trades and

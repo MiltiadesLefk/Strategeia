@@ -219,6 +219,13 @@ scripts/            verify.py (tests + type-check + lint in one command) and ui_
   trend, options open interest, Fed items and posts) were promoted to real scoring before a backtest could test
   them. Treat them as unproven until the Portfolio calibration report has 20 or more closed trades. A backtest
   rebuilds only the two price-only parts.
+- The optional smart-money tracker (off until the Watchers switch is on) turns reported insider, House, 5%-holder and
+  followed-fund filings into candidates for the normal evaluation. Those reports arrive up to 45 days after the trade,
+  its score is a starting guess and not a validated signal, and it trades paper money only, in its own two sleeves
+  (`smart-money-auto` and `smart-money-manual`, the latter fed by a Review queue). Settings: `smart_money_scope`
+  (watchlist or market-wide), `smart_money_min_score`, `smart_money_max_open_positions`, `smart_money_max_new_per_week`,
+  `smart_money_max_holding_days`, `smart_money_max_companies_per_poll` and `smart_money_followed_member_multiplier`.
+  See FEATURES.md, section 20.
 - No free source exists for short interest, the balance sheet or cash flow, institutional-ownership totals, or
   analyst-estimate revisions, so those are not used.
 - Free-tier data can rate-limit or go stale under heavy use; the composite provider falls
