@@ -937,14 +937,14 @@ export function SettingsPage() {
           </div>
         </div>
         <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            Scale Out at TP1
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ToggleSwitch checked={scaleOut} onChange={setScaleOut} label="Scale Out at TP1" />
+            <span>Scale Out at TP1</span>
             <OnOffBadge on={scaleOut} />
-          </label>
-          <select value={scaleOut ? 'enabled' : 'disabled'} onChange={(e) => setScaleOut(e.target.value === 'enabled')}>
-            <option value="disabled">Disabled - a position closes fully at TP1</option>
-            <option value="enabled">Enabled - sell part at TP1, let the rest run to TP2</option>
-          </select>
+          </div>
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            {scaleOut ? 'Enabled - sell part at TP1, let the rest run to TP2.' : 'Disabled - a position closes fully at TP1.'}
+          </div>
           {scaleOut && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
               <label className="text-muted" style={{ fontSize: 12 }}>
@@ -991,17 +991,11 @@ export function SettingsPage() {
         </div>
         <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Execution</div>
         <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            Liquidity-Aware Slippage
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ToggleSwitch checked={liquiditySlippage} onChange={setLiquiditySlippage} label="Liquidity-Aware Slippage" />
+            <span>Liquidity-Aware Slippage</span>
             <OnOffBadge on={liquiditySlippage} />
-          </label>
-          <select
-            value={liquiditySlippage ? 'enabled' : 'disabled'}
-            onChange={(e) => setLiquiditySlippage(e.target.value === 'enabled')}
-          >
-            <option value="disabled">Disabled — flat slippage only</option>
-            <option value="enabled">Enabled — bigger orders vs daily volume pay more</option>
-          </select>
+          </div>
           {liquiditySlippage && (
             <input
               type="number"
@@ -1022,14 +1016,11 @@ export function SettingsPage() {
           </div>
         </div>
         <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            Auto-Execute Trade Plans
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ToggleSwitch checked={autoExecute} onChange={setAutoExecute} label="Auto-Execute Trade Plans" />
+            <span>Auto-Execute Trade Plans</span>
             <OnOffBadge on={autoExecute} />
-          </label>
-          <select value={autoExecute ? 'enabled' : 'disabled'} onChange={(e) => setAutoExecute(e.target.value === 'enabled')}>
-            <option value="enabled">Enabled — open a paper position the moment a plan is generated</option>
-            <option value="disabled">Disabled — review each plan and click Execute manually</option>
-          </select>
+          </div>
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
             Whether a generated plan turns itself into an open paper position without you clicking Execute. Applies
             to plans you generate by hand as well as ones from Auto-Scan.
@@ -1104,11 +1095,11 @@ export function SettingsPage() {
           redundancy during a Yahoo outage. The free tier cannot serve full financials history or intraday candles,
           so those keep coming from the other providers regardless.
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input type="checkbox" checked={finnhubEnabled} onChange={(e) => setFinnhubEnabled(e.target.checked)} style={{ width: 'auto' }} />
-          Enable Finnhub for quotes/news/earnings
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ToggleSwitch checked={finnhubEnabled} onChange={setFinnhubEnabled} label="Enable Finnhub" />
+          <span>Enable Finnhub for quotes/news/earnings</span>
           <OnOffBadge on={finnhubEnabled} />
-        </label>
+        </div>
         {finnhubEnabled && (
           <SecretField
             key={`${settings?.finnhub_api_key ?? ''}-${resetNonce}`}

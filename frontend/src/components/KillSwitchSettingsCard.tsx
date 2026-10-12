@@ -28,12 +28,15 @@ export function KillSwitchSettingsCard() {
         drift away from the latest backtest. A pause only stops new positions; open ones keep being managed. You lift it
         by hand with Resume on the Portfolio page. Set a limit to 0 to switch that check off.
       </div>
-      <ToggleSwitch
-        checked={settings?.kill_switch_enabled ?? false}
-        onChange={(checked) => update.mutate({ kill_switch_enabled: checked })}
-        label="Kill switches"
-        disabled={!settings || update.isPending}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch
+          checked={settings?.kill_switch_enabled ?? false}
+          onChange={(checked) => update.mutate({ kill_switch_enabled: checked })}
+          label="Kill switches"
+          disabled={!settings || update.isPending}
+        />
+        <span>Kill switches</span>
+      </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
           Drawdown limit (% below peak)

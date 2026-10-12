@@ -1,4 +1,5 @@
 import { useSettings, useUpdateSettings } from '../api/hooks';
+import { ToggleSwitch } from './common';
 
 /** AI Committee limits on the Settings page. Each field saves on its own when it changes. */
 export function CommitteeSettingsCard() {
@@ -39,16 +40,15 @@ export function CommitteeSettingsCard() {
         {field('Risk debate rounds', 'committee_risk_rounds', 1, 3)}
       </div>
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            style={{ width: 'auto' }}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+          <ToggleSwitch
             checked={settings?.committee_gate_enabled ?? false}
             disabled={!settings || update.isPending}
-            onChange={(e) => update.mutate({ committee_gate_enabled: e.target.checked })}
+            onChange={(checked) => update.mutate({ committee_gate_enabled: checked })}
+            label="Use the committee as a final gate on trades"
           />
           <strong>Use the committee as a final gate on trades</strong>
-        </label>
+        </div>
         <div className="text-muted" style={{ fontSize: 13, maxWidth: 640 }}>
           Off by default. The rules scan and score every stock with no AI. Only a plan the rules approved, at the moment a
           paper position would really open (auto-scan and the market-open redo), or that you generate by hand with the
