@@ -334,6 +334,10 @@ def _maybe_get_ai_opinion(
     keyword read to contrast against."""
     if not settings.ai_trading_overlay_enabled or llm_provider.name == "none" or not llm_provider.is_configured():
         return AiOpinion()
+    if rule_based_direction is None:
+        # The overlay can only stop a trade; with no direction proposed there is nothing to stop,
+        # so a call here would spend a model on an opinion that changes nothing.
+        return AiOpinion()
     if ground_truth is None:
         ground_truth = build_ground_truth(
             symbol, chart, volume_ratio=volume_ratio, earnings_date=earnings_date,

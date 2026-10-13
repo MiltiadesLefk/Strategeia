@@ -517,10 +517,9 @@ def test_ai_opinion_includes_a_dedicated_news_assessment_and_shows_the_keyword_r
     assert "record revenue" in opinion_prompt.lower()
 
 
-def test_ai_opinion_populated_on_a_no_trade_decision_when_overlay_enabled(session, monkeypatch):
-    """The whole point of "take all data and add its opinion too" for a
-    no-trade symbol: the overlay still runs (the no-trade path otherwise
-    skips the LLM entirely to save tokens) and its own read is persisted."""
+def test_overlay_makes_no_call_on_a_no_trade_decision(session, monkeypatch):
+    """The overlay can only stop a trade. With no direction proposed there is nothing to stop, so no
+    model is called (it used to be, to show an opinion on rejected symbols; that cost one call each)."""
     monkeypatch.setattr(
         "app.services.trade_plan_service.load_app_settings",
         lambda: AppSettings(telegram_bot_token="", telegram_chat_id="", ai_trading_overlay_enabled=True),
@@ -529,16 +528,10 @@ def test_ai_opinion_populated_on_a_no_trade_decision_when_overlay_enabled(sessio
 
     response = trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeFlatDataProvider(), llm, session)
 
-    assert response.direction is None
-    assert response.status == "no_trade"
-    assert response.ai_opinion_stance == "neutral"
-    assert response.ai_opinion_score == 30
-    assert response.ai_opinion_text == "Nothing compelling here."
-    assert len(llm.prompts) == 1  # only the overlay call — no ai_take_text narrative for a no-trade plan
+    assert response.direction is None and response.status == "no_trade"
+    assert response.ai_opinion_stance is None and response.ai_opinion_text is None
+    assert llm.prompts == []
 
-    record = session.get(TradePlanRecord, response.id)
-    assert record.ai_opinion_stance == "neutral"
-    assert record.ai_opinion_score == 30
 
 
 def test_ai_opinion_falls_back_to_raw_text_on_malformed_response(session, monkeypatch):
