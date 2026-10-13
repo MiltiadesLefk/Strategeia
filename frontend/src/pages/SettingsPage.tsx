@@ -7,6 +7,7 @@ import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
 import { DecisionModelField } from '../components/DecisionModelField';
 import { decisionModelInvalid } from '../lib/decisionModel';
+import { CLAUDE_MODEL_PRESETS, ModelSelect } from '../components/ModelSelect';
 import { DataCacheCard } from '../components/DataCacheCard';
 import { DataSourcesCard } from '../components/DataSourcesCard';
 import { WatchersCard } from '../components/WatchersCard';
@@ -622,14 +623,12 @@ export function SettingsPage() {
         {llmProvider === 'claude_code_cli' && (
           <div>
             <label>Everyday model (writing)</label>
-            <input
-              type="text"
+            <ModelSelect
               value={claudeCliModel}
-              onChange={(e) => setClaudeCliModel(e.target.value)}
-              placeholder="sonnet"
+              onChange={setClaudeCliModel}
+              presets={CLAUDE_MODEL_PRESETS}
+              blankLabel="Don't pin (whatever the CLI is set to)"
               maxLength={64}
-              spellCheck={false}
-              autoComplete="off"
             />
             <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
               The model every call is pinned to, so it can't change underneath you. Use an alias —{' '}
@@ -779,8 +778,8 @@ export function SettingsPage() {
           outright.
         </div>
         <div className="text-muted" style={{ fontSize: 12 }}>
-          Costs one extra AI call per symbol evaluated — including ones the rule-based engine rejects as "no trade,"
-          which normally skip the AI entirely to save tokens. Requires a real provider selected above (has no effect
+          Costs one extra AI call per symbol where the rules propose a trade. Symbols the rules reject as "no trade"
+          get no call, since there is nothing to stop. Requires a real provider selected above (has no effect
           while Provider is "None").
         </div>
         <div className="text-muted" style={{ fontSize: 12 }}>

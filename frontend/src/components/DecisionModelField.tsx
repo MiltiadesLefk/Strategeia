@@ -2,6 +2,7 @@
 // field in Settings. Blank means the provider's routine model answers the AI
 // overlay too, which is also what every existing install does.
 import { PATTERNS, decisionModelInvalid, type DecisionModelKind } from '../lib/decisionModel';
+import { CLAUDE_MODEL_PRESETS, ModelSelect } from './ModelSelect';
 
 interface Props {
   kind: DecisionModelKind;
@@ -17,15 +18,25 @@ export function DecisionModelField({ kind, value, onChange, routineModel, placeh
   return (
     <div>
       <label>Decision model (optional, for the AI overlay and committee verdicts)</label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? (routineModel.trim() ? `same as above (${routineModel.trim()})` : 'same as above')}
-        maxLength={PATTERNS[kind].maxLength}
-        spellCheck={false}
-        autoComplete="off"
-      />
+      {kind === 'claude' ? (
+        <ModelSelect
+          value={value}
+          onChange={onChange}
+          presets={CLAUDE_MODEL_PRESETS}
+          blankLabel={routineModel.trim() ? `Same as everyday model (${routineModel.trim()})` : 'Same as everyday model'}
+          maxLength={PATTERNS[kind].maxLength}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder ?? (routineModel.trim() ? `same as above (${routineModel.trim()})` : 'same as above')}
+          maxLength={PATTERNS[kind].maxLength}
+          spellCheck={false}
+          autoComplete="off"
+        />
+      )}
       <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
         Answers the AI overlay's "would you take this trade?" question (the one call that can stop a trade) and the
         AI Committee's manager, trader, risk and final-rating steps. It can be a stronger model than the everyday one
