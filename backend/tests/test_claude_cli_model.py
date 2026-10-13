@@ -276,3 +276,20 @@ def test_test_connection_message_says_when_unpinned(monkeypatch):
     body = client.post("/api/settings/test-connection", json={"target": "llm"}).json()
     assert body["ok"] is True
     assert "not pinned" in body["message"]
+
+
+def test_plain_call_skips_the_interactive_overhead_but_a_web_research_call_keeps_its_tools(monkeypatch):
+    run = RunRecorder()
+    monkeypatch.setattr(RUN, run)
+    provider = ClaudeCodeCLIProvider(cli_path="/usr/bin/claude", model="sonnet")
+    provider.generate("hi")
+    plain = run.argv
+    assert plain[plain.index("--tools") + 1] == ""
+    for flag in ("--disable-slash-commands", "--strict-mcp-config", "--system-prompt"):
+        assert flag in plain
+    assert plain[plain.index("--setting-sources") + 1] == ""
+
+    provider.generate("hi", purpose="research", web_search=True)
+    web = run.argv
+    assert web[web.index("--tools") + 1] == "WebSearch,WebFetch"
+    assert "--system-prompt" not in web and "--setting-sources" not in web

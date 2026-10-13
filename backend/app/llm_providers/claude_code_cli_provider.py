@@ -17,6 +17,14 @@ RESEARCH_WEB_TOOLS = "WebSearch,WebFetch"
 # turn would end before any answer. Bounded so a runaway search cannot loop.
 RESEARCH_MAX_TURNS = "8"
 RESEARCH_TIMEOUT_SEC = 180
+# A plain call (narration, overlay, news labels) needs none of what the CLI loads for an interactive
+# session: tools, skills, MCP servers, its own system prompt, and the settings/CLAUDE.md/memory files.
+# Without these flags every call carried ~68k tokens of that; with them ~1k (measured). Our prompts
+# carry all their own instructions, and a structured reply (--json-schema) still works.
+PLAIN_CALL_FLAGS = [
+    "--tools", "", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "",
+    "--system-prompt", "You are a careful financial-data assistant. Follow the instructions in the user message exactly.",
+]
 
 
 def _served_model(parsed: object) -> str | None:
@@ -141,7 +149,7 @@ class ClaudeCodeCLIProvider:
         if use_web:
             argv += ["--tools", RESEARCH_WEB_TOOLS, "--allowedTools", RESEARCH_WEB_TOOLS, "--max-turns", RESEARCH_MAX_TURNS]
         else:
-            argv += ["--allowedTools", "", "--max-turns", "1"]
+            argv += ["--allowedTools", "", "--max-turns", "1", *PLAIN_CALL_FLAGS]
         if model:
             argv += ["--model", model]
         if response_schema:

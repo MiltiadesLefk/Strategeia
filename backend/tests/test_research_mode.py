@@ -122,14 +122,14 @@ def test_cli_default_call_keeps_no_tools_and_one_turn(monkeypatch):
     argv = rec.argv
     assert argv[argv.index("--allowedTools") + 1] == ""
     assert argv[argv.index("--max-turns") + 1] == "1"
-    assert "--tools" not in argv
+    assert argv[argv.index("--tools") + 1] == ""  # tools off entirely, not just unallowed
     assert not any("permission" in a for a in argv)
 
 
 def test_cli_research_call_without_web_search_is_the_default_call(monkeypatch):
     provider, rec = _cli(monkeypatch)
     result = provider.generate("hi", purpose="research", web_search=False)
-    assert "--tools" not in rec.argv and rec.argv[rec.argv.index("--allowedTools") + 1] == ""
+    assert rec.argv[rec.argv.index("--tools") + 1] == "" and rec.argv[rec.argv.index("--allowedTools") + 1] == ""
     assert result.web_search_used is False
 
 
@@ -137,7 +137,7 @@ def test_cli_web_flag_on_a_non_research_purpose_is_ignored(monkeypatch):
     provider, rec = _cli(monkeypatch)
     for purpose in ("narrate", "decide"):
         provider.generate("hi", purpose=purpose, web_search=True)
-        assert "--tools" not in rec.argv and rec.argv[rec.argv.index("--allowedTools") + 1] == ""
+        assert rec.argv[rec.argv.index("--tools") + 1] == "" and rec.argv[rec.argv.index("--allowedTools") + 1] == ""
 
 
 def test_cli_cleared_research_call_allows_only_the_two_web_tools(monkeypatch):
