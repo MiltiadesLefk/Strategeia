@@ -13,6 +13,9 @@ const KIND_CHIP: Record<string, { label: string; className: string }> = {
   earnings: { label: 'Earnings', className: 'badge badge-green' },
 };
 
+// Today's card and weekday chip: an accent border and a faint accent tint.
+const TODAY_STYLE = { borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' };
+
 const IMPACT_CLASS: Record<string, string> = {
   High: 'badge badge-red',
   Medium: 'badge badge-amber',
@@ -184,6 +187,30 @@ function EventRow({ item }: { item: CalendarItem }) {
   );
 }
 
+// Mon-Sun of the shown week, so today is visible even on a day with no events.
+function WeekStrip({ from, today }: { from: string; today: string }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
+      {Array.from({ length: 7 }, (_, i) => addDays(from, i)).map((day) => {
+        const date = parseDay(day);
+        return (
+          <div
+            key={day}
+            className="card"
+            aria-current={day === today ? 'date' : undefined}
+            style={{ padding: '8px 4px', textAlign: 'center', ...(day === today ? TODAY_STYLE : {}) }}
+          >
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              {date.toLocaleDateString(undefined, { weekday: 'short' })}
+            </div>
+            <div style={{ fontWeight: 600 }}>{date.getDate()}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Timeline({ data, showMacro, showEarnings, onlyMine }: { data: CalendarResponse; showMacro: boolean; showEarnings: boolean; onlyMine: boolean }) {
   const groups = useMemo(() => {
     const visible = data.items.filter((i) => (i.kind === 'earnings' ? showEarnings : showMacro) && (!onlyMine || i.my_position));
@@ -196,7 +223,7 @@ function Timeline({ data, showMacro, showEarnings, onlyMine }: { data: CalendarR
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {groups.map(([day, items]) => (
-        <div className="card" key={day}>
+        <div className="card" key={day} style={day === data.today ? TODAY_STYLE : undefined}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <h3 style={{ fontSize: 15 }}>{dayHeading(day)}</h3>
             {day === data.today && <span className="badge badge-green">Today</span>}
@@ -268,6 +295,7 @@ export function CalendarPage() {
       {error && <ErrorBanner message={(error as ApiError).message} onRetry={() => refetch()} />}
       {data && (
         <>
+          {view === 'week' && <WeekStrip from={range.from} today={data.today} />}
           <SourceNotes sources={data.sources} />
           <PositionCatalystsCard groups={data.position_catalysts} />
           <Timeline data={data} showMacro={showMacro} showEarnings={showEarnings} onlyMine={onlyMine} />
