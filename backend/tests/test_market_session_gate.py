@@ -469,6 +469,33 @@ def test_manual_execute_works_while_the_market_is_open(api, monkeypatch):
     assert resp.json()["opened_at"] == "2026-09-28T15:00:00Z"
 
 
+def test_manual_close_returns_400_while_the_market_is_closed_and_leaves_the_position_open(api, monkeypatch):
+    client, s = api
+    plan = make_plan(s)
+    monkeypatch.setattr("app.portfolio.engine.default_clock", at(MONDAY_1100))
+    position_id = client.post("/api/portfolio/positions", json={"trade_plan_id": plan.id}).json()["id"]
+    monkeypatch.setattr("app.portfolio.engine.default_clock", at(SUNDAY))
+
+    resp = client.post(f"/api/portfolio/positions/{position_id}/close", json={"reason": "manual"})
+
+    assert resp.status_code == 400
+    assert "market is closed (weekend)" in resp.json()["detail"]
+    s.expire_all()
+    assert s.get(PaperPosition, position_id).status == "open"
+
+
+def test_manual_close_works_while_the_market_is_open(api, monkeypatch):
+    client, s = api
+    plan = make_plan(s)
+    monkeypatch.setattr("app.portfolio.engine.default_clock", at(MONDAY_1100))
+    position_id = client.post("/api/portfolio/positions", json={"trade_plan_id": plan.id}).json()["id"]
+
+    resp = client.post(f"/api/portfolio/positions/{position_id}/close", json={"reason": "manual"})
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "closed"
+
+
 def test_a_plan_awaiting_its_redo_cannot_be_executed_by_hand_even_after_the_bell(api, monkeypatch):
     client, s = api
     plan = make_plan(s)

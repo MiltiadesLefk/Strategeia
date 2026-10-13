@@ -623,6 +623,20 @@ class PaperTradingEngine:
             self._session.refresh(position)  # _record_equity_snapshot()'s commit expires attributes
         return position
 
+    def close_position_by_hand(self, position: PaperPosition, close_price: float, reason: str) -> PaperPosition:
+        """A close the user asks for. Unlike the exit scan (which fills at levels a
+        session really touched), a hand close fills at the current quote, so it needs
+        the same open-session rule as opening: off-hours the only quote is the last
+        session's close, a price nobody could trade at."""
+        now = self.now()
+        if not is_market_open_for(position.symbol, now):
+            raise MarketClosedError(
+                f"The US market is closed ({us_closure_reason(now)}), so {position.symbol} can't be closed at a "
+                f"real price. It reopens {format_market_time(next_us_open(now))}. A stop or target that "
+                f"was touched is still closed by the exit check."
+            )
+        return self.close_position(position, close_price, reason)
+
     def _owns(self, position: PaperPosition) -> bool:
         """Whether `position` is in this engine's sleeve (no sleeve_id = core's)."""
         if self._is_core:

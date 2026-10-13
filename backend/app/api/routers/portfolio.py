@@ -198,10 +198,13 @@ def close_position(
         raise HTTPException(status_code=404, detail="Position not found")
     if position.status != "open":
         raise HTTPException(status_code=400, detail="Position is already closed")
-    price = data_provider.get_quote(position.symbol).price
     # Closed through the engine of the sleeve that holds it, so that sleeve's cash is credited.
     engine = _engine_for_sleeve_id(session, data_provider, settings, position.sleeve_id)
-    closed = engine.close_position(position, price, req.reason)
+    price = data_provider.get_quote(position.symbol).price
+    try:
+        closed = engine.close_position_by_hand(position, price, req.reason)
+    except MarketClosedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return position_to_schema(closed, plan_strategy_versions(session, [closed.trade_plan_id]), _sleeve_keys(session))
 
 
