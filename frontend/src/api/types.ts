@@ -516,6 +516,8 @@ export interface AppSettings {
   ai_trading_overlay_enabled: boolean;
   /** The AI-written take paragraph on each trade plan; off = the rule-based Analyst's take. Narration only. */
   ai_plan_take_enabled: boolean;
+  /** The AI Insight note on the chart; off = the rule-based insight text. Narration only. */
+  ai_chart_insight_enabled: boolean;
   ai_overlay_scores_confidence: boolean;
   ai_overlay_objection_action: AiOverlayObjectionAction;
   min_confidence_for_trade: number;
@@ -592,6 +594,7 @@ export interface SettingsUpdateRequest {
   price_alert_tp1_pct?: number;
   ai_trading_overlay_enabled?: boolean;
   ai_plan_take_enabled?: boolean;
+  ai_chart_insight_enabled?: boolean;
   ai_overlay_scores_confidence?: boolean;
   ai_overlay_objection_action?: AiOverlayObjectionAction;
   min_confidence_for_trade?: number;

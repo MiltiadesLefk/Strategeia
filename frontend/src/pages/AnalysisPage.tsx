@@ -397,7 +397,7 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
             </div>
           </div>
 
-          <AiNoteCard label="AI Insight" provider={data.ai_provider} text={data.insight_text} error={data.ai_error} />
+          <AiNoteCard label={data.ai_provider === 'none' ? 'Chart summary' : 'AI Insight'} provider={data.ai_provider} text={data.insight_text} error={data.ai_error} />
         </>
       )}
     </>

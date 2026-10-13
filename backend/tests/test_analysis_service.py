@@ -95,3 +95,43 @@ def test_analysis_endpoint_returns_502_when_intraday_is_unavailable():
         assert client.get("/api/analysis/AAPL?range=1mo").status_code == 200
     finally:
         app.dependency_overrides.pop(get_data_provider, None)
+
+
+def test_chart_insight_setting_off_skips_the_model(monkeypatch):
+    """On: the configured provider writes the insight. Off: rule-based text and no model call."""
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_app_settings, get_data_provider, get_llm_provider
+    from app.config import AppSettings
+    from app.main import app
+
+    class Spy:
+        name = "spy"
+        prompts: list = []
+
+        def is_configured(self):
+            return True
+
+        def generate(self, prompt, **kwargs):
+            from app.llm_providers.base import LLMResult
+
+            self.prompts.append(prompt)
+            return LLMResult(text="model insight", provider="spy", latency_ms=1)
+
+    spy = Spy()
+    spy.prompts = []
+    app.dependency_overrides[get_data_provider] = lambda: FakeProvider()
+    app.dependency_overrides[get_llm_provider] = lambda: spy
+    try:
+        client = TestClient(app)
+        app.dependency_overrides[get_app_settings] = lambda: AppSettings(ai_chart_insight_enabled=True)
+        on = client.get("/api/analysis/AAPL").json()
+        app.dependency_overrides[get_app_settings] = lambda: AppSettings(ai_chart_insight_enabled=False)
+        calls_before = len(spy.prompts)
+        off = client.get("/api/analysis/AAPL").json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert on["insight_text"] == "model insight" and on["ai_provider"] == "spy"
+    assert off["ai_provider"] == "none" and off["insight_text"] != "model insight"
+    assert len(spy.prompts) == calls_before

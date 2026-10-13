@@ -535,6 +535,10 @@ class AppSettings(BaseModel):
     # plan carries the rule-based "Analyst's take" template and no model is called for it.
     ai_plan_take_enabled: bool = True
 
+    # The AI Insight note on the chart. Narration only, like the
+    # take above, so not part of the strategy fingerprint. Off: the rule-based insight text, no model call.
+    ai_chart_insight_enabled: bool = True
+
     # Two independent questions about how much the overlay's opinion counts,
     # both meaningful only when ai_trading_overlay_enabled is also on — off,
     # neither changes anything, so a default install behaves exactly as it

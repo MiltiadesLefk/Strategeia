@@ -190,6 +190,7 @@ export function SettingsPage() {
   const [scaleOutTrailR, setScaleOutTrailR] = useState(1);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
   const [aiPlanTake, setAiPlanTake] = useState(true);
+  const [aiChartInsight, setAiChartInsight] = useState(true);
   const [aiOverlayScores, setAiOverlayScores] = useState(true);
   const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
   const [researchMode, setResearchMode] = useState<ResearchMode>('our_data_only');
@@ -268,6 +269,7 @@ export function SettingsPage() {
     setScaleOutTrailR(settings.scale_out_trail_r ?? 1);
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiPlanTake(settings.ai_plan_take_enabled);
+    setAiChartInsight(settings.ai_chart_insight_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
     setResearchMode(settings.research_mode ?? 'our_data_only');
@@ -306,7 +308,7 @@ export function SettingsPage() {
     telegram_chat_id: telegramChatId,
   });
 
-  function saveLlm() {
+  function saveLlm(card = 'llm') {
     if (llmMissingKey || claudeModelInvalid || decisionModelBad) return;
     update(
       {
@@ -337,7 +339,7 @@ export function SettingsPage() {
           // provider works — a green checkmark next to "not configured"
           // (e.g. picking claude_code_cli with no CLI on this machine, or a
           // bad key) is worse than no confirmation at all.
-          testLlm('llm', { onSuccess: (result) => result.ok && flashSaved('llm') });
+          testLlm('llm', { onSuccess: (result) => result.ok && flashSaved(card) });
         },
       },
     );
@@ -411,15 +413,16 @@ export function SettingsPage() {
     );
   }
 
-  function saveAiOverlay() {
+  function saveAiOverlay(card = 'ai-overlay') {
     update(
       {
         ai_trading_overlay_enabled: aiOverlayEnabled,
         ai_plan_take_enabled: aiPlanTake,
+        ai_chart_insight_enabled: aiChartInsight,
         ai_overlay_scores_confidence: aiOverlayScores,
         ai_overlay_objection_action: aiOverlayAction,
       },
-      { onSuccess: () => flashSaved('ai-overlay') },
+      { onSuccess: () => flashSaved(card) },
     );
   }
 
@@ -488,6 +491,7 @@ export function SettingsPage() {
     if (!settings) return;
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiPlanTake(settings.ai_plan_take_enabled);
+    setAiChartInsight(settings.ai_chart_insight_enabled);
     setAiOverlayScores(settings.ai_overlay_scores_confidence);
     setAiOverlayAction(settings.ai_overlay_objection_action);
   }
@@ -661,7 +665,7 @@ export function SettingsPage() {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
+          <SaveButton pending={saving || testingLlm} justSaved={justSavedKey === 'llm'} onClick={() => saveLlm('llm')} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
           <ResetButton onClick={resetLlm} />
           <button className="btn btn-secondary" onClick={() => testLlm({ target: 'llm', overrides: testOverridesLlm() })}
             disabled={testingLlm || claudeModelInvalid || decisionModelBad}
@@ -722,7 +726,7 @@ export function SettingsPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'llm'} onClick={saveLlm} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
+          <SaveButton pending={saving} justSaved={justSavedKey === 'research'} onClick={() => saveLlm('research')} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
           <ResetButton onClick={resetLlm} />
         </div>
       </div>
@@ -740,7 +744,25 @@ export function SettingsPage() {
           <OnOffBadge on={aiPlanTake} />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-overlay'} onClick={saveAiOverlay} />
+          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-take'} onClick={() => saveAiOverlay('ai-take')} />
+          <ResetButton onClick={resetAiOverlay} />
+        </div>
+      </div>
+
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h3>AI insight on charts</h3>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          The one- or two-sentence AI Insight note under each chart. It only describes
+          indicators the rules already computed and never changes a decision. Off: the chart shows the rule-based insight
+          and no AI call is made for it. One call per chart load while on.
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ToggleSwitch checked={aiChartInsight} onChange={setAiChartInsight} label="Write the AI insight on each chart" />
+          <span>Write the AI insight on each chart</span>
+          <OnOffBadge on={aiChartInsight} />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-chart'} onClick={() => saveAiOverlay('ai-chart')} />
           <ResetButton onClick={resetAiOverlay} />
         </div>
       </div>
@@ -841,7 +863,7 @@ export function SettingsPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-overlay'} onClick={saveAiOverlay} />
+          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-overlay'} onClick={() => saveAiOverlay('ai-overlay')} />
           <ResetButton onClick={resetAiOverlay} />
         </div>
       </div>
