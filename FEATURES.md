@@ -265,9 +265,9 @@ Keys are shown masked (the last 4 characters only), and there's a **Test Connect
 provider. A test button tests **what is in the form right now**, saved or not: type a new key or model
 and press Test before you Save. Nothing is stored by a test, a box you have not touched uses the saved
 value, and a key never appears in the result (even if the provider echoes it in an error). A test is
-still limited to one per 10 seconds per target. The AI card also has the **Research mode** choice and a line saying whether the chosen provider supports web search. When **Claude Code CLI** is the chosen provider, the AI card also shows a **Model** box
-(example aliases `sonnet`, `opus`, `haiku`, or a full id). Blank means "whatever the CLI is set to".
-Under each provider's model there is also a **Decision model (AI overlay)** box (blank = use the same
+still limited to one per 10 seconds per target. The AI card also has the **Research mode** choice and a line saying whether the chosen provider supports web search. When **Claude Code CLI** is the chosen provider, the AI card also shows a **Model** dropdown
+(`sonnet`, `opus`, `haiku`, or an exact version such as Claude Sonnet 5.5; **Other...** lets you type any id). Blank means "whatever the CLI is set to".
+Under each provider's model there is also a **Decision model (AI overlay)** field (for the Claude CLI a dropdown, blank = use the same
 model) and a **Test decision model** button (§9).
 
 ### Login
@@ -734,7 +734,7 @@ The code is `backend/app/portfolio/missed_trades.py` (sorting, rebuilding, walki
   close or current price, so the bar's earlier low must not stop out a trade that didn't exist yet).
   The rest of the entry day is checked **hour by hour** instead (see "The entry day, hour by hour" below).
 - A position closes **fully** at whichever comes first, **stop** or **TP1**. TP2 is for information
-  only.
+  only, unless you switch on the partial scale-out below.
 - **Time limit (third way out).** If neither was touched, a position that has been open for the
   **maximum holding time** is closed at the **close** of that day. The days are **trading days**
   counted from the bars (the entry day is day 0 and is not counted), so weekends and holidays don't
@@ -752,7 +752,8 @@ The code is `backend/app/portfolio/missed_trades.py` (sorting, rebuilding, walki
   (worse). One that opens past the target fills at the **open** (better).
 - Stop exits pay slippage (a market order). Target exits don't (a resting limit order).
 - **Liquidity-aware slippage (opt-in, Settings -> Paper Account, off by default):** when on, every market fill (entry, stop exit, time exit) pays extra basis points on top of the flat slippage: `coefficient x sqrt(shares / 20-day average volume)`, capped at 100 bps (default coefficient 100, so 1% of daily volume costs 10 bps). Target exits still pay nothing. The slippage actually paid is stored on the position (`entry_slippage_bps`, `exit_slippage_bps`). Backtests use the same engine and the same setting. The enabled flag and coefficient join the strategy-version fingerprint only while on. The missed-trades study stays on the flat slippage (it has no volume data).
-- A **manual close** from the Portfolio page closes at the current market price.
+- **Partial scale-out (opt-in, Settings -> Paper Account, off by default):** when on, TP1 sells only a fraction of the shares (default 50%) instead of closing the position. The rest then gets a breakeven stop (or a trailing stop of 1R behind the best price, your choice) and runs to TP2, the stop or the time limit. The position still counts as **one trade** with one profit and one R (measured against the size at entry). With it off, results are identical to before. The settings join the strategy-version fingerprint only while on, and backtests use the same engine.
+- A **manual close** from the Portfolio page closes at the current market price, and only while the market is open. While it is closed the only quote is the last session's close, so the button is refused with the reopening time (a stop or target that was touched is still closed by the exit check).
 - **Why a time limit:** a stalled position used to sit open forever, holding one of the 5 slots and
   a sector slot while its original reason aged. Turning the limit on changed behaviour for stalled
   positions: ones already open longer than the limit close at the next check (at the close of the day their limit
@@ -928,7 +929,9 @@ updating each year:
 ### Providers (chosen in Settings)
 - **None:** the default. Clear rule-based text instead of AI.
 - **Claude Code CLI:** uses your own Claude login (no API key). The app runs `claude -p` with **every
-  tool switched off**, so it can only read what the app sends it (the one exception is a research call
+  tool switched off**, so it can only read what the app sends it. A plain call also loads none of the
+  CLI's skills, MCP servers, own system prompt, settings or `CLAUDE.md`/memory files (about 1k tokens per call
+  instead of about 68k, which matters on a subscription's usage window; the one exception is a research call
   with web search allowed, see "Research mode" below). The model is **pinned** (default
   `sonnet`, set in Settings): without a pin the CLI answers with whichever model you last picked in an
   interactive session, so the narratives and the AI overlay's objections could change model without any
@@ -986,9 +989,9 @@ source for every web fact, keep sourced facts apart from inference, no investmen
 whether the web was really used and the sources. Web search may cost extra with the provider.
 
 ### What the AI writes
-1. **AI take:** a short narrative on each tradeable plan.
+1. **AI take:** a short narrative on each tradeable plan. Settings -> AI has a switch (on by default); off = the rule-based Analyst's take and no AI call.
 2. **AI Summary:** on the research panel.
-3. **AI Insight:** a short chart explanation on the Analysis page.
+3. **AI Insight:** a short chart explanation on the Analysis page. Settings -> AI has a switch (on by default); off = the rule-based "Chart summary" and no AI call (one call per chart load while on).
 
 It only explains numbers the rules already computed. If the AI fails or is slow, the app shows the
 rule-based text instead; a request never fails because of the AI.
@@ -1022,8 +1025,8 @@ held up, and one concrete lesson.
   simulated moment.
 
 ### The AI Trading Overlay (off by default)
-- **What it is:** an independent second opinion on **every** evaluation, including rejected ones. It's
-  one extra AI call per stock. The AI sees the same data and returns:
+- **What it is:** an independent second opinion on every evaluation where the rules propose a trade. It's
+  one extra AI call per such stock. A stock the rules reject as "no trade" gets no call (the overlay can only stop a trade, and there is none to stop). The AI sees the same data and returns:
   - its **stance** (bullish, bearish or neutral),
   - a **trade verdict** ("take" or "pass"),
   - its **conviction %**, its reasoning, and its own reading of the news.
@@ -1538,6 +1541,8 @@ Every call the app makes to a source is counted once, in one place, since the se
 | Decision model, per provider (`claude_cli_decision_model`, `openrouter_decision_model`, `orcarouter_decision_model`, `openai_decision_model`, `gemini_decision_model`) | blank | The model that answers the AI overlay's verdict. Blank = the same model as the provider's normal one. Same characters as the normal model; Gemini's can't contain `/` (§9) |
 | Claude CLI model | `sonnet` | The model the Claude Code CLI is pinned to (`--model`). An alias or a full id; letters, digits and `. _ - : @ [ ]` only, up to 64 characters. Blank = don't pin, use whatever the CLI is set to (§9) |
 | Finnhub enabled, and key | off | Adds Finnhub as the first source for what it offers |
+| AI take on trade plans (`ai_plan_take_enabled`) | on | Off: the rule-based Analyst's take, no AI call for it |
+| AI insight on charts (`ai_chart_insight_enabled`) | on | Off: the rule-based chart summary, no AI call for it |
 | AI Trading Overlay | off | The second opinion (§9) |
 | Count disagreement in the confidence score | on | The overlay can cost 0 to −3 points |
 | Overlay objection action | cancel | cancel, hold or none (§9) |

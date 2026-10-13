@@ -206,8 +206,10 @@ scripts/            verify.py (tests + type-check + lint in one command) and ui_
 ## Known limitations (v1)
 
 - Paper-trading exit rule: a position closes fully at whichever of stop-loss or TP1 hits
-  first (checked against each bar's high/low). TP2 is informational only — no partial
-  scale-out yet. A position that touches neither is closed at the close of its 20th
+  first (checked against each bar's high/low). TP2 is informational only unless you turn on
+  the opt-in partial scale-out (Settings -> Paper Account, off by default): then part of the
+  position is sold at TP1 and the rest runs to TP2 behind a breakeven or trailing stop.
+  A position that touches neither is closed at the close of its 20th
   trading day (Settings -> Maximum Holding Time; 0 turns it off).
 - The bundled `backend/data/sp500.csv` is the default list; you can replace it with your own in
   Settings -> Watchlist (up to 200 symbols, saved in `runtime/universe.json`). It holds the current S&P 500 members plus three crypto pairs (about
