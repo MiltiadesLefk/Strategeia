@@ -63,10 +63,16 @@ class PositionSchema(BaseModel):
     # The key of the sleeve (paper account) that holds the position; "core" for
     # the original account and for positions from before sleeves existed.
     sleeve_key: str | None = None
+    # "swing" or "hold" (hold: no target, no time exit; tp1/tp2 are 0 = none).
+    mode: str = "swing"
 
 
 class OpenPositionRequest(BaseModel):
     trade_plan_id: int
+
+
+class HoldBuyRequest(BaseModel):
+    symbol: str
 
 
 class ClosePositionRequest(BaseModel):

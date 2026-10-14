@@ -36,12 +36,14 @@ from app.portfolio.sleeves import (
 from app.portfolio.stats import compute_portfolio_stats
 from app.schemas.portfolio_schemas import (
     ClosePositionRequest,
+    HoldBuyRequest,
     EquityPointSchema,
     OpenPositionRequest,
     PortfolioStatsSchema,
     PositionSchema,
 )
 from app.services.deferred_evaluation_service import pending_redo_for_plan
+from app.services.hold_buy_service import hold_buy
 from app.services.lesson_service import generate_lesson, is_real_llm
 from app.services.sleeve_service import build_sleeve_engine, mark_all_sleeves
 from app.strategy.service import plan_strategy_versions
@@ -183,6 +185,31 @@ def open_position(
     return position_to_schema(
         position, plan_strategy_versions(session, [position.trade_plan_id]), _sleeve_keys(session)
     )
+
+
+@router.post("/hold-buy", response_model=PositionSchema)
+def hold_buy_endpoint(
+    req: HoldBuyRequest,
+    session: Session = Depends(get_session),
+    data_provider: DataProvider = Depends(get_data_provider),
+    settings: AppSettings = Depends(get_app_settings),
+) -> PositionSchema:
+    """Buy one stock for the portfolio at the target weight (core sleeve), hold mode."""
+    engine = build_engine(session, data_provider, settings)
+    try:
+        position = hold_buy(session, engine, data_provider, settings, req.symbol.strip().upper(), reason="manual hold buy")
+    except MarketClosedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (
+        InsufficientCashError,
+        DuplicatePositionError,
+        MaxPositionsExceededError,
+        SectorConcentrationError,
+        SleeveDisabledError,
+        StalePlanError,
+    ) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return position_to_schema(position, plan_strategy_versions(session, [position.trade_plan_id]), _sleeve_keys(session))
 
 
 @router.post("/positions/{position_id}/close", response_model=PositionSchema)
