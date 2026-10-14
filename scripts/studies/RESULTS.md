@@ -472,3 +472,25 @@ ticker per 180 days. Compared with SPY, the average liquid stock and 1,000 rando
 - Inside today's S&P 500 list every variant looks better (all insiders, 90d, 6m: +5.86% over the average stock, interval +3.77% to +7.96%); that
   list is today's members, so it favours winners. About half of the event tickers had no prices (delisted or renamed), so survivors are
   overrepresented. Purchases are not netted against sales here, unlike the live rule.
+
+---
+## 6. Step 0 of the portfolio builder: the gate against SPY (`scripts/studies/hold_gate_vs_spy.py`, 2026-10-15)
+Tests only the point-in-time parts of the live quality gate (close above the 200-day average, revenue growth above 0); profit and valuation
+have no stored history, so they are NOT tested. Every month-end 2023-01..2026-10 (46), buy every S&P 500 stock that passes, equal weight, hold
+1/3/6/12 months from the next open. "DIP" adds: 10% or more under the 63-day high. Run with `--db runtime/longhist.db`.
+```
+Variant | Hold | n | picks avg | SPY avg | universe avg | picks-SPY (95%)           | beat universe | random-basket pctile | avg size
+GATE | 1m  | 44 | +1.46% | +1.50% | +1.31% | -0.04% (-0.66% to +0.58%)  | 28 of 44 | 58.8th | 217.0
+GATE | 3m  | 42 | +5.18% | +5.14% | +4.93% | +0.04% (-1.07% to +1.15%)  | 25 of 42 | 58.5th | 215.4
+GATE | 6m  | 39 | +11.54% | +10.69% | +10.62% | +0.85% (-0.88% to +2.57%) | 26 of 39 | 66.2th | 215.6
+GATE | 12m | 33 | +23.64% | +22.02% | +24.73% | +1.62% (-0.83% to +4.07%) | 22 of 33 | 63.6th | 216.6
+GATE + DIP | 1m  | 44 | +2.35% | +1.50% | +1.31% | +0.84% (-0.40% to +2.08%)  | 25 of 44 | 56.0th | 26.8
+GATE + DIP | 3m  | 42 | +10.04% | +5.14% | +4.93% | +4.90% (+1.88% to +7.92%) | 30 of 42 | 67.4th | 25.4
+GATE + DIP | 6m  | 39 | +20.44% | +10.69% | +10.62% | +9.75% (+5.65% to +13.85%) | 32 of 39 | 78.7th | 24.9
+GATE + DIP | 12m | 33 | +42.09% | +22.02% | +24.73% | +20.07% (+8.07% to +32.07%) | 23 of 33 | 73.2th | 23.0
+```
+Reading: the gate on its own is indistinguishable from SPY (intervals include 0; it passes about 217 of 500 stocks, i.e. it is close to
+"buy the market"). Gate plus dip is far ahead of SPY in this sample, but the sample is one bull stretch, the 3/6/12m windows overlap (the
+intervals are too narrow), only the 1-3 month rows are close to independent, the index list is today's (survivors), there are no costs, and
+the dip rule was chosen before looking but the sample is the same 2023-2026 stretch as every other study here. It is a reason to keep testing
+and to run the dip option on paper, not proof. `hold_buy_only_dips` stays off by default.
