@@ -50,8 +50,10 @@ def _headers() -> dict[str, str]:
 # Each filing is its own HTTP request, so this bounds the cost of evaluating a
 # symbol: a busy large-cap files hundreds of Form 4s a year and reading all of
 # them would dominate a scan for a signal that is capped at one point.
-INSIDER_WINDOW_DAYS = 90
-MAX_FILINGS_TO_READ = 12
+# 180 days, not 90: an officer can build a position over months (study 05 found no edge either way, so this is a judgment call).
+# shortcut: a busy company can have more Form 4s than the cap in 180 days and the oldest are then left out; raise the cap if that bites.
+INSIDER_WINDOW_DAYS = 180
+MAX_FILINGS_TO_READ = 30
 
 # Form 4 transaction codes. Only open-market trades are counted: an option
 # exercise (M), a grant (A) or a tax withholding (F) is compensation

@@ -169,7 +169,7 @@ def test_activity_matches_the_live_providers_parse_of_the_same_filings(session):
         mine = insider_activity_as_of(session, symbol, when)
         assert (mine.buy_count, mine.sell_count) == (live[0], live[1]), name
         assert mine.buy_value == pytest.approx(live[2]) and mine.sell_value == pytest.approx(live[3])
-        assert mine.window_days == 90 and mine.symbol == symbol
+        assert mine.window_days == 180 and mine.symbol == symbol
 
 
 # ---- clusters ----

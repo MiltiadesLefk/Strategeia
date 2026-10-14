@@ -109,6 +109,7 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
         "INSIDER_SCORE_CAP", "MIN_NET_BUY_VALUE", "STRONG_NET_BUY_VALUE", "PLAN_SELL_WEIGHT",
         "MIN_WEIGHTED_SELL_VALUE", "STRONG_WEIGHTED_SELL_VALUE",
     ),
+    "app.data_providers.sec_edgar_provider": ("INSIDER_WINDOW_DAYS",),
     "app.analysis.live_evidence": ("EXTRA_MAX_POINTS",),
     "app.analysis.price_evidence": (
         "RELATIVE_STRENGTH_SCORE_CAP", "RELATIVE_STRENGTH_DAYS", "RELATIVE_STRENGTH_GAP_PCT",

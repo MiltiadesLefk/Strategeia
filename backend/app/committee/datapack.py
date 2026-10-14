@@ -307,7 +307,7 @@ def gather_data(symbol: str, data_provider: DataProvider, session: Session | Non
     if session is not None:
         from app.analysis.insider_scoring import insider_sell_split
 
-        split = insider_sell_split(session, symbol, insider.window_days if insider is not None else 90)
+        split = insider_sell_split(session, symbol, insider.window_days if insider is not None else 180)
         if split is not None:
             insider_parts.append(
                 f"Of those sales, {split.discretionary_count} (total {_big(split.discretionary_value)}) were made outside "

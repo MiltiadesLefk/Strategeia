@@ -42,7 +42,7 @@ class SellSplit:
         return self.discretionary_value + PLAN_SELL_WEIGHT * self.plan_value
 
 
-def insider_sell_split(session: Session | None, symbol: str, window_days: int = 90) -> SellSplit | None:
+def insider_sell_split(session: Session | None, symbol: str, window_days: int = 180) -> SellSplit | None:
     """Sales split into discretionary and plan, from the dated Form 4 archive as known now. None when no insider
     filing for the symbol was ever stored (never loaded: not the same as "nobody sold"). Reads through the
     guarded reader, so a backtest sees only what was public."""
@@ -61,7 +61,7 @@ def insider_sell_split(session: Session | None, symbol: str, window_days: int = 
     )
 
 
-def discretionary_sells(session: Session | None, symbol: str, window_days: int = 90) -> tuple[int, float] | None:
+def discretionary_sells(session: Session | None, symbol: str, window_days: int = 180) -> tuple[int, float] | None:
     """(count, value) of the discretionary sales alone, or None when the archive has nothing for the symbol."""
     split = insider_sell_split(session, symbol, window_days)
     return None if split is None else (split.discretionary_count, split.discretionary_value)
@@ -110,7 +110,7 @@ def score_insider_activity(
     net = buy - sell
     if net == 0:
         return 0, []
-    window = activity.window_days if activity is not None else 90
+    window = activity.window_days if activity is not None else 180
     if net > 0:
         reason = (
             f"{activity.buy_count} insider purchase{'s' if activity.buy_count != 1 else ''} totalling "

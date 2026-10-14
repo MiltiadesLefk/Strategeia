@@ -1093,7 +1093,7 @@ For each kind of data, the app asks the first source that offers it. If that fai
 | 2 | **Yahoo Finance** (`yfinance`) | No | Everything except insider trades: daily, weekly and intraday prices; quotes; company info; financials; news; earnings dates, estimates and history; options |
 | 3 | **Nasdaq** | No | Quotes, daily prices and company info, when Yahoo fails |
 | 4 | **StockAnalysis** | No | Daily prices of stocks and ETFs only (unofficial endpoint); the last price fallback. Stooq now serves scripts a browser-check page, so it is skipped unless `stooq_enabled` is set |
-| 5 | **SEC EDGAR** | No (it needs a contact label; see §14) | **Insider trades** (Form 4): the last 90 days, up to 12 filings per stock for the live check; years of dated history through the backfill (§11, "What the app knew, and when") |
+| 5 | **SEC EDGAR** | No (it needs a contact label; see §14) | **Insider trades** (Form 4): the last 180 days, up to 30 filings per stock for the live check; years of dated history through the backfill (§11, "What the app knew, and when") |
 
 **Other sources:**
 - **Stock logos:** Elbstream (by ticker), with coloured letters when there's no logo.
@@ -1385,13 +1385,13 @@ days. The app can read these filings and store **every transaction row as a date
   (the rows in filings accepted in the last N days, by default only open-market purchases),
   `insider_activity_as_of` (the same buy/sell counts and dollars the live scoring uses) and
   `insider_clusters_as_of` (at least 2 different insiders buying within 14 days of each other, with the
-  count, value and roles). All three read only what was known at the chosen moment. The "last 90 days"
+  count, value and roles). All three read only what was known at the chosen moment. The "last 180 days"
   window counts **filings accepted** in those days, as the live check does.
 - **This does not change today's scoring.** The live insider point (§5) still comes from the quick check of
   the latest filings. Differences from it, on purpose: the dated reader counts only the stock table (the
   live check also counts option rows coded P or S), reads every filing in the window (the live check stops at
-  12), and counts an amended filing once. On a real company's last 90 days the two agree exactly once the
-  live check's 12-filing limit is applied.
+  30), and counts an amended filing once. On a real company's last 180 days the two agree exactly once the
+  live check's 30-filing limit is applied.
 - **Honest limit:** a company with no stored insider rows gives "no data" from `insider_activity_as_of`
   (not "no insider trades"), because the history may simply not have been loaded.
 

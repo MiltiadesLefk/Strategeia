@@ -46,3 +46,14 @@ def test_failed_load_is_retried_and_does_not_mark_coverage(monkeypatch):
     with _session() as s:
         assert svc.run_insider_coverage_tick(s, ["AAPL", "SOFI"], today=TODAY) == 1  # SOFI still done
         assert s.get(InsiderCoverage, "AAPL") is None
+
+
+def test_insider_window_is_one_number_everywhere():
+    import inspect
+
+    from app.analysis.insider_scoring import insider_sell_split
+    from app.data_providers.sec_edgar_provider import INSIDER_WINDOW_DAYS
+    from app.knowledge.insider_trades import DEFAULT_WINDOW_DAYS
+
+    assert INSIDER_WINDOW_DAYS == DEFAULT_WINDOW_DAYS == 180
+    assert inspect.signature(insider_sell_split).parameters["window_days"].default == INSIDER_WINDOW_DAYS

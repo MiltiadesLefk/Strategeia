@@ -31,7 +31,7 @@ from sqlmodel import Session
 from app.data_providers.base import InsiderActivity
 from app.knowledge import FactKind, KnownFact, current_as_of, facts_known_as_of, to_naive_utc
 
-DEFAULT_WINDOW_DAYS = 90
+DEFAULT_WINDOW_DAYS = 180  # keep equal to sec_edgar_provider.INSIDER_WINDOW_DAYS
 # The same two codes the live provider counts: open-market purchases and sales.
 OPEN_MARKET_BUY = "P"
 OPEN_MARKET_SELL = "S"
