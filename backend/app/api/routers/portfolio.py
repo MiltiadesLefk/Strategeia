@@ -187,6 +187,21 @@ def open_position(
     )
 
 
+@router.get("/holdings")
+def holdings(
+    sleeve: str | None = Query(default=None, description="Sleeve key; omitted = core"),
+    session: Session = Depends(get_session),
+    data_provider: DataProvider = Depends(get_data_provider),
+    settings: AppSettings = Depends(get_app_settings),
+) -> dict:
+    """The portfolio view: weights, drift from the target, sectors, return vs SPY, drawdown. Read-only."""
+    from app.portfolio.holdings import compute_holdings
+
+    return compute_holdings(
+        session, data_provider, read_scope(session, sleeve), settings.hold_target_weight_pct, settings.paper_starting_cash
+    )
+
+
 @router.post("/hold-buy", response_model=PositionSchema)
 def hold_buy_endpoint(
     req: HoldBuyRequest,
