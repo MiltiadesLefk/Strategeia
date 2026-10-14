@@ -295,31 +295,7 @@ def evaluate_candidate(
         return STATUS_EVALUATING
 
     cap_note = sleeve_cap_note(session, settings, auto, now)
-    if settings.hold_mode_enabled:
-        return _evaluate_hold(session, candidate, settings, data_provider, auto, cap_note, clock, now)
-    try:
-        response = generate_trade_plan(
-            candidate.symbol,
-            auto.starting_cash,
-            settings.default_risk_pct,
-            data_provider,
-            llm_provider,
-            session,
-            allow_auto_execute=cap_note is None,  # auto_execute_trade_plans itself is read inside, as for every plan
-            source=SOURCE_AUTO,
-            clock=clock,
-            settings=settings,
-            sleeve=auto,
-            committee_gate=committee_gate,
-            long_only=True,
-        )
-    except Exception as exc:  # one bad symbol must not stop the others
-        logger.exception("Smart-money evaluation of %s failed", candidate.symbol)
-        session.rollback()
-        candidate = session.get(SmartMoneyCandidate, candidate.id)
-        return _skip(session, candidate, REASON_EVALUATION_ERROR, f"{type(exc).__name__}: {exc}", now)
-
-    return route_plan(session, candidate, response.id, response.status, bool(response.redo_at), cap_note, settings, auto, now)
+    return _evaluate_hold(session, candidate, settings, data_provider, auto, cap_note, clock, now)
 
 
 def _evaluate_hold(
@@ -343,6 +319,9 @@ def _evaluate_hold(
                           note="Failed the quality gate: " + "; ".join(gate.failed_reasons))
     if cap_note is not None:
         return route_plan(session, candidate, None, "pending", False, cap_note, settings, sleeve, now)
+    if not settings.auto_execute_trade_plans:
+        return route_plan(session, candidate, None, "pending", False, None, settings, sleeve, now,
+                          note="Auto-execute is off, so nothing is bought on its own.")
     engine = build_sleeve_engine(session, data_provider, settings, sleeve, clock=clock, hold=True)
     try:
         position = hold_buy(session, engine, data_provider, settings, candidate.symbol, sleeve_id=sleeve.id,
@@ -483,53 +462,7 @@ def execute_review_buy(
         raise ReviewBuyMarketClosed(candidate.symbol)
 
     old_plan_id = candidate.plan_id
-    if settings.hold_mode_enabled:
-        record, position = _review_buy_hold(session, candidate, settings, data_provider, manual, clock)
-        return _finish_review_buy(session, candidate, manual, record, position, old_plan_id, clock)
-    try:
-        response = generate_trade_plan(
-            candidate.symbol,
-            manual.starting_cash,
-            settings.default_risk_pct,
-            data_provider,
-            llm_provider,
-            session,
-            allow_auto_execute=False,  # opened below, by the person's decision
-            source=SOURCE_REVIEW_BUY,
-            clock=clock,
-            settings=settings,
-            sleeve=manual,
-            long_only=True,
-            confidence_bar_override=0,
-        )
-    except (AllProvidersFailedError, DataProviderError) as exc:
-        raise ReviewBuyRefused(f"The evaluation needs fresh market data and could not get it: {exc}") from exc
-    record = _stamp_plan(session, response.id, candidate, SOURCE_REVIEW_BUY)
-    if record is None:
-        raise ReviewBuyRefused("The evaluation produced no plan.")
-    if response.redo_at is not None:
-        record.status = "discarded"
-        session.add(record)
-        session.commit()
-        raise ReviewBuyMarketClosed(candidate.symbol)
-    if response.direction != "long" or record.status != "pending":
-        reason = response.reason or "no long trade can be built from today's data."
-        raise ReviewBuyRefused(f"There is no long trade to open for {candidate.symbol} right now: {reason}")
-
-    try:
-        position = engine.open_position(record)
-    except MarketClosedError as exc:
-        record.status = "discarded"
-        session.add(record)
-        session.commit()
-        raise ReviewBuyMarketClosed(candidate.symbol) from exc
-    except _ENGINE_REFUSALS as exc:
-        record.status = "discarded"
-        record.auto_execute_note = f"Review buy refused: {exc}"
-        session.add(record)
-        session.commit()
-        raise ReviewBuyRefused(str(exc)) from exc
-
+    record, position = _review_buy_hold(session, candidate, settings, data_provider, manual, clock)
     return _finish_review_buy(session, candidate, manual, record, position, old_plan_id, clock)
 
 

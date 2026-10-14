@@ -105,6 +105,8 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
     from app.services.hold_buy_service import check_quality, hold_buy
     from app.services.sleeve_service import build_sleeve_engine
 
+    if not settings.auto_execute_trade_plans:
+        return []  # buying on its own is exactly what that switch turns off
     held = {p.symbol for p in session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()}
     engine = build_sleeve_engine(session, data_provider, settings, hold=True)
     bought: list[str] = []

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useLogout, useSettings, useSettingsStatus } from '../api/hooks';
+import { useLogout, useSettingsStatus } from '../api/hooks';
 import type { SettingsStatus } from '../api/types';
 import logo from '../assets/logo.png';
 import { paletteShortcutLabel } from '../lib/paletteShortcut';
@@ -101,9 +101,8 @@ function ServiceStatus({ status }: { status?: SettingsStatus }) {
 
 export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobileOpen?: boolean; onClose?: () => void; onOpenPalette?: () => void }) {
   const { data: status } = useSettingsStatus();
-  const { data: settings } = useSettings();
-  // Portfolio builder mode: the swing trade-plan screen is not the way positions open any more.
-  const navItems = settings?.hold_mode_enabled ? NAV_ITEMS.filter((i) => i.to !== '/trade-plans') : NAV_ITEMS;
+  // Positions open through the hold buy now; the swing trade-plan screen is no longer in the menu.
+  const navItems = NAV_ITEMS.filter((i) => i.to !== '/trade-plans');
   const { mutate: logout, isPending: loggingOut } = useLogout();
   const renderItem = (item: (typeof NAV_ITEMS)[number]) => (
     <NavLink

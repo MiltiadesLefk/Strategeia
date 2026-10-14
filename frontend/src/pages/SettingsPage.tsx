@@ -1100,8 +1100,8 @@ export function SettingsPage() {
           </div>
         </div>
         <div className="text-muted" style={{ fontSize: 12 }}>
-          Schedule is fixed at 10:00 New York time on trading days, see the scheduler. With Portfolio builder mode on
-          (above), this scan runs the quality gate and hold-buys instead.
+          Schedule is fixed at 10:00 New York time on trading days, see the scheduler. This scan runs the
+          quality gate (see Portfolio builder, above) and hold-buys what passes.
         </div>
         <div>
           <label>Max Concurrent Open Positions</label>

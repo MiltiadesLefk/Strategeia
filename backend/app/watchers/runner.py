@@ -352,8 +352,7 @@ def run_due_watchers(
     candidates = watchers if watchers is not None else all_watchers()
     states = {row.name: row for row in session.exec(select(WatcherState)).all()}
     results: list[WatcherRunResult] = []
-    if settings.hold_mode_enabled:
-        candidates = [w for w in candidates if w.name not in MORNING_ONLY_WATCHERS]
+    candidates = [w for w in candidates if w.name not in MORNING_ONLY_WATCHERS]
     for watcher in due_watchers(candidates, states, now, master_enabled=settings.watchers_enabled):
         if jitter_seconds > 0:
             time.sleep(random.uniform(0, jitter_seconds))

@@ -5,7 +5,6 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 from sqlmodel import Session, select
 
 from app.config import load_app_settings
@@ -27,7 +26,7 @@ from app.services.sleeve_service import mark_all_sleeves
 from app.timeutil import utcnow_naive
 from app.portfolio.missed_trades import refresh_missed_trades
 from app.portfolio.models import PaperPosition
-from app.services.automation_service import run_auto_scan, run_hold_scan, run_market_open_redos
+from app.services.automation_service import run_hold_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
 from app.services.morning_note_service import run_morning_note_if_due
 from app.services.price_alert_service import run_price_alert_check
@@ -111,13 +110,9 @@ def _auto_scan_job() -> None:
         logger.info("Auto-scan skipped: US market closed for %s", us_holiday_name(today))
         return
     data_provider = get_data_provider(settings)
-    llm_provider = get_llm_provider(settings)
     with Session(engine) as session:
         try:
-            if settings.hold_mode_enabled:
-                run_hold_scan(settings, data_provider, session)
-            else:
-                run_auto_scan(settings, data_provider, llm_provider, session)
+            run_hold_scan(settings, data_provider, session)
         except Exception:
             logger.exception("Scheduled auto-scan tick failed")
 
@@ -309,7 +304,6 @@ def _insider_coverage_job() -> None:
 # the ordinary full evaluation, routing to auto-buy or the review queue), review items past their expiry are
 # closed, and held smart-money positions get their event-exit review (an alert, never a sale). A tick with
 # nothing to do is a couple of reads. Evaluations wait for the open, so nothing here fills at a stale price.
-SMART_MONEY_PIPELINE_INTERVAL_MINUTES = 10
 SMART_MONEY_EVENT_REVIEW_INTERVAL_MINUTES = 30
 
 
@@ -428,17 +422,14 @@ def start_scheduler() -> BackgroundScheduler:
         max_instances=1,
         coalesce=True,
     )
-    if settings.hold_mode_enabled:
-        _scheduler.add_job(
-            _morning_fetch_job,
-            CronTrigger(day_of_week="mon-fri", hour=MORNING_FETCH_TIME_ET[0], minute=MORNING_FETCH_TIME_ET[1], timezone=US_MARKET_TZ),
-            id="morning_fetch", max_instances=1, coalesce=True,
-        )
+    _scheduler.add_job(
+        _morning_fetch_job,
+        CronTrigger(day_of_week="mon-fri", hour=MORNING_FETCH_TIME_ET[0], minute=MORNING_FETCH_TIME_ET[1], timezone=US_MARKET_TZ),
+        id="morning_fetch", max_instances=1, coalesce=True,
+    )
     _scheduler.add_job(
         _smart_money_pipeline_job,
-        CronTrigger(day_of_week="mon-fri", hour=HOLD_PIPELINE_TIME_ET[0], minute=HOLD_PIPELINE_TIME_ET[1], timezone=US_MARKET_TZ)
-        if settings.hold_mode_enabled
-        else IntervalTrigger(minutes=SMART_MONEY_PIPELINE_INTERVAL_MINUTES, jitter=WATCHER_TICK_JITTER_SECONDS),
+        CronTrigger(day_of_week="mon-fri", hour=HOLD_PIPELINE_TIME_ET[0], minute=HOLD_PIPELINE_TIME_ET[1], timezone=US_MARKET_TZ),
         id="smart_money_pipeline",
         max_instances=1,
         coalesce=True,

@@ -5,7 +5,6 @@ import type { AppSettings } from '../api/types';
 
 type Draft = Pick<
   AppSettings,
-  | 'hold_mode_enabled'
   | 'hold_buy_only_dips'
   | 'hold_stop_pct'
   | 'hold_alert_drawdown_pct'
@@ -24,8 +23,7 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_max_new_per_scan', label: 'Max new buys per daily scan', hint: 'Keeps one scan from buying the whole list.' },
 ];
 
-/** Portfolio builder (hold mode) controls. Saved on their own button; the mode itself needs a backend restart
- *  to move the schedule (the scan, morning fetch and smart-money timing are registered at startup). */
+/** Portfolio builder controls. Saved on their own button. */
 export function HoldSettingsCard() {
   const { data } = useSettings();
   const { mutate, isPending, isSuccess } = useUpdateSettings();
@@ -34,7 +32,7 @@ export function HoldSettingsCard() {
   useEffect(() => {
     if (data) {
       setDraft({
-        hold_mode_enabled: data.hold_mode_enabled, hold_buy_only_dips: data.hold_buy_only_dips,
+        hold_buy_only_dips: data.hold_buy_only_dips,
         hold_stop_pct: data.hold_stop_pct, hold_alert_drawdown_pct: data.hold_alert_drawdown_pct,
         hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
         hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
@@ -46,16 +44,12 @@ export function HoldSettingsCard() {
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <h3>Portfolio builder (hold mode)</h3>
+      <h3>Portfolio builder</h3>
       <div className="text-muted" style={{ fontSize: 13 }}>
         Buys good stocks and holds them: no target, no time limit. The daily 10:00 New York scan runs a quality check
         (above the 200-day average, growing revenue, profitable, not expensive) and buys what passes at the target weight.
         Smart-money candidates go through the same check; one that fails waits in the review queue. Paper money only.
-        Restart the backend after switching this on or off.
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <ToggleSwitch checked={draft.hold_mode_enabled} onChange={(v) => set('hold_mode_enabled', v)} label="Hold mode" />
-        <span>Hold mode</span>
+        Buying on its own needs Auto-Execute (above) and the Auto-Scan switch below.
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.hold_buy_only_dips} onChange={(v) => set('hold_buy_only_dips', v)} label="Only buy dips" />

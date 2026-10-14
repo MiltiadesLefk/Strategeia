@@ -58,6 +58,17 @@ COMPONENTS = [
 # ---------------------------------------------------------------- fixtures
 
 
+@pytest.fixture(autouse=True)
+def quality_gate_passes(monkeypatch):
+    """The pipeline buys in hold mode, where the quality gate decides. These tests are about routing, sleeves and caps,
+    so the gate passes unless a test patches it or uses the Bearish fake (see test_smart_money_hold.py for the gate itself)."""
+    from app.analysis.quality_gate import GateResult
+    from app.services import hold_buy_service
+
+    # the Bearish fake stands for "a stock that fails the gate" (it used to stand for a bad swing rating)
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(not isinstance(dp, Bearish), []))
+
+
 @pytest.fixture
 def engine():
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -204,35 +215,25 @@ def test_a_good_rating_is_bought_automatically_in_the_auto_sleeve(session, sent)
     assert any("auto-buy" in m and "reported filings" in m and "not a prediction" in m for m in sent)
 
 
-def test_a_bad_rating_goes_to_the_review_queue_not_dropped(session, sent):
+def test_a_stock_that_fails_the_gate_goes_to_the_review_queue_not_dropped(session, sent):
     row = add_candidate(session)
-    assert evaluate(session, row, settings=settings_(min_confidence_for_trade=100)) == STATUS_NEEDS_REVIEW
+    assert evaluate(session, row, provider=Bearish()) == STATUS_NEEDS_REVIEW
     session.refresh(row)
     assert row.status == STATUS_NEEDS_REVIEW and row.reason == "rated_bad"
-    assert row.expires_at == NOW + timedelta(days=REVIEW_EXPIRY_DAYS) or abs((row.expires_at - NOW).days - REVIEW_EXPIRY_DAYS) <= 1
-    plan = session.get(TradePlanRecord, row.plan_id)
-    assert plan.status == "no_trade" and plan.source == "smart_money" and "Confidence too low" in plan.reason
+    assert abs((row.expires_at - NOW).days - REVIEW_EXPIRY_DAYS) <= 1
+    assert "quality gate" in row.reason_detail and row.plan_id is None
     assert positions_in(session, AUTO_SLEEVE_KEY) == []
     text = " ".join(sent)
     assert "waiting for your decision" in text and "not a prediction" in text and "smart money knows" not in text.lower()
 
 
-def test_a_bearish_trend_is_a_no_trade_because_the_account_is_long_only(session, sent):
-    row = add_candidate(session)
-    assert evaluate(session, row, provider=Bearish()) == STATUS_NEEDS_REVIEW
-    plan = session.get(TradePlanRecord, session.get(SmartMoneyCandidate, row.id).plan_id)
-    assert plan.status == "no_trade" and "Long-only" in plan.reason and plan.direction is None
-    assert positions_in(session, AUTO_SLEEVE_KEY) == []
 
-
-def test_a_tradeable_plan_with_auto_execute_off_is_not_dropped(session, sent):
+def test_a_passing_stock_with_auto_execute_off_is_not_dropped(session, sent):
     row = add_candidate(session)
     assert evaluate(session, row, settings=settings_(auto_execute_trade_plans=False)) == STATUS_NEEDS_REVIEW
     session.refresh(row)
-    assert row.reason == "tradeable_not_bought"
-    assert session.get(TradePlanRecord, row.plan_id).status == "pending"
+    assert row.reason == "tradeable_not_bought" and "Auto-execute is off" in row.reason_detail
     assert positions_in(session, AUTO_SLEEVE_KEY) == []
-
 
 @pytest.mark.parametrize("provider,reason", [(Cheap(), "illiquid"), (Thin(), "illiquid"), (NoPrices(), "no_prices")])
 def test_illiquid_or_unpriced_candidates_are_skipped_before_any_evaluation(session, sent, provider, reason):
@@ -249,13 +250,14 @@ def test_an_evaluation_error_is_skipped_with_the_reason(session, sent, monkeypat
     def boom(*a, **k):
         raise RuntimeError("provider exploded")
 
-    monkeypatch.setattr(pipeline, "generate_trade_plan", boom)
+    from app.services import hold_buy_service
+
+    monkeypatch.setattr(hold_buy_service, "check_quality", boom)
     row = add_candidate(session)
     assert evaluate(session, row) == STATUS_SKIPPED
     session.refresh(row)
     assert row.reason == "evaluation_error" and "provider exploded" in row.reason_detail
     assert sent == []
-
 
 def test_run_pipeline_evaluates_every_new_candidate_and_leaves_decided_ones_alone(session, sent):
     add_candidate(session, "AAA")
@@ -267,21 +269,14 @@ def test_run_pipeline_evaluates_every_new_candidate_and_leaves_decided_ones_alon
     assert done.status == STATUS_SKIPPED and done.plan_id is None
 
 
-def test_the_candidate_never_sets_direction_size_stop_or_targets(session, sent):
-    """Two evaluations of the same data, one with a candidate behind it and one without, make the same plan."""
-    from app.services.trade_plan_service import generate_trade_plan
-
-    row = add_candidate(session, score=9.0)
-    evaluate(session, row)
-    smart = session.get(TradePlanRecord, session.get(SmartMoneyCandidate, row.id).plan_id)
-    plain = generate_trade_plan(
-        "AAA", 100_000.0, 1.0, FakeUniverseProvider(), NullLLMProvider(), session, allow_auto_execute=False,
-        settings=settings_(),
-    )
-    assert (smart.direction, smart.entry, smart.stop, smart.tp1, smart.suggested_shares, smart.confidence_score) == (
-        plain.direction, plain.entry, plain.stop, plain.tp1, plain.suggested_shares, plain.confidence_score
-    )
-
+def test_the_score_never_sets_size_or_stop(session, sent):
+    """A weak and a strong candidate on the same stock get the same size and stop: the score only picks what is looked at."""
+    sizes = []
+    for symbol, score in (("AAA", 3.0), ("BBB", 12.0)):
+        evaluate(session, add_candidate(session, symbol, score=score))
+        position = session.exec(select(PaperPosition).where(PaperPosition.symbol == symbol)).one()
+        sizes.append((position.shares, round(position.stop_loss / position.entry_price, 4), position.mode))
+    assert sizes[0] == sizes[1] and sizes[0][2] == "hold"
 
 # ---------------------------------------------------------------- market closed
 
@@ -378,7 +373,7 @@ def test_the_open_position_cap_is_per_sleeve_and_other_sleeves_do_not_count(sess
     assert evaluate(session, second, settings=s) == STATUS_NEEDS_REVIEW
     session.refresh(second)
     assert "smart_money_max_open_positions" in second.reason_detail
-    assert session.get(TradePlanRecord, second.plan_id).status == "pending"  # a good plan, held for a person
+    assert second.plan_id is None  # nothing was bought: held for a person
 
 
 def test_the_new_per_week_cap_counts_recent_opens_even_if_closed(session, sent):
@@ -424,7 +419,7 @@ def client(engine):
 
 def queue_item(session, symbol="AAA") -> SmartMoneyCandidate:
     row = add_candidate(session, symbol)
-    evaluate(session, row, settings=settings_(min_confidence_for_trade=100))
+    evaluate(session, row, provider=Bearish())
     session.refresh(row)
     assert row.status == STATUS_NEEDS_REVIEW
     return row
@@ -442,8 +437,8 @@ def test_the_review_list_keeps_the_contract_the_frontend_relies_on(client, sessi
         assert key in item, key
     assert item["id"] == row.id and item["status"] == "needs_review" and item["score"] == 5.5
     assert item["components"][0].keys() >= {"source", "points", "reason"}
-    assert item["rating"].keys() >= {"confidence_score", "confidence_points", "confidence_points_max", "verdict_text"}
-    assert "Confidence too low" in item["reasons_declined"][0]
+    assert item["rating"] is None  # hold mode: no swing rating, the quality gate's reasons are shown instead
+    assert "quality gate" in item["reasons_declined"][0]
     assert item["market_open"] is True
     assert "Reported filings" in item["delay_note"] and "knows" not in item["delay_note"].lower()
     assert item["decided_by"] is None and item["plan_id"] == row.plan_id
@@ -465,7 +460,7 @@ def test_the_list_filters_by_status_and_get_writes_nothing(client, session, sent
 
 def test_buy_opens_a_position_in_the_manual_sleeve_even_for_a_bad_rating(client, session, sent):
     row = queue_item(session)
-    old_plan_id = row.plan_id
+    assert row.plan_id is None
     resp = client.post(f"/api/smart-money/review/{row.id}/buy")
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -476,9 +471,6 @@ def test_buy_opens_a_position_in_the_manual_sleeve_even_for_a_bad_rating(client,
     session.expire_all()
     plan = session.get(TradePlanRecord, body["plan_id"])
     assert plan.status == "executed" and plan.source == "smart_money_review" and plan.smart_money_candidate_id == row.id
-    # the bad-rated plan that sent it to the queue is superseded: it must not stay in the missed-trades ledger
-    old = session.get(TradePlanRecord, old_plan_id)
-    assert old.status == "discarded" and classify_plan(old) is None
 
 
 def test_buy_is_refused_when_the_sleeve_cap_is_full(client, session, sent):
@@ -494,14 +486,6 @@ def test_buy_is_refused_when_the_sleeve_cap_is_full(client, session, sent):
     assert row.status == STATUS_NEEDS_REVIEW  # nothing changed: the person can still skip
 
 
-def test_buy_is_refused_when_there_is_no_long_trade(client, session, sent):
-    row = queue_item(session)
-    app.dependency_overrides[get_data_provider] = lambda: Bearish()
-    resp = client.post(f"/api/smart-money/review/{row.id}/buy")
-    assert resp.status_code == 409 and "no long trade" in resp.json()["detail"].lower()
-    assert positions_in(session, MANUAL_SLEEVE_KEY) == []
-    session.refresh(row)
-    assert row.status == STATUS_NEEDS_REVIEW
 
 
 def test_buy_is_refused_for_a_duplicate_in_the_sleeve_and_for_decided_or_unknown_items(client, session, sent):
@@ -590,30 +574,8 @@ def test_review_items_expire_after_the_review_window_and_cancel_a_queued_buy(ses
 # ---------------------------------------------------------------- hindsight (missed-trades ledger)
 
 
-def test_smart_money_plans_are_tagged_in_the_missed_trade_report(session, sent):
-    row = queue_item(session)
-    report = build_missed_trade_report(session)
-    item = next(t for t in report.trades if t.plan_id == row.plan_id)
-    assert item.source == "smart_money"
 
 
-def test_skipped_and_expired_review_items_feed_the_hindsight_report_apart(session, sent):
-    skipped = queue_item(session, "AAA")
-    expired = queue_item(session, "BBB")
-    waiting = queue_item(session, "CCC")
-    review.skip_review_item(session, skipped.id)
-    expired.status = STATUS_EXPIRED
-    session.add(expired)
-    session.commit()
-    session.add(MissedTradeOutcome(plan_id=skipped.plan_id, symbol="AAA", category="low_confidence", status=OUTCOME_RESOLVED,
-                                   r_multiple=1.5, exit_reason="tp1_hit"))
-    session.commit()
-    groups = {g.key: g for g in review.hindsight(session).groups}
-    assert groups["user_skipped"].n == 1 and groups["user_skipped"].resolved == 1 and groups["user_skipped"].wins == 1
-    assert groups["user_skipped"].avg_r == pytest.approx(1.5) and groups["user_skipped"].small_sample is True
-    assert groups["expired"].n == 1 and groups["expired"].resolved == 0 and groups["expired"].awaiting == 1
-    assert groups["undecided"].n == 1
-    assert waiting.id  # still waiting
 
 
 def test_a_bought_item_is_not_counted_as_a_missed_trade(client, session, sent):

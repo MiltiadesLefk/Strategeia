@@ -563,7 +563,7 @@ def test_scheduled_auto_scan_skips_market_holidays(monkeypatch):
 
     calls = []
     monkeypatch.setattr(scheduler, "load_app_settings", lambda: AppSettings(auto_scan_enabled=True))
-    monkeypatch.setattr(scheduler, "run_auto_scan", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(scheduler, "run_hold_scan", lambda *a, **k: calls.append(a))
     monkeypatch.setattr(scheduler, "get_data_provider", lambda settings: None)
     monkeypatch.setattr(scheduler, "get_llm_provider", lambda settings: None)
 

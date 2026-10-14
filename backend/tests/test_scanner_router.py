@@ -30,7 +30,7 @@ def test_auto_trade_cooldown_rejects_immediate_repeat_call(monkeypatch):
     auto-execute a real paper position per qualifying symbol) and had no
     guard at all against being called in a tight loop."""
     monkeypatch.setattr(scanner_router, "_last_auto_trade_run_monotonic", None)
-    monkeypatch.setattr(scanner_router, "run_auto_scan", lambda *a, **k: AutoScanOutcome())
+    monkeypatch.setattr(scanner_router, "run_hold_scan", lambda *a, **k: [])
 
     settings = AppSettings()
     first = scanner_router.run_auto_trade_now(data_provider=None, llm_provider=None, settings=settings, session=None)

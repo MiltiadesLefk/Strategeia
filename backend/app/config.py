@@ -742,9 +742,7 @@ class AppSettings(BaseModel):
     hold_alert_drawdown_pct: float = 15.0
     # Size of one hold buy, % of the account (target weight).
     hold_target_weight_pct: float = 4.5
-    # Portfolio-builder daily scan: when on, the 10:00 ET scan runs the quality gate over the
-    # watchlist and hold-buys each pass (instead of swing plans). Off by default.
-    hold_mode_enabled: bool = False
+    # The daily 10:00 ET scan runs the quality gate over the watchlist and hold-buys each pass.
     # Buy a stock that passes the gate only while it is also in a dip (analysis/quality_gate.is_dip).
     hold_buy_only_dips: bool = False
     # Position caps for hold mode (about 15-20 names at 4-5% each), new buys per scan.

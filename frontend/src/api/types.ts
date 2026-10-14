@@ -500,7 +500,6 @@ export interface AppSettings {
   /** Opt-in: TP1 sells part of the position and the rest runs to TP2 (default off). */
   scale_out_enabled: boolean;
   /** Portfolio builder (hold mode) settings. */
-  hold_mode_enabled: boolean;
   hold_buy_only_dips: boolean;
   hold_stop_pct: number;
   hold_alert_drawdown_pct: number;
@@ -594,7 +593,6 @@ export interface SettingsUpdateRequest {
   liquidity_slippage_enabled?: boolean;
   liquidity_slippage_coefficient?: number;
   scale_out_enabled?: boolean;
-  hold_mode_enabled?: boolean;
   hold_buy_only_dips?: boolean;
   hold_stop_pct?: number;
   hold_alert_drawdown_pct?: number;

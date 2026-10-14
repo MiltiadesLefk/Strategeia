@@ -11,7 +11,7 @@ from app.data_providers.base import DataProvider
 from app.data_providers.universe import get_default_watchlist, load_universe
 from app.llm_providers.base import LLMProvider
 from app.schemas.scan_schemas import AutoScanResponse, ScanResponse
-from app.services.automation_service import run_auto_scan
+from app.services.automation_service import run_hold_scan
 from app.services.scanner_service import scan_symbols
 
 router = APIRouter(prefix="/api", tags=["scanner"], dependencies=[Depends(require_auth)])
@@ -54,7 +54,7 @@ def run_auto_trade_now(
     session: Session = Depends(get_session),
 ) -> AutoScanResponse:
     """Manual trigger for the same scan -> generate -> execute pipeline the
-    scheduler runs 3x/day (Asia/London/New York session opens) — runs
+    scheduler runs once a day at 10:00 New York time (the quality check, then a hold buy) — runs
     immediately regardless of whether the unattended `auto_scan_enabled`
     toggle is on, same relationship "Rescan" has to the read-only scan
     endpoint above.
@@ -79,5 +79,5 @@ def run_auto_trade_now(
             )
     _last_auto_trade_run_monotonic = now
 
-    outcome = run_auto_scan(settings, data_provider, llm_provider, session)
-    return AutoScanResponse(generated=outcome.generated, no_trade=outcome.no_trade)
+    bought = run_hold_scan(settings, data_provider, session)
+    return AutoScanResponse(generated=bought, no_trade=[])

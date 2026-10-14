@@ -83,7 +83,6 @@ class SettingsUpdateRequest(BaseModel):
     hold_stop_pct: float | None = Field(default=None, ge=0, le=60)
     hold_alert_drawdown_pct: float | None = Field(default=None, ge=0, le=60)
     hold_target_weight_pct: float | None = Field(default=None, gt=0, le=25)
-    hold_mode_enabled: bool | None = None
     hold_buy_only_dips: bool | None = None
     hold_max_positions: int | None = Field(default=None, ge=1, le=100)
     hold_max_per_sector: int | None = Field(default=None, ge=1, le=50)
