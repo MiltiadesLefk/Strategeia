@@ -486,6 +486,44 @@ class PaperTradingEngine:
         self._session.refresh(position)  # _record_equity_snapshot()'s commit expires attributes
         return position
 
+    def add_to_hold_position(self, position: PaperPosition, shares: int) -> PaperPosition:
+        """Buy more of an open hold position: one row stays, its entry price becomes the average cost.
+        The stop level is unchanged. Same session, sleeve, stale-quote, cash and ADV checks as a first buy."""
+        if position.mode != "hold" or position.status != "open" or position.direction != "long":
+            raise ValueError("Only an open long hold position can be added to.")
+        if not self._owns(position):
+            raise ValueError(f"Position {position.id} belongs to another sleeve; add through that sleeve's engine.")
+        now = self.now()
+        if not is_market_open_for(position.symbol, now):
+            raise MarketClosedError(
+                f"The US market is closed ({us_closure_reason(now)}), so {position.symbol} can't be bought at a real price. "
+                f"It reopens {format_market_time(next_us_open(now))}."
+            )
+        sleeve = self._sleeve_row()
+        if not sleeve.enabled:
+            raise SleeveDisabledError(f"The '{sleeve.name}' sleeve is disabled, so it opens no new positions.")
+        with fresh_data_only():
+            quote = float(self._data_provider.get_quote(position.symbol).price)
+        price = self._resolve_entry_price(position.symbol, quote, "long")
+        account = self.get_account_state()
+        available = self._available_cash(account) - self._commission_per_trade
+        shares = min(shares, math.floor(available / price) if price > 0 else 0)
+        shares = self._cap_by_liquidity(position.symbol, shares)
+        if shares <= 0:
+            raise InsufficientCashError(f"Can't add to {position.symbol} at ${price:.2f} (available cash: ${available:.2f}).")
+        account.current_cash -= shares * price + self._commission_per_trade
+        total = position.shares + shares
+        position.entry_price = (position.shares * position.entry_price + shares * price) / total
+        position.shares = total
+        position.fees_paid = (position.fees_paid or 0.0) + self._commission_per_trade
+        self._session.add(position)
+        self._session.add(account)
+        self._session.commit()
+        self._session.refresh(position)
+        self._record_equity_snapshot()
+        self._session.refresh(position)  # _record_equity_snapshot()'s commit expires attributes
+        return position
+
     def _resolve_entry_price(self, symbol: str, planned_entry: float, direction: str) -> float:
         """Fills at the CURRENT market, not at whatever the plan was built on
         however long ago — and refuses outright once the two have diverged

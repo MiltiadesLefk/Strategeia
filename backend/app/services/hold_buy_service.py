@@ -72,6 +72,19 @@ def hold_buy(
     return engine.open_position(plan, mode="hold")
 
 
+def hold_add(
+    session: Session, engine: PaperTradingEngine, data_provider: DataProvider, settings: AppSettings, position: PaperPosition
+) -> PaperPosition:
+    """Top a held stock back up toward the target weight (one more slice of what is missing, never above it)."""
+    with fresh_data_only():
+        price = float(data_provider.get_quote(position.symbol).price)
+    target = hold_shares(account_value(session, engine), settings.hold_target_weight_pct, price)
+    missing = target - position.shares
+    if missing <= 0:
+        raise InsufficientCashError(f"{position.symbol} is already at or above its {settings.hold_target_weight_pct:g}% target weight.")
+    return engine.add_to_hold_position(position, missing)
+
+
 def check_quality(data_provider: DataProvider, symbol: str) -> GateResult:
     """Fetch what the gate reads (fresh data only) and run it. A failed fetch is a failed check."""
     with fresh_data_only():

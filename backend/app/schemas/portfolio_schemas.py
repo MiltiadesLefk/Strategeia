@@ -75,6 +75,10 @@ class HoldBuyRequest(BaseModel):
     symbol: str
 
 
+class HoldAddRequest(BaseModel):
+    position_id: int
+
+
 class ClosePositionRequest(BaseModel):
     reason: str = "manual"
 

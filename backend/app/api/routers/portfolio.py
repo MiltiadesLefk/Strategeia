@@ -36,6 +36,7 @@ from app.portfolio.sleeves import (
 from app.portfolio.stats import compute_portfolio_stats
 from app.schemas.portfolio_schemas import (
     ClosePositionRequest,
+    HoldAddRequest,
     HoldBuyRequest,
     EquityPointSchema,
     OpenPositionRequest,
@@ -200,6 +201,29 @@ def holdings(
     return compute_holdings(
         session, data_provider, read_scope(session, sleeve), settings.hold_target_weight_pct, settings.paper_starting_cash
     )
+
+
+@router.post("/hold-add", response_model=PositionSchema)
+def hold_add_endpoint(
+    req: HoldAddRequest,
+    session: Session = Depends(get_session),
+    data_provider: DataProvider = Depends(get_data_provider),
+    settings: AppSettings = Depends(get_app_settings),
+) -> PositionSchema:
+    """Buy up to the target weight in a held stock (averages the cost basis)."""
+    from app.services.hold_buy_service import hold_add
+
+    position = session.get(PaperPosition, req.position_id)
+    if position is None or position.status != "open" or position.mode != "hold":
+        raise HTTPException(status_code=404, detail="No open hold position with that id")
+    engine = _engine_for_sleeve_id(session, data_provider, settings, position.sleeve_id)
+    try:
+        position = hold_add(session, engine, data_provider, settings, position)
+    except MarketClosedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (InsufficientCashError, SleeveDisabledError, StalePlanError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return position_to_schema(position, plan_strategy_versions(session, [position.trade_plan_id]), _sleeve_keys(session))
 
 
 @router.post("/hold-buy", response_model=PositionSchema)

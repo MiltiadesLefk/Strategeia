@@ -89,3 +89,18 @@ def test_hold_scan_can_buy_only_dips(session, monkeypatch):
     monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
     monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(True, [], dip=symbol == "BBB"))
     assert automation_service.run_hold_scan(AppSettings(hold_buy_only_dips=True), Provider(), session) == ["BBB"]
+
+
+def test_add_averages_the_cost_and_stops_at_target(session):
+    from app.services.hold_buy_service import hold_add
+
+    provider, settings = Provider(), AppSettings(hold_target_weight_pct=5.0)
+    engine = PaperTradingEngine(session, provider, 100_000.0)
+    p = hold_buy(session, engine, provider, AppSettings(hold_target_weight_pct=2.5), "NOVA")  # 25 shares at 100
+    assert p.shares == 25
+    provider.price = 110.0
+    p = hold_add(session, engine, provider, settings, p)
+    assert p.shares > 25 and p.entry_price == pytest.approx((25 * 100.0 + (p.shares - 25) * 110.0) / p.shares, rel=1e-3)
+    assert p.stop_loss == pytest.approx(75.0)
+    with pytest.raises(InsufficientCashError):  # now at target
+        hold_add(session, engine, provider, settings, p)
