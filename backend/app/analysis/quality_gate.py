@@ -18,6 +18,18 @@ MA_DAYS = 200
 MIN_REVENUE_GROWTH_PCT = 0.0
 
 
+# The dip rule (PORTOFOLIO_BUILDER O3): a good stock at least this % below its high of the last
+# DIP_LOOKBACK trading days (about 3 months). Price only, no AI.
+DIP_PCT = 10.0
+DIP_LOOKBACK = 63
+
+
+def is_dip(closes: list[float]) -> bool:
+    """The latest close is DIP_PCT or more under the highest close of the last DIP_LOOKBACK days."""
+    window = closes[-DIP_LOOKBACK:]
+    return len(window) >= DIP_LOOKBACK and window[-1] <= max(window) * (1 - DIP_PCT / 100)
+
+
 @dataclass
 class GateCheck:
     name: str
@@ -29,6 +41,7 @@ class GateCheck:
 class GateResult:
     passed: bool
     checks: list[GateCheck]
+    dip: bool = False  # price-only: see is_dip
 
     @property
     def failed_reasons(self) -> list[str]:
@@ -68,4 +81,4 @@ def evaluate_quality_gate(
         points, reasons = score_valuation("long", overview, financial_years)
         checks.append(GateCheck("valuation", points >= 0, "; ".join(reasons) or "not expensive on earnings"))
 
-    return GateResult(all(c.ok for c in checks), checks)
+    return GateResult(all(c.ok for c in checks), checks, dip=is_dip(closes))

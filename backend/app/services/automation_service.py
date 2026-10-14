@@ -112,9 +112,11 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         if len(bought) >= settings.hold_max_new_per_scan:
             break
         try:
-            if not check_quality(data_provider, symbol).passed:
+            gate = check_quality(data_provider, symbol)
+            if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
                 continue
-            hold_buy(session, engine, data_provider, settings, symbol, reason="hold scan: passed the quality gate")
+            hold_buy(session, engine, data_provider, settings, symbol,
+                     reason="hold scan: passed the quality gate" + (" and is in a dip" if gate.dip else ""))
             bought.append(symbol)
         except MarketClosedError:
             logger.info("Hold scan stopped: the market is closed")

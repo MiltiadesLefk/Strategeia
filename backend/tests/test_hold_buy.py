@@ -79,3 +79,13 @@ def test_one_daily_scan_job():
     from app.scheduler import AUTO_SCAN_SESSION_TIMES_ET
 
     assert AUTO_SCAN_SESSION_TIMES_ET == [("open", 10, 0)]
+
+
+def test_hold_scan_can_buy_only_dips(session, monkeypatch):
+    from app.analysis.quality_gate import GateResult
+    from app.services import automation_service, hold_buy_service
+
+    monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: ["AAA", "BBB"])
+    monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(True, [], dip=symbol == "BBB"))
+    assert automation_service.run_hold_scan(AppSettings(hold_buy_only_dips=True), Provider(), session) == ["BBB"]

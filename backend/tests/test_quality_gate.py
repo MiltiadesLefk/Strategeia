@@ -31,3 +31,14 @@ def test_each_failure_is_named():
 def test_missing_data_fails_never_guesses():
     r = verdict(closes=RISING[: MA_DAYS - 1], overview=None, financial_years=[])
     assert not r.passed and len(r.failed_reasons) == 4
+
+
+def test_dip_needs_ten_percent_under_the_three_month_high():
+    from app.analysis.quality_gate import DIP_LOOKBACK, is_dip
+
+    flat = [100.0] * DIP_LOOKBACK
+    assert not is_dip(flat)
+    assert not is_dip(flat[:-1] + [95.0])
+    assert is_dip(flat[:-1] + [90.0])
+    assert not is_dip([50.0] * (DIP_LOOKBACK - 1))  # not enough history
+    assert verdict().dip is False

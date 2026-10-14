@@ -70,6 +70,7 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_alert_drawdown_pct": "hold drawdown alert %",
     "hold_target_weight_pct": "hold target weight %",
     "hold_mode_enabled": "hold mode scan",
+    "hold_buy_only_dips": "hold buys only dips",
     "hold_max_positions": "hold max positions",
     "hold_max_per_sector": "hold max per sector",
     "hold_max_new_per_scan": "hold max new per scan",
