@@ -461,3 +461,14 @@ V5 V3+SPY>200d bad year 2022: variant 6m avg -2.0% vs universe +0.4% -> LOSES MO
 V5 V3+SPY>200d bad year 2025: variant 6m avg +20.6% vs universe +9.1% -> ok
 ==> V5 V3+SPY>200d: no evidence
 ```
+
+## Officer-only insider buying and the look-back window (`insider_officer_run.py`, 2022-07 to 2026-03 events)
+Rules were fixed before the run. Data: SEC Insider Transactions Data Sets (open-market buys, Form 4), prices from the local history store.
+Four variants: purchases by officers or by any insider, summed over 90 or 180 days, event when the sum reaches $100,000; one event per
+ticker per 180 days. Compared with SPY, the average liquid stock and 1,000 random baskets, as above.
+- **No variant counts as working.** Officer 90d at 3m: +2.73% over the average stock (interval +0.89% to +4.58%, basket percentile 64.4, just
+  under the 65 bar); at 6m +0.78% with the interval across zero. All four trail SPY at 6m.
+- Officers did not beat all insiders over the same window (3m about +1 point, 6m about -0.3 to -0.6 points), and 180 days was no better than 90.
+- Inside today's S&P 500 list every variant looks better (all insiders, 90d, 6m: +5.86% over the average stock, interval +3.77% to +7.96%); that
+  list is today's members, so it favours winners. About half of the event tickers had no prices (delisted or renamed), so survivors are
+  overrepresented. Purchases are not netted against sales here, unlike the live rule.
