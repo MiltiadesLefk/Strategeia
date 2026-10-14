@@ -8,6 +8,7 @@ import { SecretField } from '../components/SecretField';
 import { DecisionModelField } from '../components/DecisionModelField';
 import { decisionModelInvalid } from '../lib/decisionModel';
 import { CLAUDE_MODEL_PRESETS, ModelSelect } from '../components/ModelSelect';
+import { HoldSettingsCard } from '../components/HoldSettingsCard';
 import { DataCacheCard } from '../components/DataCacheCard';
 import { DataSourcesCard } from '../components/DataSourcesCard';
 import { WatchersCard } from '../components/WatchersCard';
@@ -1077,10 +1078,12 @@ export function SettingsPage() {
         </div>
       </div>
 
+      <HoldSettingsCard />
+
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>Unattended Auto-Scan</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
-          Closes the full loop: 3 times a day (Asia, London, and New York session opens), fully evaluates every
+          Closes the full loop: once a day at 10:00 New York time, fully evaluates every
           symbol in the scan universe (the top of your Watchlist) — price, volume, indicators, fundamentals, news, earnings — and either
           generates (and, if Auto-Execute above is on, opens) a trade plan or explicitly records "no trade" with a
           reason. Off by default; unlike Auto-Execute, this decides which symbols to trade with no human in the loop
@@ -1097,8 +1100,8 @@ export function SettingsPage() {
           </div>
         </div>
         <div className="text-muted" style={{ fontSize: 12 }}>
-          Schedule is fixed at 00:00, 08:00, and 13:30 UTC (Asia/London/New York session opens) — not configurable
-          per-account, see the scheduler.
+          Schedule is fixed at 10:00 New York time on trading days, see the scheduler. With Portfolio builder mode on
+          (above), this scan runs the quality gate and hold-buys instead.
         </div>
         <div>
           <label>Max Concurrent Open Positions</label>

@@ -499,6 +499,15 @@ export interface AppSettings {
   liquidity_slippage_coefficient: number;
   /** Opt-in: TP1 sells part of the position and the rest runs to TP2 (default off). */
   scale_out_enabled: boolean;
+  /** Portfolio builder (hold mode) settings. */
+  hold_mode_enabled: boolean;
+  hold_buy_only_dips: boolean;
+  hold_stop_pct: number;
+  hold_alert_drawdown_pct: number;
+  hold_target_weight_pct: number;
+  hold_max_positions: number;
+  hold_max_per_sector: number;
+  hold_max_new_per_scan: number;
   /** Share of the position sold at TP1 (0.1 to 0.9). */
   scale_out_fraction: number;
   /** Where the remainder's stop goes after TP1: its entry price, or trailing behind the best price. */
@@ -585,6 +594,14 @@ export interface SettingsUpdateRequest {
   liquidity_slippage_enabled?: boolean;
   liquidity_slippage_coefficient?: number;
   scale_out_enabled?: boolean;
+  hold_mode_enabled?: boolean;
+  hold_buy_only_dips?: boolean;
+  hold_stop_pct?: number;
+  hold_alert_drawdown_pct?: number;
+  hold_target_weight_pct?: number;
+  hold_max_positions?: number;
+  hold_max_per_sector?: number;
+  hold_max_new_per_scan?: number;
   scale_out_fraction?: number;
   scale_out_stop_mode?: ScaleOutStopMode;
   scale_out_trail_r?: number;

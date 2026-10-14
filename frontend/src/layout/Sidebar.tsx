@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useLogout, useSettingsStatus } from '../api/hooks';
+import { useLogout, useSettings, useSettingsStatus } from '../api/hooks';
 import type { SettingsStatus } from '../api/types';
 import logo from '../assets/logo.png';
 import { paletteShortcutLabel } from '../lib/paletteShortcut';
@@ -101,6 +101,9 @@ function ServiceStatus({ status }: { status?: SettingsStatus }) {
 
 export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobileOpen?: boolean; onClose?: () => void; onOpenPalette?: () => void }) {
   const { data: status } = useSettingsStatus();
+  const { data: settings } = useSettings();
+  // Portfolio builder mode: the swing trade-plan screen is not the way positions open any more.
+  const navItems = settings?.hold_mode_enabled ? NAV_ITEMS.filter((i) => i.to !== '/trade-plans') : NAV_ITEMS;
   const { mutate: logout, isPending: loggingOut } = useLogout();
   const renderItem = (item: (typeof NAV_ITEMS)[number]) => (
     <NavLink
@@ -163,7 +166,7 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
       )}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
         <div className="sidebar-section">Menu</div>
-        {NAV_ITEMS.filter((i) => i.to !== '/settings').map(renderItem)}
+        {navItems.filter((i) => i.to !== '/settings').map(renderItem)}
         <div className="sidebar-section">System</div>
         {NAV_ITEMS.filter((i) => i.to === '/settings').map(renderItem)}
       </nav>
