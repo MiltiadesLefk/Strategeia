@@ -35,6 +35,7 @@ from app.services.kill_switch_service import evaluate_kill_switches
 from app.services.telegram_service import notify as telegram_notify
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
 from app.services.thesis_service import run_thesis_sweep
+from app.services.insider_coverage_service import run_insider_coverage_tick
 from app.watchers.runner import run_due_watchers
 
 logger = logging.getLogger(__name__)
@@ -269,6 +270,22 @@ def _watchers_job() -> None:
         logger.exception("Scheduled watchers tick failed")
 
 
+INSIDER_COVERAGE_INTERVAL_MINUTES = 10
+
+
+def _insider_coverage_job() -> None:
+    try:
+        settings = load_app_settings()
+        if not settings.watchers_enabled or is_simulated():
+            return
+        from app.data_providers.universe import load_universe
+
+        with Session(engine) as session:
+            run_insider_coverage_tick(session, [e.symbol for e in load_universe()])
+    except Exception:
+        logger.exception("Insider coverage tick failed")
+
+
 # Smart-money pipeline: every few minutes the candidates the tracker flagged are evaluated (liquidity floor,
 # the ordinary full evaluation, routing to auto-buy or the review queue), review items past their expiry are
 # closed, and held smart-money positions get their event-exit review (an alert, never a sale). A tick with
@@ -357,6 +374,14 @@ def start_scheduler() -> BackgroundScheduler:
         minutes=settings.watchers_poll_minutes,
         jitter=WATCHER_TICK_JITTER_SECONDS,
         id="watchers",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _insider_coverage_job,
+        "interval",
+        minutes=INSIDER_COVERAGE_INTERVAL_MINUTES,
+        id="insider_coverage",
         max_instances=1,
         coalesce=True,
     )

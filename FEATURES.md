@@ -2388,6 +2388,8 @@ The button asks SEC for the watchlist's filings, a few symbols per click (symbol
 a new symbol, 14 days for one already stored). Click again while it says symbols are waiting. If the install still uses the
 placeholder SEC contact the page notes it (set `SEC_EDGAR_USER_AGENT`).
 
+**Filled in automatically.** With the Watchers switch on, a job runs every 10 minutes and loads a year of Form 4 filings for every watchlist symbol that has none stored (a new symbol, or a fresh install), a few symbols per pass within SEC's rate limit. Once a day it re-reads the days since each symbol's last pass (with 3 days of overlap) so time with the app down leaves no gap; the 5-minute SEC watcher still picks up new filings as they appear. A symbol is marked covered only after a clean load, so a failure is retried on the next pass.
+
 **Limits.** Only symbols you have loaded appear. Buys by an insider with no price in the filing add to the count but not
 to the value. Two buys by the same person never form a cluster.
 

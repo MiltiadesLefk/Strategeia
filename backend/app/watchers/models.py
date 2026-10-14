@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
 from sqlalchemy import JSON, Column
@@ -34,3 +34,13 @@ class WatcherState(SQLModel, table=True):
     # smart_money (universe scope): companies of the watchlist not yet read in the current round. A watchlist
     # bigger than `smart_money_max_companies_per_poll` is read over several polls, then the round starts again.
     universe_cursor: Optional[list[int]] = Field(default=None, sa_column=Column(JSON, nullable=True))
+
+
+class InsiderCoverage(SQLModel, table=True):
+    """How much Form 4 history is stored for a symbol: every filing from `covered_from` through
+    `covered_through` was loaded. A symbol with no insider trades looks the same as one never loaded,
+    so the stored rows can't say; this row does."""
+
+    symbol: str = Field(primary_key=True)
+    covered_from: date
+    covered_through: date
