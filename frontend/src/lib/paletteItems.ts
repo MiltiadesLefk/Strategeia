@@ -13,7 +13,6 @@ export const MAX_PALETTE_ROWS = 12;
 // every page and action off the list.
 const MAX_SYMBOL_ROWS = 8;
 // "Generate trade plan for X" is offered for the best few matches only.
-const MAX_PLAN_ROWS = 2;
 // Pages and actions are shown for a query only when they match at least this
 // well, so one stray letter doesn't surface "Settings" under every symbol.
 const MIN_COMMAND_SCORE = 400;
@@ -38,13 +37,11 @@ export const NAV_COMMANDS: { to: string; label: string; keywords: string }[] = [
   { to: '/', label: 'Dashboard', keywords: 'home overview summary' },
   { to: '/scan', label: 'Market Scan', keywords: 'scanner setups signals watchlist' },
   { to: '/analysis', label: 'Analysis', keywords: 'chart technical fundamentals news research' },
-  { to: '/trade-plans', label: 'Trade Plans', keywords: 'plan generate entry stop target' },
   { to: '/portfolio', label: 'Portfolio', keywords: 'positions paper account equity pnl' },
   { to: '/settings', label: 'Settings', keywords: 'config providers ai telegram watchlist' },
 ];
 
 export const analysisHref = (symbol: string) => `/analysis?symbol=${encodeURIComponent(symbol)}`;
-export const tradePlanHref = (symbol: string) => `/trade-plans?symbol=${encodeURIComponent(symbol)}`;
 
 function symbolItem(entry: SearchableSymbol, section: PaletteSection): PaletteItem {
   return {
@@ -54,7 +51,6 @@ function symbolItem(entry: SearchableSymbol, section: PaletteSection): PaletteIt
     detail: [entry.name, entry.sector].filter(Boolean).join(' · '),
     to: analysisHref(entry.symbol),
     symbol: entry.symbol,
-    shiftTo: tradePlanHref(entry.symbol),
   };
 }
 
@@ -83,14 +79,6 @@ export function buildPaletteItems<T extends SearchableSymbol>(
 
   const symbols = searchSymbolsScored(index, q, MAX_SYMBOL_ROWS);
   const symbolRows = symbols.map((s) => symbolItem(s.entry, 'Symbols'));
-  const planRows: PaletteItem[] = symbols.slice(0, MAX_PLAN_ROWS).map(({ entry }) => ({
-    id: `plan:${entry.symbol}`,
-    section: 'Actions',
-    label: `Generate trade plan for ${entry.symbol}`,
-    detail: `Opens Trade Plans with ${entry.symbol} selected`,
-    to: tradePlanHref(entry.symbol),
-    symbol: entry.symbol,
-  }));
   const pages = navItems(q).sort((a, b) => b.score - a.score);
   const pageRows = pages.map((r) => r.item);
 
@@ -99,6 +87,6 @@ export function buildPaletteItems<T extends SearchableSymbol>(
   // ties, since they are what the palette is for. The trade-plan actions
   // follow the symbols they belong to.
   const symbolsLead = (symbols[0]?.score ?? 0) >= (pages[0]?.score ?? 0);
-  const ordered = symbolsLead ? [...symbolRows, ...planRows, ...pageRows] : [...pageRows, ...symbolRows, ...planRows];
+  const ordered = symbolsLead ? [...symbolRows, ...pageRows] : [...pageRows, ...symbolRows];
   return ordered.slice(0, MAX_PALETTE_ROWS);
 }

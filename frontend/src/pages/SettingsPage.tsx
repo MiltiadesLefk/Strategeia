@@ -20,7 +20,7 @@ import { KillSwitchSettingsCard } from '../components/KillSwitchSettingsCard';
 import { CommitteeSettingsCard } from '../components/CommitteeSettingsCard';
 import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
-import type { AiOverlayObjectionAction, ResearchMode, ScaleOutStopMode, TestConnectionOverrides } from '../api/types';
+import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
 
 const SETTINGS_TABS = [
   { value: 'general', label: 'General', help: 'How the app shows times.' },
@@ -183,13 +183,8 @@ export function SettingsPage() {
   const [maxConcurrentPositions, setMaxConcurrentPositions] = useState(5);
   const [minConfidence, setMinConfidence] = useState(30);
   const [markToMarketMinutes, setMarkToMarketMinutes] = useState(15);
-  const [maxHoldingDays, setMaxHoldingDays] = useState(20);
   const [liquiditySlippage, setLiquiditySlippage] = useState(false);
   const [liquidityCoefficient, setLiquidityCoefficient] = useState(100);
-  const [scaleOut, setScaleOut] = useState(false);
-  const [scaleOutFractionPct, setScaleOutFractionPct] = useState(50);
-  const [scaleOutStopMode, setScaleOutStopMode] = useState<ScaleOutStopMode>('breakeven');
-  const [scaleOutTrailR, setScaleOutTrailR] = useState(1);
   const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
   const [aiPlanTake, setAiPlanTake] = useState(true);
   const [aiChartInsight, setAiChartInsight] = useState(true);
@@ -262,13 +257,8 @@ export function SettingsPage() {
     setMaxConcurrentPositions(settings.max_concurrent_positions);
     setMinConfidence(settings.min_confidence_for_trade);
     setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
-    setMaxHoldingDays(settings.max_holding_days);
     setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
     setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
-    setScaleOut(settings.scale_out_enabled ?? false);
-    setScaleOutFractionPct(Math.round((settings.scale_out_fraction ?? 0.5) * 100));
-    setScaleOutStopMode(settings.scale_out_stop_mode ?? 'breakeven');
-    setScaleOutTrailR(settings.scale_out_trail_r ?? 1);
     setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
     setAiPlanTake(settings.ai_plan_take_enabled);
     setAiChartInsight(settings.ai_chart_insight_enabled);
@@ -393,13 +383,8 @@ export function SettingsPage() {
         auto_execute_trade_plans: autoExecute,
         min_confidence_for_trade: minConfidence,
         mark_to_market_interval_minutes: markToMarketMinutes,
-        max_holding_days: maxHoldingDays,
         liquidity_slippage_enabled: liquiditySlippage,
         liquidity_slippage_coefficient: liquidityCoefficient,
-        scale_out_enabled: scaleOut,
-        scale_out_fraction: Math.min(0.9, Math.max(0.1, scaleOutFractionPct / 100)),
-        scale_out_stop_mode: scaleOutStopMode,
-        scale_out_trail_r: scaleOutTrailR,
       },
       { onSuccess: () => flashSaved('account') },
     );
@@ -474,13 +459,8 @@ export function SettingsPage() {
     setAutoExecute(settings.auto_execute_trade_plans);
     setMinConfidence(settings.min_confidence_for_trade);
     setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
-    setMaxHoldingDays(settings.max_holding_days);
     setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
     setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
-    setScaleOut(settings.scale_out_enabled ?? false);
-    setScaleOutFractionPct(Math.round((settings.scale_out_fraction ?? 0.5) * 100));
-    setScaleOutStopMode(settings.scale_out_stop_mode ?? 'breakeven');
-    setScaleOutTrailR(settings.scale_out_trail_r ?? 1);
   }
 
   function resetAutomation() {
@@ -957,78 +937,6 @@ export function SettingsPage() {
             connection-health alerts above run. Exit checks walk every bar since entry, so a longer interval delays
             when a close is recorded but never causes one to be missed. Runs on a fixed clock, not only during
             market hours.
-          </div>
-        </div>
-        <div>
-          <label>Maximum Holding Time (trading days)</label>
-          <input
-            type="number"
-            value={maxHoldingDays}
-            min={0}
-            max={60}
-            step={1}
-            onChange={(e) => setMaxHoldingDays(Number(e.target.value))}
-          />
-          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            A third way out after the stop and the first target: a position still open after this many trading days
-            (weekends and holidays don't count) is closed at that day's close, as a market order, so it pays
-            slippage like a stop. It only fires if neither the stop nor TP1 was touched that day. Trade plans are
-            labelled 1-4 weeks, so the default 20 (four weeks) is the end of that horizon; a position that stalls
-            past it ties up one of your slots and a sector cap. 0 turns the limit off. Applies to positions that
-            are already open, so lowering it can close stalled ones at the next check.
-          </div>
-        </div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ToggleSwitch checked={scaleOut} onChange={setScaleOut} label="Scale Out at TP1" />
-            <span>Scale Out at TP1</span>
-            <OnOffBadge on={scaleOut} />
-          </div>
-          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            {scaleOut ? 'Enabled - sell part at TP1, let the rest run to TP2.' : 'Disabled - a position closes fully at TP1.'}
-          </div>
-          {scaleOut && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
-              <label className="text-muted" style={{ fontSize: 12 }}>
-                Sell at TP1 (%)
-                <input
-                  type="number"
-                  value={scaleOutFractionPct}
-                  min={10}
-                  max={90}
-                  step={5}
-                  onChange={(e) => setScaleOutFractionPct(Number(e.target.value))}
-                  style={{ marginLeft: 6, width: 80 }}
-                />
-              </label>
-              <select value={scaleOutStopMode} onChange={(e) => setScaleOutStopMode(e.target.value as ScaleOutStopMode)}>
-                <option value="breakeven">The rest's stop moves to breakeven</option>
-                <option value="trail">The rest's stop trails the best price</option>
-              </select>
-              {scaleOutStopMode === 'trail' && (
-                <label className="text-muted" style={{ fontSize: 12 }}>
-                  Trail distance (x original risk)
-                  <input
-                    type="number"
-                    value={scaleOutTrailR}
-                    min={0.25}
-                    max={5}
-                    step={0.25}
-                    onChange={(e) => setScaleOutTrailR(Number(e.target.value))}
-                    style={{ marginLeft: 6, width: 80 }}
-                  />
-                </label>
-              )}
-            </div>
-          )}
-          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Off by default, so existing results don't change. When on, reaching TP1 sells that share of the position
-            (a limit fill, no slippage) and the rest runs with a stop at your entry price (or trailing behind the best
-            price by the distance above, never below your entry), then closes at TP2, that stop, or the holding-time
-            limit. It is still one trade: its P&amp;L and R count the part sold and the rest together, R per the size
-            you entered with. On the day TP1 is reached a daily bar cannot show whether its low came before or after,
-            so a dip through the new stop that day counts as coming after (the cautious reading). Backtests use the
-            same rules. Turning it off later still manages positions that already sold a part.
           </div>
         </div>
         <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Execution</div>

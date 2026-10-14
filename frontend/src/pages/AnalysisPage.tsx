@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { qk, useAnalysis, useArchive, useNewsCards, useResearch, useUniverse } from '../api/hooks';
 import { NewsCardChips, NewsCardsPanel } from '../components/NewsCardChips';
 import { CompanyDropdown } from '../components/CompanyDropdown';
@@ -603,11 +603,6 @@ export function AnalysisPage() {
         <h1>Analysis</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <CompanyDropdown value={symbol ?? ''} onChange={(s) => setParams({ symbol: s })} />
-          {symbol && (
-            <Link to={`/trade-plans?symbol=${symbol}`} className="btn btn-secondary">
-              Generate Trade Plan →
-            </Link>
-          )}
           {symbol && <AlertMeButton symbol={symbol} />}
         </div>
       </div>

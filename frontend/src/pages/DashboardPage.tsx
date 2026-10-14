@@ -68,7 +68,7 @@ export function DashboardPage() {
   if (error) return <ErrorBanner message={(error as ApiError).message} />;
   if (!data) return null;
 
-  const { stats, markets_scanned, potential_setups, top_setups, latest_trade_plan, top_pick_trade_plan } = data;
+  const { stats, markets_scanned, potential_setups, top_setups, top_pick_trade_plan } = data;
   const equityTrend = equity?.map((p) => p.equity_value);
   const topPick = top_setups[0];
 
@@ -169,68 +169,6 @@ export function DashboardPage() {
           )}
         </div>
 
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3>Latest Trade Plan</h3>
-            <Link to="/trade-plans" className="text-muted" style={{ fontSize: 13 }}>
-              View All →
-            </Link>
-          </div>
-          {!latest_trade_plan ? (
-            <EmptyState>No trade plans generated yet — head to Trade Plans to create one.</EmptyState>
-          ) : latest_trade_plan.direction === null ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <TickerLink symbol={latest_trade_plan.symbol} iconSize={28} fontWeight={700} />
-                <span className="badge badge-neutral">No Trade</span>
-              </div>
-              <div className="text-muted" style={{ fontSize: 13 }}>
-                {latest_trade_plan.reason ?? 'Evaluated but did not clear the bar for a trade plan.'}
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <TickerLink symbol={latest_trade_plan.symbol} iconSize={28} fontWeight={700} />
-                <span className={`badge ${latest_trade_plan.direction === 'long' ? 'badge-green' : 'badge-red'}`}>
-                  {latest_trade_plan.direction === 'long' ? 'Long' : 'Short'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    Entry
-                  </div>
-                  <div className="tabular-nums">{formatMoney(latest_trade_plan.entry)}</div>
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    Stop
-                  </div>
-                  <div className="tabular-nums text-red">{formatMoney(latest_trade_plan.stop)}</div>
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    Target 1
-                  </div>
-                  <div className="tabular-nums text-green">{formatMoney(latest_trade_plan.tp1)}</div>
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    R:R
-                  </div>
-                  <div className="tabular-nums">{formatNumber(latest_trade_plan.rr1)}:1</div>
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    Confidence
-                  </div>
-                  <div className="tabular-nums">{latest_trade_plan.confidence_score}%</div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <h3>Top Pick</h3>

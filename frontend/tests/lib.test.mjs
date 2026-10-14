@@ -167,14 +167,11 @@ test('flashDirection only reports real numeric changes', () => {
 
 const ids = (rows) => rows.map((r) => r.id);
 
-test('palette: a symbol query lists the symbol, then its trade-plan action', () => {
+test('palette: a symbol query lists the symbol', () => {
   const rows = buildPaletteItems(INDEX, 'nvda', []);
   assert.equal(rows[0].id, 'symbol:NVDA');
   assert.equal(rows[0].to, '/analysis?symbol=NVDA');
-  assert.equal(rows[0].shiftTo, '/trade-plans?symbol=NVDA');
-  const plan = rows.find((r) => r.id === 'plan:NVDA');
-  assert.equal(plan.to, '/trade-plans?symbol=NVDA');
-  assert.equal(plan.section, 'Actions');
+  assert.equal(rows.find((r) => r.id === 'plan:NVDA'), undefined, 'no trade-plan action any more');
 });
 
 test('palette: a page-name query leads with the page', () => {
@@ -193,7 +190,7 @@ test('palette: sections stay contiguous so headers render once each', () => {
 test('palette: empty query shows recents (known symbols only) then every page', () => {
   const rows = buildPaletteItems(INDEX, '', ['MSFT', 'GONE', 'AAPL']);
   assert.deepEqual(ids(rows).slice(0, 2), ['symbol:MSFT', 'symbol:AAPL']);
-  assert.equal(rows.filter((r) => r.section === 'Go to').length, 6);
+  assert.equal(rows.filter((r) => r.section === 'Go to').length, 5);
 });
 
 test('palette: never renders more than the row cap, even against a 500-symbol universe', () => {

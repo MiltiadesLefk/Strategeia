@@ -37,7 +37,6 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof 
   { to: '/screener', label: 'Screener', icon: 'screener' },
   { to: '/analysis', label: 'Analysis', icon: 'analysis' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
-  { to: '/trade-plans', label: 'Trade Plans', icon: 'plans' },
   { to: '/portfolio', label: 'Portfolio', icon: 'portfolio' },
   { to: '/terminal', label: 'Market Terminal', icon: 'terminal' },
   { to: '/smart-money', label: 'Smart Money', icon: 'smartMoney' },
@@ -101,8 +100,7 @@ function ServiceStatus({ status }: { status?: SettingsStatus }) {
 
 export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobileOpen?: boolean; onClose?: () => void; onOpenPalette?: () => void }) {
   const { data: status } = useSettingsStatus();
-  // Positions open through the hold buy now; the swing trade-plan screen is no longer in the menu.
-  const navItems = NAV_ITEMS.filter((i) => i.to !== '/trade-plans');
+  const navItems = NAV_ITEMS;
   const { mutate: logout, isPending: loggingOut } = useLogout();
   const renderItem = (item: (typeof NAV_ITEMS)[number]) => (
     <NavLink

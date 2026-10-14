@@ -14,7 +14,6 @@ import {
   ScreenerPage,
   SettingsPage,
   SmartMoneyPage,
-  TradePlansPage,
 } from './routePages';
 
 // Research was folded into Analysis (one page per symbol: chart + technicals
@@ -35,7 +34,6 @@ export default function App() {
           <Route path="screener" element={<ScreenerPage />} />
           <Route path="analysis" element={<AnalysisPage />} />
           <Route path="research" element={<ResearchRedirect />} />
-          <Route path="trade-plans" element={<TradePlansPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
           <Route path="terminal" element={<MarketTerminalPage />} />
