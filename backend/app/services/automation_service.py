@@ -94,6 +94,41 @@ def run_auto_scan(
     return outcome
 
 
+def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: Session) -> list[str]:
+    """The daily portfolio-builder scan: every watchlist stock not yet held goes through the quality
+    gate and a pass is hold-bought (target weight, wide stop), up to `hold_max_new_per_scan`. A stock
+    that fails is simply not bought. Returns the symbols bought. The engine's checks still apply."""
+    from app.portfolio.engine import (
+        DuplicatePositionError, InsufficientCashError, MarketClosedError, MaxPositionsExceededError,
+        SectorConcentrationError, SleeveDisabledError, StalePlanError,
+    )
+    from app.services.hold_buy_service import check_quality, hold_buy
+    from app.services.sleeve_service import build_sleeve_engine
+
+    held = {p.symbol for p in session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()}
+    engine = build_sleeve_engine(session, data_provider, settings, hold=True)
+    bought: list[str] = []
+    for symbol in [s for s in get_default_watchlist(settings.scan_universe_size) if s not in held]:
+        if len(bought) >= settings.hold_max_new_per_scan:
+            break
+        try:
+            if not check_quality(data_provider, symbol).passed:
+                continue
+            hold_buy(session, engine, data_provider, settings, symbol, reason="hold scan: passed the quality gate")
+            bought.append(symbol)
+        except MarketClosedError:
+            logger.info("Hold scan stopped: the market is closed")
+            break
+        except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError, SectorConcentrationError,
+                SleeveDisabledError, StalePlanError) as exc:
+            logger.info("Hold scan: %s not bought: %s", symbol, exc)
+        except Exception:
+            logger.exception("Hold scan: failed to evaluate %s", symbol)
+    if bought:
+        notify(settings.telegram_bot_token, settings.telegram_chat_id, f"Hold scan bought {', '.join(bought)} (passed the quality gate).")
+    return bought
+
+
 # ----------------------------------------------------------- market-open redo
 
 

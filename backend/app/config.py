@@ -742,6 +742,13 @@ class AppSettings(BaseModel):
     hold_alert_drawdown_pct: float = 15.0
     # Size of one hold buy, % of the account (target weight).
     hold_target_weight_pct: float = 4.5
+    # Portfolio-builder daily scan: when on, the 10:00 ET scan runs the quality gate over the
+    # watchlist and hold-buys each pass (instead of swing plans). Off by default.
+    hold_mode_enabled: bool = False
+    # Position caps for hold mode (about 15-20 names at 4-5% each), new buys per scan.
+    hold_max_positions: int = Field(default=20, ge=1, le=100)
+    hold_max_per_sector: int = Field(default=4, ge=1, le=50)
+    hold_max_new_per_scan: int = Field(default=3, ge=0, le=50)
 
     # Liquidity-aware slippage (opt-in, off = the flat slippage_bps only, results
     # unchanged): market fills pay extra bps that grow with the order's size

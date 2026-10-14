@@ -12,6 +12,7 @@ import math
 
 from sqlmodel import Session, select
 
+from app.analysis.quality_gate import GateResult, evaluate_quality_gate
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.data_providers.cache import fresh_data_only
@@ -69,3 +70,19 @@ def hold_buy(
     session.commit()
     session.refresh(plan)
     return engine.open_position(plan, mode="hold")
+
+
+def check_quality(data_provider: DataProvider, symbol: str) -> GateResult:
+    """Fetch what the gate reads (fresh data only) and run it. A failed fetch is a failed check."""
+    with fresh_data_only():
+        price = float(data_provider.get_quote(symbol).price)
+        closes = [float(c) for c in data_provider.get_ohlcv(symbol, period="1y", interval="1d")["close"]]
+        try:
+            overview = data_provider.get_company_overview(symbol)
+        except Exception:  # noqa: BLE001 - missing data fails the check instead of guessing
+            overview = None
+        try:
+            years = data_provider.get_financials(symbol).years
+        except Exception:  # noqa: BLE001
+            years = []
+    return evaluate_quality_gate(price, closes, overview, years)

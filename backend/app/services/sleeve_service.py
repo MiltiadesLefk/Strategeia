@@ -41,6 +41,7 @@ def build_sleeve_engine(
     sleeve: Sleeve | None = None,
     *,
     clock: Clock | None = None,
+    hold: bool = False,
 ) -> PaperTradingEngine:
     """The engine for `sleeve` (None = core) with the shared strategy settings.
     Only the starting cash differs by sleeve: core follows Settings -> Paper
@@ -51,10 +52,10 @@ def build_sleeve_engine(
         session,
         data_provider,
         settings.paper_starting_cash if is_core else sleeve.starting_cash,
-        sleeve_position_cap(settings, sleeve),
+        settings.hold_max_positions if hold else sleeve_position_cap(settings, sleeve),
         slippage_bps=settings.slippage_bps,
         commission_per_trade=settings.commission_per_trade,
-        max_positions_per_sector=settings.max_positions_per_sector,
+        max_positions_per_sector=settings.hold_max_per_sector if hold else settings.max_positions_per_sector,
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         clock=clock,
         # The smart-money sleeves hold longer (their own time limit) and so read a longer bar window.

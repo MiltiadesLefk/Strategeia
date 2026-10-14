@@ -26,7 +26,7 @@ from app.services.sleeve_service import mark_all_sleeves
 from app.timeutil import utcnow_naive
 from app.portfolio.missed_trades import refresh_missed_trades
 from app.portfolio.models import PaperPosition
-from app.services.automation_service import run_auto_scan, run_market_open_redos
+from app.services.automation_service import run_auto_scan, run_hold_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
 from app.services.morning_note_service import run_morning_note_if_due
 from app.services.price_alert_service import run_price_alert_check
@@ -51,9 +51,7 @@ _scheduler: BackgroundScheduler | None = None
 # UTC hours, so APScheduler tracks DST instead of the whole schedule sliding
 # an hour twice a year. Weekdays only — the US session is the anchor.
 AUTO_SCAN_SESSION_TIMES_ET = [
-    ("open", 10, 0),  # 30 min after the bell: the opening range has formed
-    ("midday", 13, 0),  # mid-session
-    ("post_close", 16, 15),  # after the close, once the day's bar is final
+    ("open", 10, 0),  # 30 min after the bell: the opening range has formed (one daily scan, PORTOFOLIO_BUILDER D6)
 ]
 
 # The market-open redo (D10 = C) is polled on this cadence through the US
@@ -115,7 +113,10 @@ def _auto_scan_job() -> None:
     llm_provider = get_llm_provider(settings)
     with Session(engine) as session:
         try:
-            run_auto_scan(settings, data_provider, llm_provider, session)
+            if settings.hold_mode_enabled:
+                run_hold_scan(settings, data_provider, session)
+            else:
+                run_auto_scan(settings, data_provider, llm_provider, session)
         except Exception:
             logger.exception("Scheduled auto-scan tick failed")
 

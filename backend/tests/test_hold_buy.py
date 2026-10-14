@@ -55,3 +55,27 @@ def test_too_small_account_raises(session):
     engine = PaperTradingEngine(session, provider, 100_000.0)
     with pytest.raises(InsufficientCashError):
         hold_buy(session, engine, provider, AppSettings(), "BIG")
+
+
+# ------------------------------------------------------------ the daily hold scan
+
+
+def test_hold_scan_buys_passes_only_and_respects_the_per_scan_cap(session, monkeypatch):
+    from app.analysis.quality_gate import GateResult
+    from app.services import automation_service, hold_buy_service
+
+    provider = Provider()
+    monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: ["AAA", "BAD", "BBB", "CCC"])
+    monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(symbol != "BAD", []))
+    settings = AppSettings(hold_max_new_per_scan=2)
+
+    bought = automation_service.run_hold_scan(settings, provider, session)
+
+    assert bought == ["AAA", "BBB"]  # BAD failed the gate, CCC waits for the next scan
+
+
+def test_one_daily_scan_job():
+    from app.scheduler import AUTO_SCAN_SESSION_TIMES_ET
+
+    assert AUTO_SCAN_SESSION_TIMES_ET == [("open", 10, 0)]

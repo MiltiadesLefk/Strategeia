@@ -195,7 +195,7 @@ def hold_buy_endpoint(
     settings: AppSettings = Depends(get_app_settings),
 ) -> PositionSchema:
     """Buy one stock for the portfolio at the target weight (core sleeve), hold mode."""
-    engine = build_engine(session, data_provider, settings)
+    engine = build_sleeve_engine(session, data_provider, settings, hold=True)
     try:
         position = hold_buy(session, engine, data_provider, settings, req.symbol.strip().upper(), reason="manual hold buy")
     except MarketClosedError as exc:
