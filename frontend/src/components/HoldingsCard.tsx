@@ -23,6 +23,11 @@ export function HoldingsCard({ sleeve }: { sleeve: string }) {
           positive={data.vs_spy_pct === null ? null : data.vs_spy_pct >= 0}
           note={data.spy_return_pct === null ? 'SPY not available' : `SPY ${formatPct(data.spy_return_pct)} since the first entry`}
         />
+        <StatCard
+          label="Equal-weight basket"
+          value={data.equal_weight_return_pct === null ? '—' : formatPct(data.equal_weight_return_pct)}
+          note="same stocks, equal amounts"
+        />
         <StatCard label="Cash" value={`${data.cash_pct.toFixed(1)}%`} note={formatMoney(data.cash)} />
         <StatCard label="Worst drawdown" value={`${data.max_drawdown_pct.toFixed(1)}%`} note="from the equity curve" />
       </div>

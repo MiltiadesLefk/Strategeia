@@ -2,7 +2,7 @@
 
 Read-only and computed from the stored rows plus live quotes; it never writes (a GET must not touch the
 equity curve). A quote that cannot be fetched falls back to the entry price, flagged in `stale_symbols`.
-Not built: equal-weight and random-basket comparisons (needs the point-in-time study tooling).
+Random-basket comparison is study-only (scripts/studies/hold_gate_vs_spy.py), not a live number.
 """
 
 from __future__ import annotations
@@ -81,7 +81,9 @@ def compute_holdings(session: Session, data_provider: DataProvider, scope: Sleev
     return {
         "target_weight_pct": target_weight_pct, "equity": equity, "cash": cash,
         "cash_pct": cash / equity * 100 if equity > 0 else 0.0, "invested": equity - cash,
-        "open_pnl": sum(r["pnl"] for r in positions), "total_return_pct": total_return, "spy_return_pct": spy_return,
+        "open_pnl": sum(r["pnl"] for r in positions),
+        # the same stocks held in equal amounts from their entry prices: shows whether the weights helped or hurt
+        "equal_weight_return_pct": sum(r["pnl_pct"] for r in positions) / len(positions) if positions else None, "total_return_pct": total_return, "spy_return_pct": spy_return,
         "vs_spy_pct": None if spy_return is None else total_return - spy_return,
         "max_drawdown_pct": max_drawdown_pct(curve + [equity]), "positions": positions,
         "sectors": sorted(({"sector": k, "weight_pct": v} for k, v in sectors.items()), key=lambda r: -r["weight_pct"]),

@@ -49,4 +49,5 @@ def test_holdings_endpoint_weights_drift_and_spy():
     assert row["drift_pct"] == pytest.approx(row["weight_pct"] - 4.5)
     assert row["pnl"] == pytest.approx(500.0)
     assert body["total_return_pct"] == pytest.approx(0.5)
+    assert body["equal_weight_return_pct"] == pytest.approx(10.0)
     assert body["spy_return_pct"] == pytest.approx((109 / 102 - 1) * 100)  # SPY from the entry day's close (Jan 5)

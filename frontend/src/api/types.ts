@@ -2842,6 +2842,8 @@ export interface Holdings {
   cash_pct: number;
   invested: number;
   open_pnl: number;
+  /** Average return of the held stocks as if equal amounts were bought at their entry prices. */
+  equal_weight_return_pct: number | null;
   total_return_pct: number;
   spy_return_pct: number | null;
   vs_spy_pct: number | null;
