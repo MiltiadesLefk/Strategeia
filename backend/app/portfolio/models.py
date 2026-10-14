@@ -160,6 +160,12 @@ class PaperPosition(SQLModel, table=True):
     tp2: float
     shares: int
     opened_at: datetime = Field(default_factory=utcnow_naive)
+    # "swing" (stop/TP1/time exit; every row before hold mode) or "hold" (no target, no time
+    # exit, only the close-based disaster stop; tp1/tp2 are 0.0 = none). Hold alerts: when
+    # each one-time alert fired, so it is never repeated.
+    mode: str = "swing"
+    alerted_drawdown_at: Optional[datetime] = None
+    alerted_ma200_at: Optional[datetime] = None
     status: str = "open"
     closed_at: Optional[datetime] = None
     close_price: Optional[float] = None

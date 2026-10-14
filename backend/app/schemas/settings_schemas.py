@@ -80,6 +80,9 @@ class SettingsUpdateRequest(BaseModel):
     # Capped at 60 (about three months): the exit scan reads 3 months of bars
     # and has to see the entry bar to count days from it.
     max_holding_days: int | None = Field(default=None, ge=0, le=60)
+    hold_stop_pct: float | None = Field(default=None, ge=0, le=60)
+    hold_alert_drawdown_pct: float | None = Field(default=None, ge=0, le=60)
+    hold_target_weight_pct: float | None = Field(default=None, gt=0, le=25)
     liquidity_slippage_enabled: bool | None = None
     liquidity_slippage_coefficient: float | None = Field(default=None, ge=0, le=1000)
     scale_out_enabled: bool | None = None

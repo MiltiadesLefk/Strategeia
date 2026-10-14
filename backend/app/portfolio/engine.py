@@ -365,7 +365,7 @@ class PaperTradingEngine:
 
     # ------------------------------------------------------------ open/close
 
-    def open_position(self, trade_plan: TradePlanRecord) -> PaperPosition:
+    def open_position(self, trade_plan: TradePlanRecord, *, mode: str = "swing") -> PaperPosition:
         # First, before any other check or the re-quote: nothing else about
         # the fill means anything if no real trade could happen right now.
         now = self.now()
@@ -473,6 +473,7 @@ class PaperTradingEngine:
             opened_at=now,
             sleeve_id=sleeve_id,
             entry_slippage_bps=entry_slippage_bps,
+            mode=mode,
         )
         trade_plan.status = "executed"
 
@@ -800,6 +801,22 @@ class PaperTradingEngine:
                     float(bar["close"]), buying=position.direction == "short", symbol=position.symbol, shares=position.shares
                 )
                 return ExitFound(fill, "time_exit", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
+        return None
+
+    def _scan_hold_exit(self, position: PaperPosition, bars: pd.DataFrame) -> ExitFound | None:
+        """Hold mode: the first FINAL daily bar whose CLOSE is beyond the disaster stop closes
+        the position at that close (plus slippage). A wick through the stop that closes back
+        above it does nothing; a gap-down fills at the close, the honest unfavourable choice.
+        Every bar since entry is walked, as in _scan_exit. stop_loss <= 0 = alert-only."""
+        if position.stop_loss <= 0:
+            return None
+        is_long = position.direction == "long"
+        for number, (_, bar) in enumerate(bars.iterrows(), start=1):
+            close = float(bar["close"])
+            beyond = close <= position.stop_loss if is_long else close >= position.stop_loss
+            if beyond and self._bar_is_final(position.symbol, bar):
+                fill = self._slip(close, buying=not is_long, symbol=position.symbol, shares=position.shares)
+                return ExitFound(fill, "disaster_stop", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
         return None
 
     def _hourly_fill(
@@ -1268,6 +1285,18 @@ class PaperTradingEngine:
             except AllProvidersFailedError:
                 continue
             if bars.empty:
+                continue
+            if position.mode == "hold":
+                scope = self._bars_after_entry(bars, position.opened_at)
+                found = None if scope.empty else self._scan_hold_exit(position, scope)
+                if found is not None:
+                    closed.append(
+                        self.close_position(
+                            position, found.fill_price, found.reason, snapshot=False,
+                            held_bars=self._held_bars(scope, found) if self._entry_bar_in_window(bars, position.opened_at) else None,
+                            last_bar="complete", resolution=found.resolution, slippage_bps=found.slippage_bps,
+                        )
+                    )
                 continue
             hourly = None
             if self._intraday_exits:

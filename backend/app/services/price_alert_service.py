@@ -261,6 +261,18 @@ class _Market:
     price: float
     change_pct: float | None
     atr: float | None = None
+    ma200: float | None = None
+
+
+def hold_alerts_due(position: PaperPosition, price: float, ma200: float | None, drawdown_pct: float) -> list[str]:
+    """Hold-mode alerts (never a trade) whose condition is met and that have not fired yet:
+    "hold_drawdown" (price this % below entry) and "hold_ma200" (price under the 200-day average)."""
+    due = []
+    if drawdown_pct > 0 and position.alerted_drawdown_at is None and price <= position.entry_price * (1 - drawdown_pct / 100):
+        due.append("hold_drawdown")
+    if ma200 is not None and position.alerted_ma200_at is None and price < ma200:
+        due.append("hold_ma200")
+    return due
 
 
 def format_alert_message(symbol: str, headline: str, detail: str, note: str | None = None) -> str:
@@ -303,7 +315,7 @@ def _record_alert_fact(
         session.rollback()
 
 
-def _fetch_market(symbol: str, provider: DataProvider, need_atr: bool) -> _Market | None:
+def _fetch_market(symbol: str, provider: DataProvider, need_atr: bool, need_ma200: bool = False) -> _Market | None:
     """Quote (and, when needed, the 14-day ATR) for one symbol; None when the fresh
     fetch failed. Always called inside fresh_data_only()."""
     try:
@@ -319,7 +331,14 @@ def _fetch_market(symbol: str, provider: DataProvider, need_atr: bool) -> _Marke
             atr = latest_atr(provider.get_ohlcv(symbol, period=ATR_BARS_PERIOD, interval="1d"))
         except Exception as exc:  # noqa: BLE001 - ATR alerts just wait; price alerts still run
             logger.info("Price alerts: no daily bars for %s: %s", symbol, type(exc).__name__)
-    return _Market(price=float(quote.price), change_pct=quote.change_pct_24h, atr=atr)
+    ma200: float | None = None
+    if need_ma200:
+        try:
+            closes = provider.get_ohlcv(symbol, period="1y", interval="1d")["close"]
+            ma200 = float(closes.tail(200).mean()) if len(closes) >= 200 else None
+        except Exception as exc:  # noqa: BLE001 - the 200-day alert just waits
+            logger.info("Price alerts: no daily bars for %s: %s", symbol, type(exc).__name__)
+    return _Market(price=float(quote.price), change_pct=quote.change_pct_24h, atr=atr, ma200=ma200)
 
 
 def run_price_alert_check(
@@ -341,26 +360,29 @@ def run_price_alert_check(
         alerts = [a for a in list_alerts(session, "active") if cooldown_elapsed(a, now)]
         positions = list(session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all())
         position_by_symbol = {p.symbol: p for p in positions}
+        hold_positions = [p for p in positions if p.mode == "hold"]
+        positions = [p for p in positions if p.mode != "hold"]  # swing alerts measure against a target hold has none of
         auto_on = settings.price_alert_positions_enabled and bool(positions)
-        if not alerts and not auto_on:
+        if not alerts and not auto_on and not hold_positions:
             return result
 
         # Which symbols need a look, oldest alert first, then held positions.
         wanted: list[str] = []
-        for symbol in [a.symbol for a in reversed(alerts)] + ([p.symbol for p in positions] if auto_on else []):
+        for symbol in [a.symbol for a in reversed(alerts)] + ([p.symbol for p in positions] if auto_on else []) + [p.symbol for p in hold_positions]:
             if symbol not in wanted:
                 wanted.append(symbol)
         atr_needed = {a.symbol for a in alerts if a.condition in POSITION_CONDITIONS and a.unit == "atr"}
         if auto_on:
             atr_needed |= set(position_by_symbol)  # the automatic stop alert measures in ATRs
 
+        hold_symbols = {p.symbol for p in hold_positions}
         markets: dict[str, _Market] = {}
         with fresh_data_only():
             for symbol in wanted[:MAX_SYMBOLS_PER_RUN]:
                 if not is_market_open_for(symbol, now):
                     result.skipped_symbols.append(symbol)
                     continue
-                market = _fetch_market(symbol, data_provider, symbol in atr_needed)
+                market = _fetch_market(symbol, data_provider, symbol in atr_needed, symbol in hold_symbols)
                 if market is None:
                     result.skipped_symbols.append(symbol)
                     continue
@@ -386,6 +408,7 @@ def run_price_alert_check(
             if outcome.met:
                 _fire_user_alert(session, settings, alert, market, outcome, now, notifier, result)
 
+        _check_hold_positions(session, settings, hold_positions, markets, now, notifier, result)
         if auto_on:
             _check_positions(session, settings, positions, markets, now, notifier, result)
     except Exception:  # noqa: BLE001 - the scheduler must never see an exception from here
@@ -517,3 +540,40 @@ def _check_positions(
                 notifier,
                 result,
             )
+
+
+def _check_hold_positions(
+    session: Session,
+    settings: AppSettings,
+    positions: list[PaperPosition],
+    markets: dict[str, _Market],
+    now: datetime,
+    notifier: Notifier,
+    result: PriceAlertRunResult,
+) -> None:
+    """Hold-mode alerts, each at most once per position for good (the time is stored on the row)."""
+    for position in positions:
+        market = markets.get(position.symbol)
+        if market is None:
+            continue
+        for condition in hold_alerts_due(position, market.price, market.ma200, settings.hold_alert_drawdown_pct):
+            if condition == "hold_drawdown":
+                position.alerted_drawdown_at = now
+                headline = f"Down {settings.hold_alert_drawdown_pct:g}% from your entry"
+                detail = f"price {market.price:,.2f} vs entry {position.entry_price:,.2f}"
+            else:
+                position.alerted_ma200_at = now
+                headline = "Below the 200-day average"
+                detail = f"price {market.price:,.2f} is under the 200-day average {market.ma200:,.2f}"
+            session.add(position)
+            session.commit()
+            result.fired.append(f"{position.symbol}:{condition}")
+            _record_alert_fact(
+                session,
+                symbol=position.symbol,
+                key_parts=(AUTO_SOURCE, position.id, condition),
+                now=now,
+                payload={"source": AUTO_SOURCE, "position_id": position.id, "condition": condition,
+                         "price": market.price, "detail": detail},
+            )
+            _send(settings, format_alert_message(position.symbol, headline + " (held stock)", detail), notifier, result)

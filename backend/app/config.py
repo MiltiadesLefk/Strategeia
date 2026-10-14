@@ -734,6 +734,15 @@ class AppSettings(BaseModel):
     # bar to count days.
     max_holding_days: int = 20
 
+    # Portfolio-builder hold mode (PORTOFOLIO_BUILDER.md D2-D5): no target, no time exit.
+    # The only automatic exit is a disaster stop on a daily CLOSE this % below the entry
+    # (or below the 200-day average if that is lower); 0 = alert-only, never closes.
+    hold_stop_pct: float = 25.0
+    # Alert (never a trade) when a held stock closes this % below its entry; 0 = off.
+    hold_alert_drawdown_pct: float = 15.0
+    # Size of one hold buy, % of the account (target weight).
+    hold_target_weight_pct: float = 4.5
+
     # Liquidity-aware slippage (opt-in, off = the flat slippage_bps only, results
     # unchanged): market fills pay extra bps that grow with the order's size
     # relative to the symbol's 20-day average daily volume. The coefficient is the
