@@ -15,6 +15,7 @@ import type {
   MarketSession,
   Position,
   PortfolioStats,
+  Holdings,
   Sleeve,
   SleeveCreateRequest,
   SleeveUpdateRequest,
@@ -258,6 +259,13 @@ export function useWriteLesson() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.positions });
     },
+  });
+}
+
+export function useHoldings(sleeve?: string | null) {
+  return useQuery({
+    queryKey: ['holdings', sleeve ?? 'core'],
+    queryFn: () => api.get<Holdings>(`/api/portfolio/holdings${sleeveQuery(sleeve)}`),
   });
 }
 

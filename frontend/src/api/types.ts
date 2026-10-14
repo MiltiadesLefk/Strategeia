@@ -283,6 +283,8 @@ export interface MarketSession {
 export type ScaleOutStopMode = 'breakeven' | 'trail';
 
 export interface Position {
+  /** 'hold' = no target or time exit (tp1/tp2 are 0); otherwise 'swing'. */
+  mode?: string;
   id: number;
   trade_plan_id: number | null;
   symbol: string;
@@ -2797,4 +2799,37 @@ export interface SleeveReport {
   random_draws: number;
   random_seed: number;
   universe_size: number;
+}
+
+export interface HoldingRow {
+  symbol: string;
+  sector: string;
+  mode: string;
+  shares: number;
+  entry_price: number;
+  price: number;
+  value: number;
+  weight_pct: number;
+  drift_pct: number;
+  pnl: number;
+  pnl_pct: number;
+  /** Disaster stop level; null = alert-only. */
+  stop_loss: number | null;
+  opened_at: string;
+}
+
+export interface Holdings {
+  target_weight_pct: number;
+  equity: number;
+  cash: number;
+  cash_pct: number;
+  invested: number;
+  open_pnl: number;
+  total_return_pct: number;
+  spy_return_pct: number | null;
+  vs_spy_pct: number | null;
+  max_drawdown_pct: number;
+  positions: HoldingRow[];
+  sectors: { sector: string; weight_pct: number }[];
+  stale_symbols: string[];
 }

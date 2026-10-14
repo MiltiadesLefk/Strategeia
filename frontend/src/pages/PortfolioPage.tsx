@@ -9,6 +9,7 @@ import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { TradeExcursionsCard } from '../components/TradeExcursionsCard';
 import { formatAdverseR } from '../lib/excursion';
+import { HoldingsCard } from '../components/HoldingsCard';
 import { CalibrationCard } from '../components/CalibrationCard';
 import { PriceAlertsCard } from '../components/PriceAlertsPanel';
 import { EquityCurveChart } from '../components/chart/EquityCurveChart';
@@ -27,6 +28,7 @@ const CLOSE_REASON_LABELS: Record<string, string> = {
   tp1_hit: 'Target (TP1)',
   tp2_hit: 'Target (TP2)',
   time_exit: 'Time limit',
+  disaster_stop: 'Disaster stop',
   manual: 'Manual',
 };
 function closeReasonLabel(reason: string | null): string {
@@ -260,6 +262,8 @@ export function PortfolioPage() {
       <SleevesOverview selected={sleeve} onSelect={selectSleeve} />
       <PauseHistoryCard />
       {resetError && <ErrorBanner message={(resetError as ApiError).message} />}
+
+      <HoldingsCard sleeve={sleeve} />
 
       {statsLoading && <LoadingSpinner label="Loading portfolio…" />}
       {stats && (
