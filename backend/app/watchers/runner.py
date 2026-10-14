@@ -326,6 +326,17 @@ def _act(
         logger.exception("Watcher %s: alert failed", watcher.name)
 
 
+# Hold mode fetches these once each morning (scheduler.py) instead of all day: the price reacts overnight,
+# so polling through the day buys nothing (PORTOFOLIO_BUILDER D7).
+MORNING_ONLY_WATCHERS = ("sec_filings", "smart_money")
+
+
+def run_morning_fetch(session: Session, settings: AppSettings, now: datetime | None = None, **kwargs) -> list[WatcherRunResult]:
+    """The once-a-day pull of the smart-money sources, run before the open. Each is still skipped by its own switch."""
+    now = now if now is not None else utcnow_naive()
+    return [run_watcher_once(session, w, settings, now, force=True, **kwargs) for w in all_watchers() if w.name in MORNING_ONLY_WATCHERS]
+
+
 def run_due_watchers(
     session: Session,
     settings: AppSettings,
@@ -341,6 +352,8 @@ def run_due_watchers(
     candidates = watchers if watchers is not None else all_watchers()
     states = {row.name: row for row in session.exec(select(WatcherState)).all()}
     results: list[WatcherRunResult] = []
+    if settings.hold_mode_enabled:
+        candidates = [w for w in candidates if w.name not in MORNING_ONLY_WATCHERS]
     for watcher in due_watchers(candidates, states, now, master_enabled=settings.watchers_enabled):
         if jitter_seconds > 0:
             time.sleep(random.uniform(0, jitter_seconds))

@@ -295,6 +295,8 @@ def evaluate_candidate(
         return STATUS_EVALUATING
 
     cap_note = sleeve_cap_note(session, settings, auto, now)
+    if settings.hold_mode_enabled:
+        return _evaluate_hold(session, candidate, settings, data_provider, auto, cap_note, clock, now)
     try:
         response = generate_trade_plan(
             candidate.symbol,
@@ -320,6 +322,36 @@ def evaluate_candidate(
     return route_plan(session, candidate, response.id, response.status, bool(response.redo_at), cap_note, settings, auto, now)
 
 
+def _evaluate_hold(
+    session: Session, candidate: SmartMoneyCandidate, settings: AppSettings, data_provider: DataProvider,
+    sleeve: Sleeve, cap_note: str | None, clock: Clock, now: datetime,
+) -> str:
+    """Hold mode (PORTOFOLIO_BUILDER step 3): the quality gate decides instead of a swing plan. A pass inside the
+    sleeve caps is hold-bought at the target weight; a failed gate, a reached cap or an engine refusal goes to the
+    review queue with the reason. The smart-money score only chose which stock was looked at."""
+    from app.services.hold_buy_service import check_quality, hold_buy
+
+    try:
+        gate = check_quality(data_provider, candidate.symbol)
+    except Exception as exc:  # one bad symbol must not stop the others
+        logger.exception("Smart-money quality check of %s failed", candidate.symbol)
+        session.rollback()
+        candidate = session.get(SmartMoneyCandidate, candidate.id)
+        return _skip(session, candidate, REASON_EVALUATION_ERROR, f"{type(exc).__name__}: {exc}", now)
+    if not gate.passed:
+        return route_plan(session, candidate, None, "no_trade", False, None, settings, sleeve, now,
+                          note="Failed the quality gate: " + "; ".join(gate.failed_reasons))
+    if cap_note is not None:
+        return route_plan(session, candidate, None, "pending", False, cap_note, settings, sleeve, now)
+    engine = build_sleeve_engine(session, data_provider, settings, sleeve, clock=clock, hold=True)
+    try:
+        position = hold_buy(session, engine, data_provider, settings, candidate.symbol, sleeve_id=sleeve.id,
+                            reason=f"smart money score {candidate.score:g}; passed the quality gate")
+    except (MarketClosedError, *_ENGINE_REFUSALS) as exc:
+        return route_plan(session, candidate, None, "pending", False, None, settings, sleeve, now, note=str(exc))
+    return route_plan(session, candidate, position.trade_plan_id, "executed", False, None, settings, sleeve, now)
+
+
 def route_plan(
     session: Session,
     candidate: SmartMoneyCandidate,
@@ -330,6 +362,7 @@ def route_plan(
     settings: AppSettings,
     sleeve: Sleeve,
     now: datetime,
+    note: str | None = None,
 ) -> str:
     """Decide where an evaluated candidate goes. Only reads what the evaluation already decided."""
     candidate = session.get(SmartMoneyCandidate, candidate.id)
@@ -372,10 +405,10 @@ def route_plan(
     candidate.expires_at = now + timedelta(days=REVIEW_EXPIRY_DAYS)
     if status == "pending":
         candidate.reason = "tradeable_not_bought"
-        candidate.reason_detail = (cap_note or (plan.auto_execute_note if plan is not None else None) or "Auto-buy did not open it.")[:500]
+        candidate.reason_detail = (note or cap_note or (plan.auto_execute_note if plan is not None else None) or "Auto-buy did not open it.")[:500]
     else:
         candidate.reason = "rated_bad"
-        candidate.reason_detail = ((plan.reason if plan is not None else None) or "The evaluation found no trade.")[:500]
+        candidate.reason_detail = (note or (plan.reason if plan is not None else None) or "The evaluation found no trade.")[:500]
     session.add(candidate)
     session.commit()
     _alert_review(settings, candidate, plan, candidate.reason_detail or "", session)
@@ -450,6 +483,9 @@ def execute_review_buy(
         raise ReviewBuyMarketClosed(candidate.symbol)
 
     old_plan_id = candidate.plan_id
+    if settings.hold_mode_enabled:
+        record, position = _review_buy_hold(session, candidate, settings, data_provider, manual, clock)
+        return _finish_review_buy(session, candidate, manual, record, position, old_plan_id, clock)
     try:
         response = generate_trade_plan(
             candidate.symbol,
@@ -494,6 +530,28 @@ def execute_review_buy(
         session.commit()
         raise ReviewBuyRefused(str(exc)) from exc
 
+    return _finish_review_buy(session, candidate, manual, record, position, old_plan_id, clock)
+
+
+def _review_buy_hold(session, candidate, settings, data_provider, manual, clock):
+    """The review Buy in hold mode: the person has read why it failed the gate, so the gate is skipped; every
+    engine check still applies (session, duplicate, caps, stale quote, cash)."""
+    from app.services.hold_buy_service import hold_buy
+
+    engine = build_sleeve_engine(session, data_provider, settings, manual, clock=clock, hold=True)
+    try:
+        position = hold_buy(session, engine, data_provider, settings, candidate.symbol, sleeve_id=manual.id,
+                            reason="review-queue buy (quality gate skipped by the person)")
+    except MarketClosedError as exc:
+        raise ReviewBuyMarketClosed(candidate.symbol) from exc
+    except _ENGINE_REFUSALS as exc:
+        raise ReviewBuyRefused(str(exc)) from exc
+    except (AllProvidersFailedError, DataProviderError) as exc:
+        raise ReviewBuyRefused(f"The buy needs fresh market data and could not get it: {exc}") from exc
+    return _stamp_plan(session, position.trade_plan_id, candidate, SOURCE_REVIEW_BUY), position
+
+
+def _finish_review_buy(session, candidate, manual, record, position, old_plan_id, clock):
     candidate = session.get(SmartMoneyCandidate, candidate.id)
     if old_plan_id is not None and old_plan_id != record.id:
         # The evaluation that sent it to the queue is superseded by the plan that was bought: the position is the

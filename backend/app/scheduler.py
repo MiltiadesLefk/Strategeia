@@ -5,6 +5,7 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlmodel import Session, select
 
 from app.config import load_app_settings
@@ -36,7 +37,7 @@ from app.services.telegram_service import notify as telegram_notify
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
 from app.services.thesis_service import run_thesis_sweep
 from app.services.insider_coverage_service import run_insider_coverage_tick
-from app.watchers.runner import run_due_watchers
+from app.watchers.runner import run_due_watchers, run_morning_fetch
 
 logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
@@ -271,6 +272,23 @@ def _watchers_job() -> None:
         logger.exception("Scheduled watchers tick failed")
 
 
+# Hold mode (PORTOFOLIO_BUILDER D7): the smart-money sources are pulled once, before the open, and the
+# candidates are evaluated just after the 09:45 redo. Registered at startup, like the other intervals.
+MORNING_FETCH_TIME_ET = (9, 27)
+HOLD_PIPELINE_TIME_ET = (9, 50)
+
+
+def _morning_fetch_job() -> None:
+    try:
+        settings = load_app_settings()
+        if not settings.watchers_enabled or not is_us_trading_day(to_market_time().date()):
+            return
+        with Session(engine) as session:
+            run_morning_fetch(session, settings)
+    except Exception:
+        logger.exception("Morning smart-money fetch failed")
+
+
 INSIDER_COVERAGE_INTERVAL_MINUTES = 10
 
 
@@ -410,11 +428,17 @@ def start_scheduler() -> BackgroundScheduler:
         max_instances=1,
         coalesce=True,
     )
+    if settings.hold_mode_enabled:
+        _scheduler.add_job(
+            _morning_fetch_job,
+            CronTrigger(day_of_week="mon-fri", hour=MORNING_FETCH_TIME_ET[0], minute=MORNING_FETCH_TIME_ET[1], timezone=US_MARKET_TZ),
+            id="morning_fetch", max_instances=1, coalesce=True,
+        )
     _scheduler.add_job(
         _smart_money_pipeline_job,
-        "interval",
-        minutes=SMART_MONEY_PIPELINE_INTERVAL_MINUTES,
-        jitter=WATCHER_TICK_JITTER_SECONDS,
+        CronTrigger(day_of_week="mon-fri", hour=HOLD_PIPELINE_TIME_ET[0], minute=HOLD_PIPELINE_TIME_ET[1], timezone=US_MARKET_TZ)
+        if settings.hold_mode_enabled
+        else IntervalTrigger(minutes=SMART_MONEY_PIPELINE_INTERVAL_MINUTES, jitter=WATCHER_TICK_JITTER_SECONDS),
         id="smart_money_pipeline",
         max_instances=1,
         coalesce=True,
