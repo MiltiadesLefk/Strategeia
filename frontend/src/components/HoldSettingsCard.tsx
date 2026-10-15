@@ -12,6 +12,9 @@ type Draft = Pick<
   | 'hold_max_positions'
   | 'hold_max_per_sector'
   | 'hold_max_new_per_scan'
+  | 'hold_failed_gate_size_pct'
+  | 'news_discovery_enabled'
+  | 'news_discovery_max_per_run'
 >;
 
 const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: number }[] = [
@@ -21,6 +24,8 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_max_positions', label: 'Max positions', hint: 'Open hold positions in the sleeve.' },
   { key: 'hold_max_per_sector', label: 'Max per sector', hint: 'Same-sector hold positions.' },
   { key: 'hold_max_new_per_scan', label: 'Max new buys per daily scan', hint: 'Keeps one scan from buying the whole list.' },
+  { key: 'hold_failed_gate_size_pct', label: 'Size of a smart-money buy that fails the gate (% of a normal slice)', hint: '0 = send it to the review queue instead.' },
+  { key: 'news_discovery_max_per_run', label: 'Max news-discovered tickers per run', hint: 'Only used when news discovery is on.' },
 ];
 
 /** Portfolio builder controls. Saved on their own button. */
@@ -36,6 +41,8 @@ export function HoldSettingsCard() {
         hold_stop_pct: data.hold_stop_pct, hold_alert_drawdown_pct: data.hold_alert_drawdown_pct,
         hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
         hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
+        hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
+        news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
       });
     }
   }, [data]);
@@ -54,6 +61,10 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.hold_buy_only_dips} onChange={(v) => set('hold_buy_only_dips', v)} label="Only buy dips" />
         <span>Only buy a good stock while it is 10% or more under its 3-month high</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.news_discovery_enabled} onChange={(v) => set('news_discovery_enabled', v)} label="News discovery" />
+        <span>Look for new tickers in the news of watched stocks (off by default)</span>
       </div>
       {NUMBER_FIELDS.map((f) => (
         <div key={f.key}>
