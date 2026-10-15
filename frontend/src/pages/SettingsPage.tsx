@@ -732,10 +732,8 @@ export function SettingsPage() {
             onChange={(e) => setMinConfidence(Number(e.target.value))}
           />
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            The bar a setup has to clear to become a tradeable plan at all — below it the symbol is still fully
-            evaluated and recorded, as an explicit "No Trade" with its reason, rather than skipped. Confidence is the
-            share of the engine's 16 evidence points a setup earned, so it moves in ~6% steps: the default 30% means
-            5 points. Raise it for fewer, higher-conviction plans; lower it to see more marginal setups.
+            Retired: hold mode scores nothing, so this no longer affects buying. It is only kept in the strategy
+            fingerprint and read by old-style backtest runs.
           </div>
         </div>
         <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Scanning</div>
