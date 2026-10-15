@@ -298,7 +298,8 @@ def build_seed(
         if today <= event_day <= horizon:
             seed.catalysts.append(_catalyst("macro", f"{label} (market-wide)", event_day, SOURCE_RULE))
     target_word = "falls to" if not long else "reaches"
-    seed.catalysts.append(_catalyst("target", f"Price {target_word} the first target ${position.tp1:,.2f}", None, SOURCE_RULE))
+    if position.tp1 > 0:  # hold positions have no target
+        seed.catalysts.append(_catalyst("target", f"Price {target_word} the first target ${position.tp1:,.2f}", None, SOURCE_RULE))
 
     if plan is not None:
         origin = f"Thesis created from trade plan #{plan.id} (confidence {plan.confidence_score}%)."
@@ -730,7 +731,8 @@ def build_review_facts(position: PaperPosition, thesis: ThesisRecord, *, now: da
         f"Symbol: {position.symbol}",
         f"Direction: {position.direction}" + (" (profits when the price falls)" if position.direction == "short" else ""),
         f"Entered {position.opened_at.date().isoformat()} at ${position.entry_price:,.2f}; held {held} calendar days",
-        f"Stop ${position.stop_loss:,.2f}, first target ${position.tp1:,.2f}, second target ${position.tp2:,.2f}",
+        f"Stop ${position.stop_loss:,.2f}"
+        + (f", first target ${position.tp1:,.2f}, second target ${position.tp2:,.2f}" if position.tp1 > 0 else ", no profit target (hold)"),
         f"Thesis broken warning: {'ON' if thesis.thesis_broken else 'off'}",
         f"Last rule re-check: {thesis.last_checked_at.isoformat() + ' UTC' if thesis.last_checked_at else 'never'}",
     ]

@@ -311,7 +311,7 @@ def build_lesson_prompt(
         f"Exited: {position.closed_at.date().isoformat()} at ${position.close_price:.2f}, "
         f"reason: {_CLOSE_REASON_TEXT.get(position.close_reason or '', position.close_reason or 'unknown')}",
         f"Held: {held_days} calendar days",
-        f"Stop was ${position.stop_loss:.2f}, first target ${position.tp1:.2f}",
+        f"Stop was ${position.stop_loss:.2f}" + (f", first target ${position.tp1:.2f}" if position.tp1 > 0 else ", no profit target (hold)"),
         f"Stock price move over the trade: {stock_move_pct:+.1f}%; the trade's own result after direction: {trade_move_pct:+.1f}%",
     ]
     if position.realized_r is not None:

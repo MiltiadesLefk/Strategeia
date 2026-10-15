@@ -172,6 +172,12 @@ def test_a_note_with_nothing_to_report_says_so_instead_of_padding(session):
     assert "OPEN POSITIONS" not in note.text
 
 
+def test_a_hold_position_has_no_target_line(session):
+    add_position(session, "AAA", tp1=0)
+    note = build(session, FakeData({**MARKET, "AAA": (101.0, 0.0)}))
+    assert "to stop" in note.text and "first target" not in note.text
+
+
 def test_a_failing_part_is_listed_as_unavailable_and_the_rest_still_builds(session):
     add_position(session, "AAA")
     data = FakeData({"SPY": (580.0, 0.3)})  # no futures, no VIX, no AAA price

@@ -111,7 +111,7 @@ def _position_lines(session: Session, provider: DataProvider, unavailable: list[
         for position in positions:
             thesis = getattr(position, "thesis_status", None)  # filled in by the thesis feature when present
             head = f"{position.symbol} {position.direction} {position.shares} sh from {position.entry_price:,.2f}"
-            levels = f"stop {position.stop_loss:,.2f}, first target {position.tp1:,.2f}"
+            levels = f"stop {position.stop_loss:,.2f}" + (f", first target {position.tp1:,.2f}" if position.tp1 > 0 else "")
             try:
                 price = float(_quote(provider, position.symbol).price)
             except Exception:  # noqa: BLE001
@@ -129,8 +129,9 @@ def _position_lines(session: Session, provider: DataProvider, unavailable: list[
                 + (f", {r_value:+.1f}R" if r_value is not None else "")
                 + ")",
                 f"{stop_gap:.1f}% to stop {position.stop_loss:,.2f}" if stop_gap > 0 else f"at or past stop {position.stop_loss:,.2f}",
-                f"{tp_gap:.1f}% to first target {position.tp1:,.2f}" if tp_gap > 0 else f"at or past first target {position.tp1:,.2f}",
             ]
+            if position.tp1 > 0:  # hold positions have no target (tp1 = 0)
+                parts.append(f"{tp_gap:.1f}% to first target {position.tp1:,.2f}" if tp_gap > 0 else f"at or past first target {position.tp1:,.2f}")
             if thesis:
                 parts.append(f"thesis: {short(str(thesis), 60)}")
             lines.append("; ".join(parts))
