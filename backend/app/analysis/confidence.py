@@ -1,6 +1,5 @@
-"""The confidence arithmetic and the ATR-floored stop, shared by the live plan
-builder, the backtester and the historical calibration reports. Lived in
-services/trade_plan_service.py (which re-exports it for now)."""
+"""The confidence constants and the ATR-floored stop numbers of the retired swing plan builder. Still read by the
+historical calibration report, the stop calculator and the thesis tracker (old plan rows carry these scales)."""
 
 from __future__ import annotations
 
@@ -66,30 +65,6 @@ CONFIDENCE_CEILING = 100
 # spend tokens on) an AI narrative, only a rule-based reason.
 
 
-def _derive_entry_and_stop(
-    direction: str,
-    price: float,
-    support: list[float],
-    resistance: list[float],
-    atr_value: float | None = None,
-) -> tuple[float, float]:
-    """Structure first, volatility as a floor: the stop goes just past the
-    nearest level, then gets pushed out if that would put it closer than
-    ATR_STOP_MULTIPLE x ATR. Never pulled IN — a level further away than the
-    ATR floor is respected as-is, since structure is the better reason. A
-    missing ATR read (too few bars) just skips the floor."""
-    entry = price
-    if direction == "long":
-        stop = support[0] * (1 - STOP_BUFFER_PCT) if support else entry * (1 - FALLBACK_STOP_PCT)
-        if atr_value:
-            stop = min(stop, entry - ATR_STOP_MULTIPLE * atr_value)
-    else:
-        stop = resistance[0] * (1 + STOP_BUFFER_PCT) if resistance else entry * (1 + FALLBACK_STOP_PCT)
-        if atr_value:
-            stop = max(stop, entry + ATR_STOP_MULTIPLE * atr_value)
-    return entry, stop
-
-
 def clamp_points(total: int) -> int:
     """The raw evidence points behind a confidence percentage, clamped to
     the range the percentage can express. Surfaced on the response because
@@ -101,8 +76,3 @@ def clamp_points(total: int) -> int:
     """
     return max(0, min(MAX_SCORE_FOR_CONFIDENCE, total))
 
-
-def _confidence_score(score: int) -> int:
-    clamped = clamp_points(score)
-    span = CONFIDENCE_CEILING - CONFIDENCE_FLOOR
-    return round(CONFIDENCE_FLOOR + (clamped / MAX_SCORE_FOR_CONFIDENCE) * span)

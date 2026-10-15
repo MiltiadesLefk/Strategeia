@@ -42,24 +42,6 @@ def relative_strength(ohlcv: pd.DataFrame | None, market_ohlcv: pd.DataFrame | N
     return stock, market, stock - market
 
 
-def score_relative_strength(
-    direction: str | None, ohlcv: pd.DataFrame | None, market_ohlcv: pd.DataFrame | None
-) -> tuple[int, list[str]]:
-    reading = relative_strength(ohlcv, market_ohlcv)
-    if reading is None or direction not in ("long", "short"):
-        return 0, []
-    stock, market, gap = reading
-    if abs(gap) < RELATIVE_STRENGTH_GAP_PCT:
-        return 0, []
-    leading = gap > 0
-    supports = leading == (direction == "long")
-    verb = "supports" if supports else "argues against"
-    word = "ahead of" if leading else "behind"
-    return (1 if supports else -1) * RELATIVE_STRENGTH_SCORE_CAP, [
-        f"{RELATIVE_STRENGTH_DAYS}-day return {stock:+.1f}% is {abs(gap):.1f} points {word} the market ({market:+.1f}%), which {verb} a {direction}"
-    ]
-
-
 def up_down_volume_ratio(ohlcv: pd.DataFrame | None, days: int = VOLUME_TREND_DAYS) -> float | None:
     """Volume on up days over volume on down days across the last `days` bars; None when there are no down
     days with volume (a ratio would be meaningless)."""
@@ -73,20 +55,3 @@ def up_down_volume_ratio(ohlcv: pd.DataFrame | None, days: int = VOLUME_TREND_DA
         return None
     return up / down
 
-
-def score_volume_trend(direction: str | None, ohlcv: pd.DataFrame | None) -> tuple[int, list[str]]:
-    ratio = up_down_volume_ratio(ohlcv)
-    if ratio is None or direction not in ("long", "short"):
-        return 0, []
-    if ratio >= ACCUMULATION_RATIO:
-        accumulating = True
-    elif ratio <= 1 / ACCUMULATION_RATIO:
-        accumulating = False
-    else:
-        return 0, []
-    supports = accumulating == (direction == "long")
-    verb = "supports" if supports else "argues against"
-    name = "accumulation (buyers heavier)" if accumulating else "distribution (sellers heavier)"
-    return (1 if supports else -1) * VOLUME_TREND_SCORE_CAP, [
-        f"volume trend: {name}, up-day volume is {ratio:.2f}x down-day volume over {VOLUME_TREND_DAYS} days, which {verb} a {direction}"
-    ]

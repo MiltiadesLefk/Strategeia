@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -154,42 +154,3 @@ def macro_coverage_days_left(today: date | None = None) -> dict[str, int]:
     return {label: (end - today).days for label, (_, end) in MACRO_SERIES_COVERAGE.items()}
 
 
-# Series already warned about in this process, so the log says it once rather
-# than once per trade plan.
-_warned_uncovered: set[str] = set()
-
-
-def _warn_once_if_uncovered(day: date) -> None:
-    missing = [label for label in uncovered_macro_series(day) if label not in _warned_uncovered]
-    if not missing:
-        return
-    _warned_uncovered.update(missing)
-    logger.warning(
-        "Macro-event calendar has no %s dates for %s; the macro-event penalty is "
-        "silently off for those events. Extend analysis/macro_calendar.py from the "
-        "agencies' published schedules.",
-        ", ".join(missing), day.isoformat(),
-    )
-
-
-def score_macro_event_proximity(today: date | None = None) -> tuple[int, list[str]]:
-    """-MACRO_EVENT_SCORE_CAP when a scheduled macro release falls within
-    MACRO_EVENT_LOOKAHEAD_DAYS, else 0. Symbol-independent by design — this
-    is the same penalty for every plan generated on a given day, which is
-    correct: the risk is to the whole tape, not to any one setup.
-
-    Falls outside the hand-maintained table (see MACRO_SERIES_COVERAGE)
-    contributes 0 rather than guessing — silence here means "not tracked,"
-    never "confirmed calm." The gap is logged once per process, and
-    macro_calendar_covers() lets a caller tell the two apart.
-    """
-    today = today or date.today()
-    _warn_once_if_uncovered(today + timedelta(days=MACRO_EVENT_LOOKAHEAD_DAYS))
-    horizon_end = today + timedelta(days=MACRO_EVENT_LOOKAHEAD_DAYS)
-    upcoming = [(label, d) for label, d in ALL_MACRO_EVENTS if today <= d <= horizon_end]
-    if not upcoming:
-        return 0, []
-
-    label, event_date = min(upcoming, key=lambda pair: pair[1])
-    when = "today" if event_date == today else "tomorrow"
-    return -MACRO_EVENT_SCORE_CAP, [f"{label} {when} ({event_date.isoformat()}) — market-wide event risk"]
