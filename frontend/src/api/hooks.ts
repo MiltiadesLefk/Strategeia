@@ -667,7 +667,7 @@ const smartMoneyKeys = {
   trades: (days: number, side: string, symbol: string, minValue: number) =>
     ['smart-money', 'insiders', days, side, symbol, minValue] as const,
   clusters: (days: number, symbol: string) => ['smart-money', 'clusters', days, symbol] as const,
-  summary: (symbol: string) => ['smart-money', 'summary', symbol] as const,
+  summary: (symbol: string, days?: number) => ['smart-money', 'summary', symbol, days] as const,
 };
 
 export function useSmartMoneyStatus() {
@@ -692,10 +692,13 @@ export function useSmartMoneyClusters(days: number, symbol: string) {
   });
 }
 
-export function useSmartMoneySummary(symbol: string) {
+export function useSmartMoneySummary(symbol: string, days?: number) {
   return useQuery({
-    queryKey: smartMoneyKeys.summary(symbol),
-    queryFn: () => api.get<SmartMoneyInsiderSummary>(`/api/smart-money/insiders/summary/${encodeURIComponent(symbol)}`),
+    queryKey: smartMoneyKeys.summary(symbol, days),
+    queryFn: () =>
+      api.get<SmartMoneyInsiderSummary>(
+        `/api/smart-money/insiders/summary/${encodeURIComponent(symbol)}${days ? `?days=${days}` : ''}`,
+      ),
     enabled: !!symbol,
   });
 }

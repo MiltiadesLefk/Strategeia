@@ -36,6 +36,7 @@ const TABS = [
   { value: 'catalysts', label: 'Catalysts' },
   { value: 'options', label: 'Options' },
   { value: 'valuation', label: 'Valuation' },
+  { value: 'smartmoney', label: 'Smart Money' },
   { value: 'library', label: 'Library' },
   { value: 'tradingview', label: 'TradingView' },
 ];
@@ -580,9 +581,9 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
             </>
           )}
 
-          {tab === 'overview' && !data.symbol.endsWith('-USD') && <InsiderPanel symbol={data.symbol} />}
-          {tab === 'overview' && !data.symbol.endsWith('-USD') && <FundHoldersPanel symbol={data.symbol} />}
-          {tab === 'overview' && !data.symbol.endsWith('-USD') && <FinraPanel symbol={data.symbol} />}
+          {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <InsiderPanel symbol={data.symbol} />}
+          {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <FundHoldersPanel symbol={data.symbol} />}
+          {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <FinraPanel symbol={data.symbol} />}
         </>
       )}
     </>

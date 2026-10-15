@@ -1,19 +1,36 @@
+import { useState } from 'react';
 import { useSmartMoneyInsiders, useSmartMoneySummary } from '../../api/hooks';
 import type { ApiError } from '../../api/client';
 import { ErrorBanner, LoadingSpinner, formatMoney } from '../common';
+import type { SmartMoneySide } from '../../api/types';
 import { InsiderTradesTable } from './InsiderTradesTable';
 
-const PANEL_DAYS = 90;
-const PANEL_MAX_ROWS = 8;
+const PANEL_MAX_ROWS = 25;
+const DAY_OPTIONS = [30, 90, 180, 365];
+const MIN_VALUE_OPTIONS = [
+  { value: 0, label: 'Any value' },
+  { value: 50_000, label: '$50k +' },
+  { value: 100_000, label: '$100k +' },
+  { value: 500_000, label: '$500k +' },
+  { value: 1_000_000, label: '$1M +' },
+];
+const SIDE_OPTIONS: { value: SmartMoneySide; label: string }[] = [
+  { value: 'all', label: 'Buys and sells' },
+  { value: 'buys', label: 'Buys only' },
+  { value: 'sells', label: 'Sells only' },
+];
 
 /** One symbol's insider activity: the numbers the scorer reads, what it would do with them
  *  (information only), and the most recent open-market trades. Used on the Analysis page's
  *  research tabs; the Smart Money page has its own full table. Read-only. */
 export function InsiderPanel({ symbol }: { symbol: string }) {
-  const summary = useSmartMoneySummary(symbol);
-  const trades = useSmartMoneyInsiders({ days: PANEL_DAYS, side: 'all', symbol, minValue: 0 });
+  const [side, setSide] = useState<SmartMoneySide>('all');
+  const [minValue, setMinValue] = useState(0);
+  const [days, setDays] = useState(90);
+  const summary = useSmartMoneySummary(symbol, days);
+  const trades = useSmartMoneyInsiders({ days, side, symbol, minValue });
 
-  if (summary.isLoading || trades.isLoading) return <LoadingSpinner label="Loading insider activity…" />;
+  if (summary.isLoading) return <LoadingSpinner label="Loading insider activity…" />;
   if (summary.error) return <ErrorBanner message={(summary.error as ApiError).message} onRetry={() => summary.refetch()} />;
   const s = summary.data;
   if (!s) return null;
@@ -62,7 +79,36 @@ export function InsiderPanel({ symbol }: { symbol: string }) {
           : 'For information: today\'s rules would add nothing for insiders (they need meaningful net open-market buying).'}{' '}
         Only open-market buys can ever score; sells are context only.
       </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select aria-label="Side" style={{ width: 'auto' }} value={side} onChange={(e) => setSide(e.target.value as SmartMoneySide)}>
+          {SIDE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select aria-label="Minimum value" style={{ width: 'auto' }} value={minValue} onChange={(e) => setMinValue(Number(e.target.value))}>
+          {MIN_VALUE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select aria-label="Days" style={{ width: 'auto' }} value={days} onChange={(e) => setDays(Number(e.target.value))}>
+          {DAY_OPTIONS.map((d) => (
+            <option key={d} value={d}>
+              Last {d} days
+            </option>
+          ))}
+        </select>
+      </div>
+      {trades.isLoading && <LoadingSpinner label="Loading trades…" />}
       {shown.length > 0 && <InsiderTradesTable trades={shown} showSymbol={false} />}
+      {!trades.isLoading && shown.length === 0 && (
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          No trades match these filters.
+        </div>
+      )}
     </div>
   );
 }
