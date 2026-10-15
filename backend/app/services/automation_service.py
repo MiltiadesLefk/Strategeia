@@ -36,7 +36,7 @@ def hold_scan_symbol(
     try:
         dip = False
         if not skip_gate:
-            gate = check_quality(data_provider, symbol, price_only=price_only)
+            gate = check_quality(data_provider, symbol, price_only=price_only, session=session)
             if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
                 return False
             dip = gate.dip

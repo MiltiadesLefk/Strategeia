@@ -147,3 +147,20 @@ def test_hold_scan_buys_a_news_discovered_ticker_outside_the_universe(session, m
     assert bought == ["AAA", "VST"]  # FAKE has no quote, AAA is already in the universe
     plan = session.exec(select(TradePlanRecord).where(TradePlanRecord.symbol == "VST")).one()
     assert "NYSE: VST" in plan.reason
+
+
+def test_check_quality_archives_the_fundamentals_it_fetched(session):
+    from app.data_providers.base import CompanyOverview
+    from app.knowledge import FactKind, facts_known_as_of
+    from app.services.hold_buy_service import check_quality
+
+    class WithFundamentals(Provider):
+        def get_company_overview(self, symbol):
+            return CompanyOverview(symbol=symbol, name="Nova", market_cap=1e9, pe_ratio=20.0, revenue_ttm=1e8,
+                                   eps_ttm=2.0, week52_low=70.0, week52_high=120.0)
+
+        def get_financials(self, symbol):
+            raise RuntimeError("no history")  # the gate treats this as no years; the overview alone is archived
+
+    check_quality(WithFundamentals(), "NOVA", session=session)
+    assert facts_known_as_of(session, FactKind.FUNDAMENTALS_SNAPSHOT, symbol="NOVA", limit=1)
