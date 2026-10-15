@@ -93,16 +93,3 @@ class MissedTradeReportSchema(_FromAttributes):
     trades: list[MissedTradeItemSchema]
     trades_listed: int
     caveats: list[str]
-
-
-class MissedTradeRefreshSchema(_FromAttributes):
-    considered: int
-    computed: int
-    resolved: int
-    still_open: int
-    no_data: int
-    not_simulatable: int
-    skipped_resolved: int
-    remaining: int
-    busy: bool
-    failed_symbols: list[str]

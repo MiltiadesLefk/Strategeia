@@ -325,10 +325,10 @@ def _headline(closed: int, analyzed: int, excluded: Exclusions) -> str:
 
 def compute_calibration(session: Session, points_max: int | None = None) -> CalibrationReport:
     """Build the report from the database. `points_max` defaults to the
-    engine's MAX_SCORE_FOR_CONFIDENCE (imported lazily: that module pulls in the
+    engine's MAX_SCORE_FOR_CONFIDENCE (imported lazily, kept out of module scope
     whole evaluation pipeline, which a pure statistics test should not need)."""
     if points_max is None:
-        from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE
+        from app.analysis.confidence import MAX_SCORE_FOR_CONFIDENCE
 
         points_max = MAX_SCORE_FOR_CONFIDENCE
 

@@ -11,8 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.api.deps import get_app_settings, get_session
-from app.api.routers.missed_trades import get_missed_trade_bars_loader
+from app.api.deps import get_session
 from app.main import app
 from app.portfolio.missed_trade_models import (
     OUTCOME_NO_DATA,
@@ -34,7 +33,7 @@ from app.portfolio.missed_trade_report import (
 )
 from app.portfolio.models import PaperPosition, TradePlanRecord
 from app.portfolio.signal_stats import wilson_interval
-from test_missed_trades import CLEAN, LONG_REASON, long_bars
+from test_missed_trades import LONG_REASON
 
 VETO = "AI Trading Overlay would not take this trade at 80% conviction — no trade taken against a rule-based long."
 NO_TREND = "No clear trend (EMA20/EMA50 not aligned) — not enough information to size a trade."
@@ -258,24 +257,11 @@ def test_the_report_never_writes(session):
 # ----------------------------------------------------------------------- endpoints
 
 
-class CountingLoader:
-    def __init__(self, bars: pd.DataFrame):
-        self.bars, self.calls = bars, 0
-
-    def __call__(self, symbol, start):
-        self.calls += 1
-        return self.bars
-
-
 @pytest.fixture
 def api(session):
-    loader = CountingLoader(long_bars([(200.0, 208.5, 199.0, 208.0)]))
     app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[get_app_settings] = lambda: CLEAN
-    app.dependency_overrides[get_missed_trade_bars_loader] = lambda: loader
-    yield TestClient(app), loader
-    for dep in (get_session, get_app_settings, get_missed_trade_bars_loader):
-        app.dependency_overrides.pop(dep, None)
+    yield TestClient(app)
+    app.dependency_overrides.pop(get_session, None)
 
 
 def _plan_at_decision(session) -> TradePlanRecord:
@@ -288,13 +274,11 @@ def _plan_at_decision(session) -> TradePlanRecord:
     return plan
 
 
-def test_get_reads_the_stored_outcomes_and_never_computes_or_writes(api, session):
-    client, loader = api
+def test_get_reads_the_stored_outcomes_and_never_writes(api, session):
     _plan_at_decision(session)
 
-    body = client.get("/api/missed-trades").json()
+    body = api.get("/api/missed-trades").json()
 
-    assert loader.calls == 0  # no price history was requested
     assert session.exec(select(MissedTradeOutcome)).all() == []
     assert body["awaiting_refresh"] == 1
     low = next(c for c in body["categories"] if c["key"] == "low_confidence")
@@ -303,28 +287,16 @@ def test_get_reads_the_stored_outcomes_and_never_computes_or_writes(api, session
     assert body["last_computed_at"] is None
 
 
-def test_refresh_computes_then_get_shows_the_result(api, session):
-    client, loader = api
-    _plan_at_decision(session)
+def test_an_old_row_without_levels_still_displays(api, session):
+    plan = _plan_at_decision(session)
+    session.add(MissedTradeOutcome(plan_id=plan.id, symbol="TEST", category="low_confidence", status="resolved", r_multiple=1.5))
+    session.commit()
 
-    refreshed = client.post("/api/missed-trades/refresh")
-    assert refreshed.status_code == 200
-    assert refreshed.json()["computed"] == 1 and refreshed.json()["resolved"] == 1
-    assert loader.calls == 1
+    trade = api.get("/api/missed-trades").json()["trades"][0]
 
-    body = client.get("/api/missed-trades").json()
-    low = next(c for c in body["categories"] if c["key"] == "low_confidence")
-    assert (low["resolved"], low["wins"]) == (1, 1)
-    assert low["avg_r"] == pytest.approx(1.5)
-    assert body["trades"][0]["r_multiple"] == pytest.approx(1.5)
-    assert body["last_computed_at"].endswith("Z")
-    assert loader.calls == 1  # the GET did not load prices
+    assert trade["tp1"] is None and trade["entry"] is None
+    assert trade["r_multiple"] == pytest.approx(1.5)
 
 
-def test_refresh_has_a_cooldown(api, session):
-    client, _ = api
-    assert client.post("/api/missed-trades/refresh").status_code == 200
-    second = client.post("/api/missed-trades/refresh")
-    assert second.status_code == 429
-    assert "wait" in second.json()["detail"]
-
+def test_the_refresh_endpoint_is_gone(api):
+    assert api.post("/api/missed-trades/refresh").status_code in (404, 405)

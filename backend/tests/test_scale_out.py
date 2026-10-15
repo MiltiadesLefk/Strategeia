@@ -421,19 +421,6 @@ def test_off_is_byte_identical_to_an_engine_that_never_heard_of_scale_out(sessio
     assert results[0] == results[1] == results[2]
 
 
-def test_the_strategy_fingerprint_is_unchanged_while_off_and_moves_when_on():
-    base = fingerprint(build_snapshot(AppSettings()))
-    assert fingerprint(build_snapshot(AppSettings(scale_out_fraction=0.3, scale_out_stop_mode="trail"))) == base
-    on = fingerprint(build_snapshot(AppSettings(scale_out_enabled=True)))
-    assert on != base
-    assert fingerprint(build_snapshot(AppSettings(scale_out_enabled=True, scale_out_fraction=0.3))) != on
-    assert fingerprint(build_snapshot(AppSettings(scale_out_enabled=True, scale_out_stop_mode="trail"))) != on
-    # The trail multiple only matters in trail mode.
-    assert fingerprint(build_snapshot(AppSettings(scale_out_enabled=True, scale_out_trail_r=2.0))) == on
-    trail = fingerprint(build_snapshot(AppSettings(scale_out_enabled=True, scale_out_stop_mode="trail")))
-    assert fingerprint(build_snapshot(AppSettings(scale_out_enabled=True, scale_out_stop_mode="trail", scale_out_trail_r=2.0))) != trail
-
-
 # --------------------------------------------------------- stats and liquidity
 
 

@@ -159,7 +159,6 @@ def _reset_in_process_cooldowns(monkeypatch):
     from app.data_providers import health as _data_source_health
 
     _data_source_health.reset()
-    monkeypatch.setattr("app.api.routers.missed_trades._last_missed_trades_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.signals._last_finra_refresh_monotonic", None)
     monkeypatch.setattr("app.api.routers.news._last_news_collect_monotonic", None)
     monkeypatch.setattr("app.api.routers.news._last_news_label_monotonic", {})

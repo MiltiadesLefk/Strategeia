@@ -201,6 +201,14 @@ def test_empty_database_says_there_is_nothing_to_calibrate(session):
     assert all(c.verdict == VERDICT_NOT_ENOUGH_DATA for c in report.components)
 
 
+def test_hold_positions_with_no_plan_do_not_crash_the_report(session):
+    add_trade(session, 0, 1.0, with_plan=False)
+    add_trade(session, 0, -1.0, with_plan=False)
+    report = compute_calibration(session)
+    assert report.closed_trades == 2 and report.analyzed_trades == 0
+    assert report.reliable is False
+
+
 def test_one_trade_is_reported_but_flagged_and_has_no_interval_on_r(session):
     add_trade(session, 9, 1.5)
     report = compute_calibration(session)

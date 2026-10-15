@@ -53,7 +53,7 @@ from app.config import AppSettings
 
 # Bump when rule LOGIC changes in a way no named constant reflects (a new
 # condition in a scorer, a changed formula). Part of every fingerprint.
-RULES_REVISION = 1
+RULES_REVISION = 2
 
 # Settings that always shape a decision, in snapshot order, with the label the
 # change list uses. Everything else in AppSettings is excluded (see above).
@@ -65,7 +65,6 @@ DECISION_SETTINGS: dict[str, str] = {
     "max_concurrent_positions": "max open positions",
     "max_positions_per_sector": "max positions per sector",
     "max_position_pct_of_adv": "max position % of daily volume",
-    "max_holding_days": "max holding days",
     "hold_stop_pct": "hold disaster stop %",
     "hold_alert_drawdown_pct": "hold drawdown alert %",
     "hold_target_weight_pct": "hold target weight %",
@@ -90,7 +89,6 @@ DECISION_SETTINGS: dict[str, str] = {
     "smart_money_min_score": "smart-money min score",
     "smart_money_max_open_positions": "smart-money max open positions",
     "smart_money_max_new_per_week": "smart-money max new per week",
-    "smart_money_max_holding_days": "smart-money max holding days",
 }
 
 # Only meaningful while the overlay is on (see module docstring).
@@ -153,10 +151,12 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     ),
     "app.analysis.expected_move": ("EXPECTED_MOVE_SCORE_CAP", "ELEVATED_RATIO_THRESHOLD", "MIN_DAYS_FOR_RELIABLE_READ"),
     "app.analysis.macro_calendar": ("MACRO_EVENT_SCORE_CAP", "MACRO_EVENT_LOOKAHEAD_DAYS"),
-    "app.services.trade_plan_service": (
+    "app.analysis.confidence": (
         "STOP_BUFFER_PCT", "FALLBACK_STOP_PCT", "ATR_PERIOD", "ATR_STOP_MULTIPLE", "TECHNICAL_SCORE_CAP",
         "MAX_SCORE_FOR_CONFIDENCE", "CONFIDENCE_FLOOR", "CONFIDENCE_CEILING",
     ),
+    # The hold gate's own rules (hold_stop_pct and hold_target_weight_pct are settings above).
+    "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS", "MIN_REVENUE_GROWTH_PCT"),
     "app.risk.position_sizing": ("FALLBACK_R_MULTIPLES", "MIN_RR_FOR_LEVEL_TARGET"),
     # Which silent signals have been promoted into real scoring (none yet).
     "app.analysis.shadow_signals": ("LIVE_SIGNALS",),
@@ -255,16 +255,6 @@ def build_snapshot(settings: AppSettings) -> dict[str, Any]:
         snapshot["liquidity_slippage"] = {
             "liquidity_slippage_coefficient": normalize(values["liquidity_slippage_coefficient"])
         }
-    if settings.scale_out_enabled:
-        # Only while on (it changes how a position exits), so an install that never
-        # uses it keeps its fingerprint. The trail multiple only matters in trail mode.
-        scale_out: dict[str, Any] = {
-            "scale_out_fraction": normalize(values["scale_out_fraction"]),
-            "scale_out_stop_mode": values["scale_out_stop_mode"],
-        }
-        if settings.scale_out_stop_mode == "trail":
-            scale_out["scale_out_trail_r"] = normalize(values["scale_out_trail_r"])
-        snapshot["scale_out"] = scale_out
     return snapshot
 
 
@@ -298,7 +288,7 @@ def _label(group: str, key: str) -> str:
         if key == "llm_model":
             return "overlay LLM model"
         return key.split(".", 1)[-1].replace("_", " ").lower()
-    # rules: "trade_plan_service.ATR_STOP_MULTIPLE" -> "ATR STOP MULTIPLE" would
+    # rules: "confidence.ATR_STOP_MULTIPLE" -> "ATR STOP MULTIPLE" would
     # shout; lower-case it and keep the module out of the way.
     if key == "rules_revision":
         return "rules revision"
@@ -326,7 +316,7 @@ def describe_changes(old: dict[str, Any] | None, new: dict[str, Any]) -> list[st
     if old is None:
         return []
     lines: list[str] = []
-    for group in ("settings", "overlay", "ml", "liquidity_slippage", "scale_out", "rules"):
+    for group in ("settings", "overlay", "ml", "liquidity_slippage", "rules"):
         before = old.get(group) or {}
         after = new.get(group) or {}
         if group == "overlay" and before and not after:

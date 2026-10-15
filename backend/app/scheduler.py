@@ -24,7 +24,6 @@ from app.knowledge.point_in_time import is_simulated
 from app.services import smart_money_event_review_service, smart_money_pipeline_service
 from app.services.sleeve_service import mark_all_sleeves
 from app.timeutil import utcnow_naive
-from app.portfolio.missed_trades import refresh_missed_trades
 from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_hold_scan, run_market_open_redos
 from app.services.health_monitor import check_and_alert
@@ -150,23 +149,6 @@ def _lesson_catchup_job() -> None:
             run_lesson_catchup(session, data_provider, llm_provider)
     except Exception:
         logger.exception("Scheduled lesson catch-up tick failed")
-
-
-# The missed-trades ledger is recomputed once a day, after the close, when the day's
-# bars are final (see portfolio/missed_trades.py). Analysis only: it places nothing and
-# decides nothing, and it is skipped inside a simulated (backtest) moment.
-MISSED_TRADES_REFRESH_TIME_ET = (16, 45)
-
-
-def _missed_trades_refresh_job() -> None:
-    try:
-        if is_simulated():
-            return
-        settings = load_app_settings()
-        with Session(engine) as session:
-            refresh_missed_trades(session, settings)
-    except Exception:
-        logger.exception("Scheduled missed-trades refresh failed")
 
 
 # Watchers: one tick wakes every watchers_poll_minutes and runs whichever watchers
@@ -385,18 +367,6 @@ def start_scheduler() -> BackgroundScheduler:
         _market_open_redo_job,
         CronTrigger(**MARKET_OPEN_REDO_CRON, timezone=US_MARKET_TZ),
         id="market_open_redo",
-    )
-    _scheduler.add_job(
-        _missed_trades_refresh_job,
-        CronTrigger(
-            day_of_week="mon-fri",
-            hour=MISSED_TRADES_REFRESH_TIME_ET[0],
-            minute=MISSED_TRADES_REFRESH_TIME_ET[1],
-            timezone=US_MARKET_TZ,
-        ),
-        id="missed_trades_refresh",
-        max_instances=1,
-        coalesce=True,
     )
     _scheduler.add_job(
         _lesson_catchup_job,

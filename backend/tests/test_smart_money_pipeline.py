@@ -721,7 +721,6 @@ def test_the_pipeline_constants_and_settings_move_the_strategy_fingerprint(monke
 
     base = fp()
     assert fp(smart_money_max_new_per_week=7) != base
-    assert fp(smart_money_max_holding_days=60) != base
     monkeypatch.setattr(pipeline_rules, "NEW_POSITION_WINDOW_DAYS", 14)
     assert fp() != base
 

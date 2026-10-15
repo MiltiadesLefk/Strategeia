@@ -29,6 +29,7 @@ from app.strategy.snapshot import (
     build_snapshot,
     describe_changes,
     fingerprint,
+    snapshot_json,
     normalize,
 )
 from test_trade_plan_service import FakeFlatDataProvider, FakeUptrendDataProvider
@@ -110,7 +111,7 @@ def test_normalize_refuses_what_it_cannot_represent():
         ("max_concurrent_positions", 3),
         ("max_positions_per_sector", 1),
         ("max_position_pct_of_adv", 0.5),
-        ("max_holding_days", 10),
+        ("hold_stop_pct", 30.0),
         ("auto_execute_trade_plans", False),
         ("ai_trading_overlay_enabled", True),
     ],
@@ -238,9 +239,9 @@ def test_the_key_stop_and_exit_constants_named_in_the_brief_are_covered():
 
 
 def test_a_constant_that_disappears_fails_loudly(monkeypatch):
-    from app.services import trade_plan_service as tps
+    from app.analysis import confidence
 
-    monkeypatch.delattr(tps, "ATR_STOP_MULTIPLE")
+    monkeypatch.delattr(confidence, "ATR_STOP_MULTIPLE")
     with pytest.raises(AttributeError):
         build_snapshot(AppSettings())
 
@@ -266,7 +267,7 @@ def test_numbers_are_sequential_and_a_returning_fingerprint_reuses_its_row(sessi
 
     # Changing back is version 1 again, not a new number.
     assert current_strategy_version(session, AppSettings()).number == 1
-    v3 = current_strategy_version(session, AppSettings(max_holding_days=10))
+    v3 = current_strategy_version(session, AppSettings(hold_stop_pct=30.0))
     assert v3.number == 3
     assert len(session.exec(select(StrategyVersion)).all()) == 3
 
@@ -275,14 +276,14 @@ def test_the_snapshot_is_stored_in_full_and_the_fingerprint_matches_it(session):
     row = current_strategy_version(session, AppSettings(min_confidence_for_trade=38))
     stored = json.loads(row.settings_snapshot)
     assert stored["settings"]["min_confidence_for_trade"] == 38
-    assert stored["rules"]["trade_plan_service.ATR_STOP_MULTIPLE"] == trade_plan_service.ATR_STOP_MULTIPLE
+    assert stored["rules"]["confidence.ATR_STOP_MULTIPLE"] == trade_plan_service.ATR_STOP_MULTIPLE
     assert fingerprint(stored) == row.fingerprint
     assert row.label is None
 
 
 def test_a_code_change_makes_the_next_plan_a_new_version(session, monkeypatch):
     first = current_strategy_version(session, AppSettings())
-    monkeypatch.setattr(trade_plan_service, "ATR_STOP_MULTIPLE", 2.5)
+    monkeypatch.setattr("app.analysis.confidence.ATR_STOP_MULTIPLE", 2.5)
     second = current_strategy_version(session, AppSettings())
     assert (first.number, second.number) == (1, 2)
     assert "rule: atr stop multiple 1.5 -> 2.5" in describe_changes(
@@ -488,7 +489,7 @@ def test_versions_endpoint_lists_newest_first_with_changes_and_counts(client):
 def test_current_number_is_none_after_a_settings_change_with_no_plan_yet(client):
     test_client, session, state = client
     current_strategy_version(session, AppSettings())
-    state["settings"] = AppSettings(max_holding_days=10)
+    state["settings"] = AppSettings(hold_stop_pct=30.0)
     body = test_client.get("/api/strategy/versions").json()
     assert body["current_number"] is None
     assert [v["number"] for v in body["versions"]] == [1]
@@ -561,3 +562,19 @@ def test_an_existing_database_gains_the_table_and_the_column_and_keeps_old_plans
         assert old.symbol == "AAPL" and old.strategy_version is None
         assert s.exec(select(StrategyVersion)).all() == []
         assert current_strategy_version(s, AppSettings()).number == 1
+
+
+def test_a_version_stored_before_the_swing_retirement_still_loads_and_diffs(session):
+    # An old row carries keys that are no longer snapshotted (max_holding_days, scale_out group).
+    new = build_snapshot(AppSettings())
+    old = json.loads(snapshot_json(new))
+    old["settings"]["max_holding_days"] = 20
+    old["settings"]["smart_money_max_holding_days"] = 120
+    old["scale_out"] = {"scale_out_fraction": 0.5, "scale_out_stop_mode": "breakeven"}
+    row = StrategyVersion(number=1, fingerprint=fingerprint(old), settings_snapshot=snapshot_json(old))
+    session.add(row)
+    session.commit()
+    stored = json.loads(session.get(StrategyVersion, row.id).settings_snapshot)
+    lines = describe_changes(stored, new)
+    assert "max_holding_days removed (was 20)" in lines
+    assert current_strategy_version(session, AppSettings()).number == 2

@@ -1,10 +1,9 @@
 """The missed-trades report: what the trades we did not take earned, next to the ones we did.
 
 Read-only, like portfolio/calibration.py: it classifies the plans on file, joins
-the stored counterfactual outcomes (missed_trades.refresh_missed_trades computes
-them) and the closed positions, and never writes, marks to market or fetches a
-price. Opening the page therefore changes nothing; the Refresh button (a POST) and
-the daily job do the computing.
+the stored counterfactual outcomes (old rows from the retired swing simulator;
+nothing computes new ones) and the closed positions, and never writes, marks to
+market or fetches a price.
 
 Honesty rules, the same as the calibration report's:
 - Every statistic comes with n and an interval (Wilson for a win rate, bootstrap
