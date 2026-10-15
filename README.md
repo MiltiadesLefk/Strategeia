@@ -203,6 +203,12 @@ scripts/            verify.py (tests + type-check + lint in one command) and ui_
                     (screenshots the app in a real browser against a throwaway database)
 ```
 
+## Portfolio builder (hold mode)
+
+The app picks stocks to hold, not to swing trade: a daily quality-gate scan buys at a target weight, smart-money
+buys that fail the gate still buy at half size, an optional news scan looks at tickers outside the list, and a
+daily sell plan plus a rebuy watch handle exits. Paper money only. See FEATURES.md, section 27.
+
 ## Known limitations (v1)
 
 - Paper-trading exit rule: a position closes fully at whichever of stop-loss or TP1 hits

@@ -2748,3 +2748,14 @@ The **Forecast Lab** page (`/forecast-lab`) trains a small LightGBM model on the
 - **Caveats.** Backtests are price-only, so fundamentals, news and options points were never seen in training; results are optimistic (survivors, daily bars).
 - **API.** `GET /api/forecast-lab/status`, `GET /models`, `GET /models/{id}`, `POST /models/train`, `POST /models/{id}/activate`, `POST /models/deactivate`, `DELETE /models/{id}`, `POST /sleeve` (creates the ML sleeve once), `GET /predictions`.
 
+
+## 27. Portfolio builder: the app picks stocks to hold (paper money only)
+
+The app no longer opens swing trades. Every position is a **hold**: bought at a target weight of the account (`hold_target_weight_pct`, 4.5%), with a wide disaster stop on a daily close (`hold_stop_pct`, 25%, or the 200-day average if lower) and no profit target or time limit. No real money moves anywhere.
+
+- **Daily scan (10:00 ET).** Each stock on the watchlist goes through the **quality gate**: above the 200-day average, revenue not shrinking, profitable, not expensive. A pass is bought (caps: `hold_max_positions`, `hold_max_per_sector`, `hold_max_new_per_scan`).
+- **News discovery (off by default, `news_discovery_enabled`).** The same scan also tries tickers named with an exchange prefix or a cashtag ("NYSE: XYZ", "$XYZ") in the headlines of the watched stocks, when they are outside the list and can be quoted live. They get exactly the same gate and buy path, and share the per-scan cap. Rules pick the tickers, never the AI.
+- **Smart money.** A stock that insiders, Congress or funds are buying goes through the same check, but a failed gate no longer stops the buy: it is bought at half a slice (`hold_failed_gate_size_pct`, 50). Cap and engine refusals still go to the review queue.
+- **Sell plan (10:30 ET).** Each holding is checked for bad signals: the gate fails, N closes under the 200-day (`sell_ma200_days`, 5), the thesis tracker flags it, several insiders or Congress members selling, and clearly negative news (counts only as a second signal). One signal sends an alert and, if the position is in profit, raises the stop to breakeven or `sell_trail_pct` (10%) below the high. Two or more sell the whole position (reason `sell_plan`). Fund 13F sells are not used (no per-stock feed). Rules only: the AI never sells.
+- **Rebuy watch.** A stock sold by the stop or the sell plan can be bought again after `rebuy_cooldown_days` (30), only if a fresh gate read passes without the 200-day rule and the dip rule fires (close 10% under the 63-day high). A rebuy that is stopped again leaves the watch for good. Shown on the Portfolio page and at `GET /api/portfolio/rebuy-watch`.
+- **Caveats.** None of this has run live yet. The numbers above are starting guesses. The studies behind the gate are optimistic (survivors, daily bars, no costs) and show the gate alone is about equal to SPY.
