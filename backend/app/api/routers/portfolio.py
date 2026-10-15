@@ -203,6 +203,20 @@ def holdings(
     )
 
 
+@router.get("/rebuy-watch")
+def rebuy_watch(session: Session = Depends(get_session), settings: AppSettings = Depends(get_app_settings)) -> list[dict]:
+    """Stocks sold at a stop or by the sell plan that may be bought again. Read-only."""
+    from datetime import timedelta
+
+    from app.portfolio.models import RebuyWatch
+
+    rows = session.exec(select(RebuyWatch).order_by(RebuyWatch.sold_at.desc())).all()
+    return [
+        {**r.model_dump(exclude={"sold_position_id"}), "eligible_from": (r.sold_at + timedelta(days=settings.rebuy_cooldown_days)).isoformat()}
+        for r in rows
+    ]
+
+
 @router.post("/hold-add", response_model=PositionSchema)
 def hold_add_endpoint(
     req: HoldAddRequest,

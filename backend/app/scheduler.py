@@ -35,6 +35,7 @@ from app.services.kill_switch_service import evaluate_kill_switches
 from app.services.telegram_service import notify as telegram_notify
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
 from app.services.thesis_service import run_thesis_sweep
+from app.services.sell_plan_service import run_sell_plan
 from app.services.insider_coverage_service import run_insider_coverage_tick
 from app.watchers.runner import run_due_watchers, run_morning_fetch
 
@@ -331,6 +332,23 @@ def _smart_money_event_review_job() -> None:
         logger.exception("Scheduled smart-money event review failed")
 
 
+# Sell plan + rebuy watch (F4): once a day shortly after the scan, on fresh data, in the session
+# (selling and rebuying open and close positions at a real price).
+SELL_PLAN_TIME_ET = (10, 30)
+
+
+def _sell_plan_job() -> None:
+    try:
+        if is_simulated() or not is_us_trading_day(to_market_time().date()):
+            return
+        settings = load_app_settings()
+        data_provider = get_data_provider(settings)
+        with Session(engine) as session:
+            run_sell_plan(settings, data_provider, session)
+    except Exception:
+        logger.exception("Scheduled sell plan failed")
+
+
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -356,6 +374,13 @@ def start_scheduler() -> BackgroundScheduler:
             CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone=US_MARKET_TZ),
             id=f"auto_scan_{session_name}",
         )
+    _scheduler.add_job(
+        _sell_plan_job,
+        CronTrigger(day_of_week="mon-fri", hour=SELL_PLAN_TIME_ET[0], minute=SELL_PLAN_TIME_ET[1], timezone=US_MARKET_TZ),
+        id="sell_plan",
+        max_instances=1,
+        coalesce=True,
+    )
     _scheduler.add_job(
         _market_open_redo_job,
         CronTrigger(**MARKET_OPEN_REDO_CRON, timezone=US_MARKET_TZ),

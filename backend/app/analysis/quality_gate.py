@@ -53,10 +53,13 @@ def evaluate_quality_gate(
     closes: list[float],
     overview: CompanyOverview | None,
     financial_years: list[FinancialYear],
+    require_trend: bool = True,  # False = the rebuy gate: a stock that just fell is rarely above its 200-day
 ) -> GateResult:
     checks: list[GateCheck] = []
 
-    if len(closes) >= MA_DAYS:
+    if not require_trend:
+        pass
+    elif len(closes) >= MA_DAYS:
         ma = sum(closes[-MA_DAYS:]) / MA_DAYS
         checks.append(GateCheck("trend", price > ma, f"price {price:,.2f} vs 200-day average {ma:,.2f}"))
     else:

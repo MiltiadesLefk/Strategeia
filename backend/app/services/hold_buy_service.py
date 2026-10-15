@@ -86,7 +86,7 @@ def hold_add(
     return engine.add_to_hold_position(position, missing)
 
 
-def check_quality(data_provider: DataProvider, symbol: str) -> GateResult:
+def check_quality(data_provider: DataProvider, symbol: str, require_trend: bool = True) -> GateResult:
     """Fetch what the gate reads (fresh data only) and run it. A failed fetch is a failed check."""
     with fresh_data_only():
         price = float(data_provider.get_quote(symbol).price)
@@ -99,4 +99,4 @@ def check_quality(data_provider: DataProvider, symbol: str) -> GateResult:
             years = data_provider.get_financials(symbol).years
         except Exception:  # noqa: BLE001
             years = []
-    return evaluate_quality_gate(price, closes, overview, years)
+    return evaluate_quality_gate(price, closes, overview, years, require_trend)

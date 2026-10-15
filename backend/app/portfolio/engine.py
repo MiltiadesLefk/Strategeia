@@ -849,7 +849,10 @@ class PaperTradingEngine:
         if position.stop_loss <= 0:
             return None
         is_long = position.direction == "long"
+        raised = position.stop_raised_at.date() if position.stop_raised_at else None  # sell plan raised the stop that day
         for number, (_, bar) in enumerate(bars.iterrows(), start=1):
+            if raised is not None and "date" in bar.index and pd.Timestamp(bar["date"]).date() <= raised:
+                continue
             close = float(bar["close"])
             beyond = close <= position.stop_loss if is_long else close >= position.stop_loss
             if beyond and self._bar_is_final(position.symbol, bar):

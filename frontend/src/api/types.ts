@@ -509,6 +509,9 @@ export interface AppSettings {
   hold_max_new_per_scan: number;
   /** A smart-money buy that fails the quality gate buys this % of the normal slice. */
   hold_failed_gate_size_pct: number;
+  sell_ma200_days: number;
+  sell_trail_pct: number;
+  rebuy_cooldown_days: number;
   /** Share of the position sold at TP1 (0.1 to 0.9). */
   scale_out_fraction: number;
   /** Where the remainder's stop goes after TP1: its entry price, or trailing behind the best price. */
@@ -603,6 +606,9 @@ export interface SettingsUpdateRequest {
   hold_max_per_sector?: number;
   hold_max_new_per_scan?: number;
   hold_failed_gate_size_pct?: number;
+  sell_ma200_days?: number;
+  sell_trail_pct?: number;
+  rebuy_cooldown_days?: number;
   scale_out_fraction?: number;
   scale_out_stop_mode?: ScaleOutStopMode;
   scale_out_trail_r?: number;
@@ -2852,4 +2858,15 @@ export interface Holdings {
   positions: HoldingRow[];
   sectors: { sector: string; weight_pct: number }[];
   stale_symbols: string[];
+}
+
+export interface RebuyWatchItem {
+  id: number;
+  symbol: string;
+  sold_at: string;
+  sold_price: number;
+  sold_reason: string;
+  status: string;
+  rebuy_position_id: number | null;
+  eligible_from: string;
 }
