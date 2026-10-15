@@ -33,6 +33,7 @@ from app.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
+RESOLUTION_LIVE = "live"  # exit from a live price check (touch stop)
 RESOLUTION_DAILY = "daily"  # PaperPosition.exit_resolution of an exit found on a daily bar
 
 # Returns "now" as a naive-UTC datetime, the convention for every stored
@@ -175,6 +176,7 @@ class PaperTradingEngine:
         sleeve: Sleeve | None = None,
         liquidity_slippage_coefficient: float | None = None,
         exit_scan_period: str = EXIT_SCAN_PERIOD,
+        hold_stop_mode: str = "close",
     ):
         self._session = session
         # Only plain values are kept (not the ORM object, whose attributes expire
@@ -196,6 +198,10 @@ class PaperTradingEngine:
         # How much daily history the exit scan reads. The core's 3 months suit
         # a position held a few weeks; a sleeve that holds longer (smart money) passes a longer one.
         self._exit_scan_period = exit_scan_period
+        # "close": only a final daily close beyond the stop exits. "touch": a final bar's LOW at or beyond it
+        # exits too (in the bar walk), and check_touch_stops closes on a live price at or beyond it. Callers
+        # pass settings.hold_stop_mode; the bare engine keeps the old close rule.
+        self._touch_stops = hold_stop_mode == "touch"
 
     def now(self) -> datetime:
         """The engine's current moment (naive UTC): real time, or a simulated
@@ -710,11 +716,48 @@ class PaperTradingEngine:
                 continue
             close = float(bar["close"])
             beyond = close <= position.stop_loss if is_long else close >= position.stop_loss
+            if self._touch_stops and not beyond and self._bar_is_final(position.symbol, bar):
+                # Touch mode: the bar's wick reached the stop, so a market stop order would have fired. Fill at the
+                # stop, or at the open when the bar gapped past it (never better than the stop).
+                extreme = float(bar["low"] if is_long else bar["high"]) if ("low" if is_long else "high") in bar.index else close
+                if extreme <= position.stop_loss if is_long else extreme >= position.stop_loss:
+                    level = self._exit_fill_price(position.direction, float(bar["open"]) if "open" in bar.index else position.stop_loss,
+                                                  position.stop_loss, is_stop=True)
+                    fill = self._slip(level, buying=not is_long, symbol=position.symbol, shares=position.shares)
+                    return ExitFound(fill, "disaster_stop", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
             if beyond and self._bar_is_final(position.symbol, bar):
                 fill = self._slip(close, buying=not is_long, symbol=position.symbol, shares=position.shares)
                 return ExitFound(fill, "disaster_stop", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
         return None
 
+
+    def check_touch_stops(self, *, snapshot: bool = True) -> list[PaperPosition]:
+        """Touch mode, during market hours: close every open hold position of this sleeve whose LIVE price is at or
+        beyond its disaster stop. Fills at the live price with slippage, so a gap-down fills where it trades,
+        never at the stop level. A no-op in close mode, for a closed market, a failed quote or an alert-only
+        position (stop 0). Fresh data only: a cached quote must never decide an exit."""
+        if not self._touch_stops:
+            return []
+        closed: list[PaperPosition] = []
+        for position in self._open_positions():
+            if position.stop_loss <= 0 or position.mode != "hold" or not is_market_open_for(position.symbol, self.now()):
+                continue
+            try:
+                with fresh_data_only():
+                    price = float(self._data_provider.get_quote(position.symbol).price)
+            except Exception:  # noqa: BLE001 - no live price, no exit
+                continue
+            is_long = position.direction == "long"
+            if price <= 0 or not (price <= position.stop_loss if is_long else price >= position.stop_loss):
+                continue
+            fill = self._slip(price, buying=not is_long, symbol=position.symbol, shares=position.shares)
+            closed.append(self.close_position(position, fill, "disaster_stop", snapshot=False, last_bar="complete",
+                                              resolution=RESOLUTION_LIVE, slippage_bps=self._exit_bps(position)))
+        if closed and snapshot:
+            self._record_equity_snapshot()
+            for position in closed:
+                self._session.refresh(position)  # the snapshot's commit expired them
+        return closed
 
     def _bar_is_final(self, symbol: str, bar: pd.Series) -> bool:
         """Whether `bar` is finished as of the engine's clock. A bar is read by

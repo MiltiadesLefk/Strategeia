@@ -23,7 +23,7 @@ from app.markets import (
 )
 from app.knowledge.point_in_time import is_simulated
 from app.services import smart_money_event_review_service, smart_money_pipeline_service
-from app.services.sleeve_service import mark_all_sleeves
+from app.services.sleeve_service import check_touch_stops_all_sleeves, mark_all_sleeves
 from app.timeutil import utcnow_naive
 from app.portfolio.models import PaperPosition
 from app.services.automation_service import run_hold_scan, run_market_open_redos
@@ -181,6 +181,19 @@ def _thesis_sweep_job() -> None:
 # this cadence; the check itself skips symbols whose market is closed, so a tick outside
 # the session costs one database read. It only sends messages and records facts.
 PRICE_ALERT_INTERVAL_MINUTES = 5
+
+
+def _touch_stop_job() -> None:
+    try:
+        if is_simulated():
+            return
+        settings = load_app_settings()
+        if settings.hold_stop_mode != "touch":
+            return
+        with Session(engine) as session:
+            check_touch_stops_all_sleeves(session, get_data_provider(settings), settings)
+    except Exception:
+        logger.exception("Scheduled touch-stop check failed")
 
 
 def _price_alerts_job() -> None:
@@ -414,6 +427,14 @@ def start_scheduler() -> BackgroundScheduler:
         "interval",
         minutes=PRICE_ALERT_INTERVAL_MINUTES,
         id="price_alerts",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        _touch_stop_job,
+        "interval",
+        minutes=PRICE_ALERT_INTERVAL_MINUTES,
+        id="touch_stop",
         max_instances=1,
         coalesce=True,
     )

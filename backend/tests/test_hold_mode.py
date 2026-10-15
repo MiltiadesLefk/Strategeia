@@ -96,3 +96,63 @@ def test_hold_alerts_fire_once_per_condition():
     assert hold_alerts_due(p, 84.0, None, 0.0) == []  # drawdown alert off, no 200-day yet
     p.alerted_drawdown_at = p.alerted_ma200_at = object()
     assert hold_alerts_due(p, 50.0, 90.0, 15.0) == []
+
+
+# ------------------------------------------------------------------ touch stop mode
+
+
+def test_touch_mode_closes_a_wick_that_recovered_but_close_mode_does_not(session):
+    p = hold_position(session)
+    rows, last = with_day(3, o=100.0, h=101.0, low=90.0, c=99.0)  # touched 95, closed back above
+    assert sweep(session, rows, last) == []  # close mode (the engine default)
+    assert p.status == "open"
+    sweep(session, rows, last, hold_stop_mode="touch")
+    assert p.close_reason == "disaster_stop"
+    assert p.close_price == pytest.approx(95.0)
+
+
+def test_touch_mode_gap_down_fills_at_the_open_not_the_stop(session):
+    p = hold_position(session)
+    rows, last = with_day(3, o=90.0, h=96.0, low=88.0, c=99.0)
+    sweep(session, rows, last, hold_stop_mode="touch")
+    assert p.close_price == pytest.approx(90.0)
+
+
+def test_touch_mode_never_counts_the_entry_bar_or_an_unfinished_bar(session):
+    p = hold_position(session)
+    rows = quiet_bars(2)
+    rows[0] = bar(ENTRY_DAY, o=100.0, h=101.0, low=80.0, c=100.0)  # pre-entry wick under the stop
+    days = trading_days_after(ENTRY_DAY, 2)
+    assert sweep(session, rows, days[-1], hold_stop_mode="touch") == []
+    rows[-1] = bar(days[-1], o=100.0, h=101.0, low=90.0, c=99.0)
+    engine = PaperTradingEngine(session, BarsProvider(rows), STARTING_CASH, hold_stop_mode="touch",
+                                clock=clock_at_et(days[-1], 12))  # that bar is still forming
+    assert engine.mark_to_market(snapshot=False) == []
+    assert p.status == "open"
+
+
+def test_live_price_at_or_under_the_stop_closes_at_that_price(session):
+    p = hold_position(session)
+    days = trading_days_after(ENTRY_DAY, 1)
+
+    class Live(BarsProvider):
+        def __init__(self, price):
+            super().__init__([])
+            self.price = price
+
+        def get_quote(self, symbol):
+            q = super().get_quote(symbol)
+            q.price = self.price
+            return q
+
+    def check(price, mode="touch", hour=12):
+        engine = PaperTradingEngine(session, Live(price), STARTING_CASH, hold_stop_mode=mode, slippage_bps=10.0,
+                                    clock=clock_at_et(days[0], hour))
+        return engine.check_touch_stops(snapshot=False)
+
+    assert check(94.0, mode="close") == []  # close mode never uses the live check
+    assert check(94.0, hour=8) == []  # market closed
+    assert check(96.0) == []  # above the stop
+    closed = check(90.0)  # gapped under the stop: fills at the live price, not 95
+    assert closed and p.close_reason == "disaster_stop"
+    assert p.close_price == pytest.approx(90.0 * 0.999)

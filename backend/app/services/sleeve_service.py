@@ -60,6 +60,7 @@ def build_sleeve_engine(
         clock=clock,
         liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
         sleeve=None if is_core else sleeve,
+        hold_stop_mode=settings.hold_stop_mode,
         # The smart-money sleeves hold longer, so they read a longer bar window.
         **({"exit_scan_period": SMART_MONEY_EXIT_SCAN_PERIOD} if is_smart_money else {}),
     )
@@ -77,6 +78,15 @@ def mark_all_sleeves(
     closed: list[PaperPosition] = []
     for sleeve in sleeves:
         closed.extend(build_sleeve_engine(session, data_provider, settings, sleeve).mark_to_market(snapshot=snapshot))
+    return closed
+
+
+def check_touch_stops_all_sleeves(session: Session, data_provider: DataProvider, settings: AppSettings) -> list[PaperPosition]:
+    """The live touch-stop check for every sleeve, each through its own engine (a no-op in close mode)."""
+    sleeves = [None, *session.exec(select(Sleeve).where(Sleeve.key != CORE_SLEEVE_KEY).order_by(Sleeve.id)).all()]
+    closed: list[PaperPosition] = []
+    for sleeve in sleeves:
+        closed.extend(build_sleeve_engine(session, data_provider, settings, sleeve).check_touch_stops())
     return closed
 
 
