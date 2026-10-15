@@ -20,8 +20,9 @@ def describe_hold_coverage(buy_only_dips: bool = False) -> dict[str, Any]:
         ("profit", "Profitable", "no dated net-income history is served to a backtest; a missing figure is never counted as a pass"),
         ("valuation", "Valuation (P/E)", "no dated P/E history is served to a backtest"),
         ("news_discovery", "News discovery of tickers outside the list", "not in v1"),
+        ("big_news", "Big-news buy lane", "not in v1; no dated headline archive to replay"),
         ("dip_add", "Adding to a held dip", "not in v1"),
-        ("sell_plan", "Sell plan and rebuy watch", "not in v1; the only exit is the disaster stop on a final daily close"),
+        ("sell_plan", "Sell plan and rebuy watch", "not in v1; the only exit is the disaster stop on a final daily close (a backtest always uses hold_stop_mode close: the live touch check has no replay)"),
     ]
     if not buy_only_dips:
         not_run.insert(3, ("dip", "Dip rule", "switched off for this run (hold_buy_only_dips)"))

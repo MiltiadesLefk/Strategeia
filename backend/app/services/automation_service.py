@@ -63,13 +63,14 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
     held = {p.symbol for p in session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()}
     engine = build_sleeve_engine(session, data_provider, settings, hold=True)
     bought: list[str] = []
-    candidates = {s: "hold scan: passed the quality gate" for s in get_default_watchlist(settings.scan_universe_size) if s not in held}
+    candidates = {s: "hold scan [quality lane]: passed the quality gate" for s in get_default_watchlist(settings.scan_universe_size) if s not in held}
     if settings.news_discovery_enabled:
         from app.services.news_discovery_service import discover_from_news
 
         for symbol, headline in discover_from_news(settings, data_provider).items():
             if symbol not in held and symbol not in candidates:
-                candidates[symbol] = f'hold scan (news discovery, headline: "{headline}"): passed the quality gate'
+                candidates[symbol] = f'hold scan [quality lane] (news discovery, headline: "{headline}"): passed the quality gate'
+    market_closed = False
     for symbol, reason in candidates.items():
         if len(bought) >= settings.hold_max_new_per_scan:
             break
@@ -78,9 +79,37 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
                 bought.append(symbol)
         except MarketClosedError:
             logger.info("Hold scan stopped: the market is closed")
+            market_closed = True
             break
         except Exception:
             logger.exception("Hold scan: failed to evaluate %s", symbol)
+    if settings.big_news_buy_enabled and not market_closed:
+        from app.services.big_news_service import big_news_scan_symbol, market_8k_symbols
+        from app.services.news_discovery_service import discover_from_news
+
+        # Big-news lane, whole market: the watchlist, tickers named in watched stocks' headlines, and companies with a
+        # big stored 8-K from the SEC market-wide feed. Same per-scan cap; found stocks are analysed even if not bought.
+        extras: dict[str, str | None] = {s: None for s in candidates}
+        try:
+            for ticker, headline in discover_from_news(settings, data_provider).items():
+                extras.setdefault(ticker, headline)
+            for ticker in market_8k_symbols(session, settings):
+                extras.setdefault(ticker, None)
+        except Exception:
+            logger.exception("Big-news lane: could not gather market-wide candidates")
+        for symbol, headline in extras.items():
+            if len(bought) >= settings.hold_max_new_per_scan:
+                break
+            if symbol in bought or symbol in held:
+                continue
+            try:
+                if big_news_scan_symbol(settings, data_provider, session, engine, symbol, headline):
+                    bought.append(symbol)
+            except MarketClosedError:
+                logger.info("Big-news lane stopped: the market is closed")
+                break
+            except Exception:
+                logger.exception("Big-news lane: failed to evaluate %s", symbol)
     if settings.hold_add_on_dips:
         from app.services.hold_buy_service import hold_add
 
@@ -102,7 +131,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
             except Exception:
                 logger.exception("Hold scan: failed to add to %s", position.symbol)
     if bought:
-        notify(settings.telegram_bot_token, settings.telegram_chat_id, f"Hold scan bought {', '.join(bought)} (passed the quality gate).")
+        notify(settings.telegram_bot_token, settings.telegram_chat_id, f"Hold scan bought {', '.join(bought)} (quality gate or big-news lane).")
     return bought
 
 

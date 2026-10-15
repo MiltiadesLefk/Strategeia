@@ -66,6 +66,7 @@ class SettingsUpdateRequest(BaseModel):
     smart_money_max_evaluations_per_run: int | None = Field(default=None, ge=1, le=100)
     max_concurrent_positions: int | None = Field(default=None, gt=0)
     hold_stop_pct: float | None = Field(default=None, ge=0, le=60)
+    hold_stop_mode: Literal["close", "touch"] | None = None
     hold_alert_drawdown_pct: float | None = Field(default=None, ge=0, le=60)
     hold_target_weight_pct: float | None = Field(default=None, gt=0, le=25)
     hold_buy_only_dips: bool | None = None
@@ -73,6 +74,9 @@ class SettingsUpdateRequest(BaseModel):
     hold_max_per_sector: int | None = Field(default=None, ge=1, le=50)
     hold_max_new_per_scan: int | None = Field(default=None, ge=0, le=50)
     hold_failed_gate_size_pct: float | None = Field(default=None, gt=0, le=100)
+    big_news_buy_enabled: bool | None = None
+    big_news_size_pct: float | None = Field(default=None, gt=0, le=100)
+    big_news_lookback_hours: int | None = Field(default=None, ge=1, le=168)
 
     news_discovery_enabled: bool | None = None
     news_discovery_max_per_run: int | None = Field(default=None, ge=0, le=20)

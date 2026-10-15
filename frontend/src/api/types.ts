@@ -392,6 +392,12 @@ export interface AppSettings {
   hold_max_new_per_scan: number;
   /** A smart-money buy that fails the quality gate buys this % of the normal slice. */
   hold_failed_gate_size_pct: number;
+  /** Big-news lane: buys without the quality gate at this % of a slice (off by default). */
+  big_news_buy_enabled: boolean;
+  big_news_size_pct: number;
+  big_news_lookback_hours: number;
+  /** 'touch' = the disaster stop fires when price touches it; 'close' = only a final daily close beyond it. */
+  hold_stop_mode: 'close' | 'touch';
 
   news_discovery_enabled: boolean;
   news_discovery_max_per_run: number;
@@ -477,6 +483,10 @@ export interface SettingsUpdateRequest {
   hold_max_per_sector?: number;
   hold_max_new_per_scan?: number;
   hold_failed_gate_size_pct?: number;
+  big_news_buy_enabled?: boolean;
+  big_news_size_pct?: number;
+  big_news_lookback_hours?: number;
+  hold_stop_mode?: 'close' | 'touch';
 
   news_discovery_enabled?: boolean;
   news_discovery_max_per_run?: number;

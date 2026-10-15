@@ -14,6 +14,10 @@ type Draft = Pick<
   | 'hold_max_per_sector'
   | 'hold_max_new_per_scan'
   | 'hold_failed_gate_size_pct'
+  | 'big_news_buy_enabled'
+  | 'big_news_size_pct'
+  | 'big_news_lookback_hours'
+  | 'hold_stop_mode'
   | 'news_discovery_enabled'
   | 'hold_add_on_dips'
   | 'news_discovery_max_per_run'
@@ -31,6 +35,8 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_max_per_sector', label: 'Max per sector', hint: 'Same-sector hold positions.' },
   { key: 'hold_max_new_per_scan', label: 'Max new buys per daily scan', hint: 'Keeps one scan from buying the whole list.' },
   { key: 'hold_failed_gate_size_pct', label: 'Size of a smart-money buy that fails the gate (% of a normal slice)', hint: 'Half a slice by default (50).' },
+  { key: 'big_news_size_pct', label: 'Size of a big-news buy (% of a normal slice)', hint: 'Only used when big-news buys are on. Half a slice by default (50).' },
+  { key: 'big_news_lookback_hours', label: 'Big news counts for (hours)', hint: 'A headline older than this is ignored; a bad headline in this window blocks the buy.' },
   { key: 'news_discovery_max_per_run', label: 'Max news-discovered tickers per run', hint: 'Only used when news discovery is on.' },
   { key: 'sell_ma200_days', label: 'Sell plan: closes under the 200-day that count as a signal', hint: 'In a row.' },
   { key: 'sell_trail_pct', label: 'Sell plan: stop trails this % below the high (profit, one signal)', hint: '0 = move the stop to breakeven instead.' },
@@ -45,6 +51,8 @@ function fromSettings(data: AppSettings): Draft {
     hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
     hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
     hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
+    big_news_buy_enabled: data.big_news_buy_enabled, big_news_size_pct: data.big_news_size_pct,
+    big_news_lookback_hours: data.big_news_lookback_hours, hold_stop_mode: data.hold_stop_mode,
     hold_add_on_dips: data.hold_add_on_dips, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
     sell_ma200_days: data.sell_ma200_days, sell_trail_pct: data.sell_trail_pct, rebuy_cooldown_days: data.rebuy_cooldown_days,
     hold_review_days: data.hold_review_days,
@@ -87,6 +95,17 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.news_discovery_enabled} onChange={(v) => set('news_discovery_enabled', v)} label="News discovery" />
         <span>Look for new tickers in the news of watched stocks (off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.big_news_buy_enabled} onChange={(v) => set('big_news_buy_enabled', v)} label="Big-news buys" />
+        <span>Buy a watched stock on a big headline (FDA approval, contract, takeover offer, guidance raise...) without the quality check, at a smaller size (off by default)</span>
+      </div>
+      <div>
+        <label>Disaster stop trigger</label>
+        <select value={draft.hold_stop_mode} onChange={(e) => set('hold_stop_mode', e.target.value as Draft['hold_stop_mode'])}>
+          <option value="touch">Touch: closes as soon as the price reaches the stop</option>
+          <option value="close">Close: only a daily close beyond the stop</option>
+        </select>
       </div>
       {NUMBER_FIELDS.map((f) => (
         <div key={f.key}>

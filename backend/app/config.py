@@ -638,6 +638,9 @@ class AppSettings(BaseModel):
     # The only automatic exit is a disaster stop on a daily CLOSE this % below the entry
     # (or below the 200-day average if that is lower); 0 = alert-only, never closes.
     hold_stop_pct: float = 25.0
+    # "touch": the stop fires as soon as the price reaches it (live check every few minutes in market hours, and a
+    # final daily bar's low in the bar walk); "close": only a final daily close beyond it. Touch matches a broker stop order.
+    hold_stop_mode: Literal["close", "touch"] = "touch"
     # Alert (never a trade) when a held stock closes this % below its entry; 0 = off.
     hold_alert_drawdown_pct: float = 15.0
     # Size of one hold buy, % of the account (target weight).
@@ -651,6 +654,10 @@ class AppSettings(BaseModel):
     hold_max_new_per_scan: int = Field(default=3, ge=0, le=50)
     # A smart-money buy that fails the quality gate still buys, at this % of the normal slice.
     hold_failed_gate_size_pct: float = Field(default=50.0, gt=0, le=100)
+    # Big-news lane (analysis/big_news.py): a recent big headline buys without the quality gate, at this % of a slice.
+    big_news_buy_enabled: bool = False
+    big_news_size_pct: float = Field(default=50.0, gt=0, le=100)
+    big_news_lookback_hours: int = Field(default=24, ge=1, le=168)
     # Sell plan (F4): consecutive closes under the 200-day that count as a bad signal; the trail
     # (% under the high since entry) a profitable position's stop is raised to on one signal, 0 =
     # breakeven; days a stopped-out or sold stock waits before it may be bought again.

@@ -107,6 +107,7 @@ def effective_settings(base: AppSettings, overrides: SettingsOverrides | None = 
         "finnhub_api_key": "",
         "auto_execute_trade_plans": True,
         "auto_scan_enabled": False,
+        "hold_stop_mode": "close",  # the live touch check has no backtest equivalent; see coverage.py
     }
     if overrides is not None:
         changes.update(overrides.model_dump(exclude_none=True))

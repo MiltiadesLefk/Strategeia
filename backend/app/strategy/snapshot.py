@@ -44,7 +44,7 @@ from app.config import AppSettings
 
 # Bump when rule LOGIC changes in a way no named constant reflects (a new
 # condition in a scorer, a changed formula). Part of every fingerprint.
-RULES_REVISION = 2
+RULES_REVISION = 3
 
 # Settings that always shape a decision, in snapshot order, with the label the
 # change list uses. Everything else in AppSettings is excluded (see above).
@@ -57,6 +57,7 @@ DECISION_SETTINGS: dict[str, str] = {
     "max_positions_per_sector": "max positions per sector",
     "max_position_pct_of_adv": "max position % of daily volume",
     "hold_stop_pct": "hold disaster stop %",
+    "hold_stop_mode": "hold stop trigger (close/touch)",
     "hold_alert_drawdown_pct": "hold drawdown alert %",
     "hold_target_weight_pct": "hold target weight %",
     "hold_buy_only_dips": "hold buys only dips",
@@ -64,6 +65,9 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_max_per_sector": "hold max per sector",
     "hold_max_new_per_scan": "hold max new per scan",
     "hold_failed_gate_size_pct": "hold failed-gate size %",
+    "big_news_buy_enabled": "big-news buys",
+    "big_news_size_pct": "big-news size %",
+    "big_news_lookback_hours": "big-news lookback hours",
 
     "news_discovery_enabled": "news discovery",
     "news_discovery_max_per_run": "news discovery max per run",
@@ -90,6 +94,7 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     # The hold gate's own rules (hold_stop_pct and hold_target_weight_pct are settings above).
     "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS", "MIN_REVENUE_GROWTH_PCT"),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),
+    "app.analysis.big_news": ("BIG_NEWS_PATTERNS", "BIG_8K_ITEMS", "INCLUDE_ANALYST_UPGRADES", "ANALYST_UPGRADE_PATTERNS", "NEGATIVE_PATTERNS"),
     "app.smartmoney.scoring": (
         "WINDOW_DAYS", "RECENT_DAYS", "OLD_RECENCY_FACTOR", "INSIDER_SCORE_CAP", "INSIDER_PER_BUYER",
         "INSIDER_CEO_CFO_EXTRA", "INSIDER_SIZE_TIERS", "HOUSE_BRACKET_POINTS", "HOUSE_EXTRA_MEMBER_POINTS",

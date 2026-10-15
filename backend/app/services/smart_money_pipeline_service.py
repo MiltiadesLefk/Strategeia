@@ -311,6 +311,10 @@ def _evaluate_hold(
         session.rollback()
         candidate = session.get(SmartMoneyCandidate, candidate.id)
         return _skip(session, candidate, REASON_EVALUATION_ERROR, f"{type(exc).__name__}: {exc}", now)
+    from app.services.market_find_service import LANE_SMART_MONEY, adopt_found_stock
+
+    # Whole-market: a found stock is analysed, alerted and joins the universe even when it fails the gate or is not bought.
+    adopt_found_stock(session, settings, data_provider, candidate.symbol, LANE_SMART_MONEY, f"smart money score {candidate.score:g}", gate)
     if cap_note is not None:
         return route_plan(session, candidate, None, "pending", False, cap_note, settings, sleeve, now)
     if not settings.auto_execute_trade_plans:
@@ -319,7 +323,7 @@ def _evaluate_hold(
     engine = build_sleeve_engine(session, data_provider, settings, sleeve, clock=clock, hold=True)
     try:
         position = hold_buy(session, engine, data_provider, settings, candidate.symbol, sleeve_id=sleeve.id,
-                            reason=f"smart money score {candidate.score:g}; "
+                            reason=f"[smart money lane] score {candidate.score:g}; "
                             + ("passed the quality gate" if gate.passed else "failed the quality gate (" + "; ".join(gate.failed_reasons) + "), half size"),
                             size_pct=100.0 if gate.passed else settings.hold_failed_gate_size_pct)
     except (MarketClosedError, *_ENGINE_REFUSALS) as exc:

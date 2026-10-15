@@ -149,6 +149,24 @@ def save_watchlist(raw: list[str], provider: DataProvider) -> None:
     universe_store.write_store(stored)
 
 
+def add_to_universe(raw: str, provider: DataProvider) -> bool:
+    """Add one found stock to the saved list for good. True = added now; False = already there, not a valid
+    symbol, or a simulated moment (a backtest never edits the saved list). The saved list starts from the bundled
+    one when none is saved yet. Note `STRATEGEIA_DEV_TICKERS`, when set, still overrides the saved list."""
+    from app.knowledge.point_in_time import is_simulated
+
+    symbol = normalize_symbol(raw)
+    if symbol is None or is_simulated():
+        return False
+    previous = universe_store.read_store().watchlist
+    base = list(previous.symbols) if previous else [StoredSymbol(e.symbol, e.name, e.sector) for e in universe.load_bundled_universe()]
+    if any(s.symbol == symbol for s in base):
+        return False
+    base.append(StoredSymbol(symbol, _company_name(symbol, provider) or symbol, default_sector_for(symbol)))
+    universe_store.write_store(base)
+    return True
+
+
 def reset_watchlist() -> bool:
     """Back to the bundled list. True when a saved list was removed."""
     return universe_store.delete_store()
