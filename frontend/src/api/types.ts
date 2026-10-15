@@ -280,7 +280,6 @@ export interface MarketSession {
   as_of: string;
 }
 
-export type ScaleOutStopMode = 'breakeven' | 'trail';
 
 export interface Position {
   /** 'hold' = no target or time exit (tp1/tp2 are 0); otherwise 'swing'. */
@@ -487,18 +486,13 @@ export interface AppSettings {
   smart_money_min_score: number;
   smart_money_max_open_positions: number;
   smart_money_max_new_per_week: number;
-  smart_money_max_holding_days: number;
   smart_money_max_companies_per_poll: number;
   smart_money_max_evaluations_per_run: number;
   max_concurrent_positions: number;
-  /** Trading days before a stalled position is closed at the close; 0 = no limit. */
-  max_holding_days: number;
   /** Opt-in: market fills pay extra bps that grow with order size vs average daily volume. */
   liquidity_slippage_enabled: boolean;
   /** Extra bps at 100% of average daily volume (square-root law, capped at 100 bps). */
   liquidity_slippage_coefficient: number;
-  /** Opt-in: TP1 sells part of the position and the rest runs to TP2 (default off). */
-  scale_out_enabled: boolean;
   /** Portfolio builder (hold mode) settings. */
   hold_buy_only_dips: boolean;
   hold_stop_pct: number;
@@ -518,12 +512,6 @@ export interface AppSettings {
   rebuy_cooldown_days: number;
   hold_add_on_dips: boolean;
 
-  /** Share of the position sold at TP1 (0.1 to 0.9). */
-  scale_out_fraction: number;
-  /** Where the remainder's stop goes after TP1: its entry price, or trailing behind the best price. */
-  scale_out_stop_mode: ScaleOutStopMode;
-  /** Trail distance in multiples of the original risk (trail mode only). */
-  scale_out_trail_r: number;
   /** Notifications (Telegram): morning note, weekly digest, alerts on open positions. */
   morning_note_enabled: boolean;
   /** "HH:MM", New York time. */
@@ -596,14 +584,11 @@ export interface SettingsUpdateRequest {
   smart_money_min_score?: number;
   smart_money_max_open_positions?: number;
   smart_money_max_new_per_week?: number;
-  smart_money_max_holding_days?: number;
   smart_money_max_companies_per_poll?: number;
   smart_money_max_evaluations_per_run?: number;
   max_concurrent_positions?: number;
-  max_holding_days?: number;
   liquidity_slippage_enabled?: boolean;
   liquidity_slippage_coefficient?: number;
-  scale_out_enabled?: boolean;
   hold_buy_only_dips?: boolean;
   hold_stop_pct?: number;
   hold_alert_drawdown_pct?: number;
@@ -621,9 +606,6 @@ export interface SettingsUpdateRequest {
   rebuy_cooldown_days?: number;
   hold_add_on_dips?: boolean;
 
-  scale_out_fraction?: number;
-  scale_out_stop_mode?: ScaleOutStopMode;
-  scale_out_trail_r?: number;
   morning_note_enabled?: boolean;
   morning_note_time_et?: string;
   weekly_digest_enabled?: boolean;
@@ -874,19 +856,6 @@ export interface MissedTradeReport {
   caveats: string[];
 }
 
-export interface MissedTradeRefresh {
-  considered: number;
-  computed: number;
-  resolved: number;
-  still_open: number;
-  no_data: number;
-  not_simulatable: number;
-  skipped_resolved: number;
-  remaining: number;
-  busy: boolean;
-  failed_symbols: string[];
-}
-
 /** GET /api/strategy/versions — which rules and settings produced the plans. */
 export interface StrategyVersion {
   id: number;
@@ -1104,14 +1073,20 @@ export interface BacktestCoverage {
   summary: string;
   profile?: string;
   included?: { fundamentals: boolean; insiders: boolean; earnings: boolean };
-  live_points_max: number;
-  achievable_points: number;
-  achievable_max_confidence_pct: number;
+  // Old swing runs: score-point fields. Hold runs (profile "hold_price_only") send null/empty for these.
+  live_points_max: number | null;
+  achievable_points: number | null;
+  achievable_max_confidence_pct?: number | null;
   active_parts: { part: string; label: string; points_max: number; note: string | null }[];
-  inactive_parts: { part: string; label: string; live_points_max: number; reason: string }[];
-  min_confidence_for_trade: number;
-  bar_points_needed: number | null;
-  bar_reachable: boolean;
+  inactive_parts: { part: string; label: string; live_points_max: number | null; reason: string }[];
+  min_confidence_for_trade?: number;
+  bar_points_needed?: number | null;
+  bar_reachable: boolean | null;
+  // Hold runs
+  checks_run?: { check: string; label: string }[];
+  checks_not_run?: { check: string; label: string; reason: string }[];
+  optimistic?: boolean;
+  min_confidence_note?: string;
 }
 
 export interface BacktestTrade {
@@ -1129,6 +1104,7 @@ export interface BacktestTrade {
   close_reason: string | null;
   realized_pnl: number | null;
   realized_r: number | null;
+  return_pct: number | null;
   holding_days: number | null;
   confidence_points: number | null;
   confidence_points_max: number | null;
@@ -1146,7 +1122,7 @@ export interface BacktestStartRequest {
   start: string;
   end: string;
   decision_every_n_days: number;
-  overrides: Record<string, number>;
+  overrides: Record<string, number | boolean>;
   run_baseline: boolean;
   baseline_runs: number;
   include_fundamentals?: boolean;
@@ -1197,6 +1173,9 @@ export interface BacktestMetrics {
     average_r: number | null;
     average_r_low: number | null;
     average_r_high: number | null;
+    average_return_pct: number | null;
+    average_return_pct_low: number | null;
+    average_return_pct_high: number | null;
     expectancy_usd: number | null;
     total_pnl: number;
     profit_factor: number | null;
@@ -1211,8 +1190,8 @@ export interface BacktestMetrics {
   exposure: { days_with_a_position: number; exposure_pct: number | null; average_open_positions: number | null };
   yearly_returns: BacktestPeriodReturn[];
   monthly_returns: BacktestPeriodReturn[];
-  exit_reasons: { reason: string; count: number; share_pct: number; average_r: number | null; total_pnl: number }[];
-  by_direction: { direction: string; trades: number; share_pct: number; win_rate_pct: number | null; average_r: number | null; total_pnl: number }[];
+  exit_reasons: { reason: string; count: number; share_pct: number; average_r: number | null; average_return_pct: number | null; total_pnl: number }[];
+  by_direction: { direction: string; trades: number; share_pct: number; win_rate_pct: number | null; average_r: number | null; average_return_pct: number | null; total_pnl: number }[];
   drawdown_series: { day: string; drawdown_pct: number }[];
   run_status: string;
   partial: boolean;
@@ -1278,8 +1257,8 @@ export interface BacktestBaseline {
   note?: string | null;
   requested_runs?: number;
   entry_probability?: number | null;
-  seeds?: { seed: number; total_return_pct: number | null; sharpe: number | null; average_r: number | null; win_rate_pct: number | null; trade_count: number; max_drawdown_pct: number }[];
-  real?: { total_return_pct: number | null; sharpe: number | null; average_r: number | null } | null;
+  seeds?: { seed: number; total_return_pct: number | null; sharpe: number | null; average_r: number | null; average_return_pct?: number | null; win_rate_pct: number | null; trade_count: number; max_drawdown_pct: number }[];
+  real?: { total_return_pct: number | null; sharpe: number | null; average_r: number | null; average_return_pct?: number | null } | null;
   placement?: Record<string, BacktestPlacement | null>;
   enough_seeds?: boolean;
   caveat?: string;
@@ -1611,7 +1590,7 @@ export interface CongressRefreshResponse {
 export interface ValidationKnob {
   name: string;
   label: string;
-  kind: 'int' | 'float';
+  kind: 'int' | 'float' | 'bool';
   low: number;
   high: number;
   help: string;
@@ -1661,6 +1640,7 @@ export interface ValidationWindowStats {
   total_return_pct: number | null;
   sharpe: number | null;
   average_r: number | null;
+  average_return_pct?: number | null;
   win_rate_pct: number | null;
   trade_count: number;
   max_drawdown_pct: number | null;
@@ -1745,63 +1725,6 @@ export interface BacktestValidation {
   params: Record<string, unknown>;
   result?: ValidationResult | null;
   scorecard?: ValidationScorecard | null;
-}
-
-// ---- Replay ("What if?": a settings change re-decided on past plans, POST /api/replay) ----
-
-export interface ReplayOverrides {
-  min_confidence_for_trade?: number;
-  ai_overlay_objection_action?: 'cancel' | 'hold' | 'none';
-  ai_overlay_scores_confidence?: boolean;
-  allowed_directions?: 'both' | 'long' | 'short';
-}
-
-export interface ReplayStats {
-  taken: number;
-  resolved: number;
-  open: number;
-  no_result: number;
-  wins: number;
-  win_rate: number | null;
-  win_rate_low: number | null;
-  win_rate_high: number | null;
-  avg_r: number | null;
-  avg_r_low: number | null;
-  avg_r_high: number | null;
-  total_r: number;
-  small_sample: boolean;
-}
-
-export interface ReplayFlip {
-  plan_id: number;
-  symbol: string;
-  created_at: string;
-  direction: string | null;
-  flip: 'now_taken' | 'now_skipped';
-  why: string;
-  confidence_points: number | null;
-  points_after: number | null;
-  result_state: 'resolved' | 'open' | 'none';
-  result_r: number | null;
-  strategy_version: number | null;
-}
-
-export interface ReplayResult {
-  overrides: Record<string, unknown>;
-  decisions: number;
-  truncated: boolean;
-  before: ReplayStats;
-  after: ReplayStats;
-  flipped_count: number;
-  now_taken: number;
-  now_skipped: number;
-  flips_without_result: number;
-  flips: ReplayFlip[];
-  fixed_count: number;
-  baseline_disagrees: number;
-  versions: { strategy_version: number | null; decisions: number }[];
-  replayable: Record<string, string>;
-  caveats: string[];
 }
 
 // ---- Market Terminal ----

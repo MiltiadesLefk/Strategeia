@@ -220,17 +220,6 @@ export function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <IconBadge variant={(top_pick_trade_plan.rr1 ?? 0) >= 2 ? 'up' : 'down'} size={34} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>Risk</div>
-                      <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-                        {formatNumber(top_pick_trade_plan.rr1)}:1 risk:reward on{' '}
-                        <Link to={tickerHref(top_pick_trade_plan.symbol)}>{top_pick_trade_plan.symbol}</Link>,{' '}
-                        {top_pick_trade_plan.confidence_score}% confidence.
-                      </div>
-                    </div>
-                  </div>
                 </>
               )}
             </div>

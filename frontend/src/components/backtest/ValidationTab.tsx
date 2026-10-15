@@ -34,7 +34,12 @@ function addYears(iso: string, years: number): string {
 function describeParams(params: Record<string, number>, knobs: ValidationOptions['knobs'] | undefined): string {
   const entries = Object.entries(params);
   if (entries.length === 0) return 'settings as they are';
-  return entries.map(([k, val]) => `${knobs?.find((x) => x.name === k)?.label ?? k} = ${val}`).join(', ');
+  return entries
+    .map(([k, val]) => {
+      const knob = knobs?.find((x) => x.name === k);
+      return `${knob?.label ?? k} = ${knob?.kind === 'bool' ? (val ? 'on' : 'off') : val}`;
+    })
+    .join(', ');
 }
 
 // ---------------------------------------------------------------- form
@@ -72,7 +77,7 @@ function ValidationForm({ onStarted }: { onStarted: (id: number) => void }) {
         problems.push(`${knob.label}: values must be numbers from ${knob.low} to ${knob.high}`);
         continue;
       }
-      if (knob.kind === 'int' && values.some((x) => !Number.isInteger(x))) {
+      if (knob.kind !== 'float' && values.some((x) => !Number.isInteger(x))) {
         problems.push(`${knob.label}: whole numbers only`);
         continue;
       }
@@ -212,7 +217,7 @@ function ValidationForm({ onStarted }: { onStarted: (id: number) => void }) {
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{knob.label}</div>
               <input
                 aria-label={knob.label}
-                placeholder={`now ${knob.live_value}; e.g. ${knob.live_value}, ${knob.kind === 'int' ? Math.round(knob.live_value * 1.5) : +(knob.live_value * 1.5).toFixed(2)}`}
+                placeholder={knob.kind === 'bool' ? `now ${knob.live_value ? 1 : 0}; e.g. 0, 1` : `now ${knob.live_value}; e.g. ${knob.live_value}, ${knob.kind === 'int' ? Math.round(knob.live_value * 1.5) : +(knob.live_value * 1.5).toFixed(2)}`}
                 value={grid[knob.name] ?? ''}
                 onChange={(e) => setGrid({ ...grid, [knob.name]: e.target.value })}
                 style={{ width: '100%' }}

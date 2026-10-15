@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { getDisplayTimeZone } from '../lib/timezone';
-import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useRebuyWatch, useSettings, useSettingsStatus } from '../api/hooks';
+import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useRebuyWatch, useSettingsStatus } from '../api/hooks';
 import { PauseHistoryCard, SleeveSwitcher, SleevesOverview, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { LessonCell, LessonDetailRow } from '../components/TradeLesson';
 import { ThesisBrokenBadge, ThesisPanel } from '../components/ThesisPanel';
@@ -69,26 +69,16 @@ function exitResolutionHint(p: Position): string | undefined {
   return parts.length ? parts.join(' ') : undefined;
 }
 
-/** Calendar date (YYYY-MM-DD) of the daily bar a position was entered on: bars
- *  carry the New York date for a US equity and the UTC date for a crypto pair. */
-function entryBarDate(symbol: string, openedAt: string): string {
-  const timeZone = symbol.toUpperCase().endsWith('-USD') ? 'UTC' : 'America/New_York';
-  return new Date(openedAt).toLocaleDateString('en-CA', { timeZone });
-}
-
 function ActivePositionCard({ position }: { position: Position }) {
   // Deferred until the card is near the viewport — see lib/useInView.
   const { ref, inView } = useInView<HTMLDivElement>();
   const { data: analysis, isLoading, dataUpdatedAt: priceUpdatedAt } = useAnalysis(position.symbol, '3mo', inView);
   const { mutate: closePosition, isPending: closing } = useClosePosition();
-  const { data: appSettings } = useSettings();
 
   const levels: PriceLevel[] = [
     { price: position.entry_price, color: '#2563eb', title: 'Entry' },
-    { price: position.partial_fill_price != null ? (position.runner_stop ?? position.entry_price) : position.stop_loss, color: '#ef4444', title: 'SL' },
-    { price: position.tp1, color: '#10b981', title: 'TP1' },
-    { price: position.tp2, color: '#10b981', title: 'TP2' },
-  ];
+    { price: position.stop_loss, color: '#ef4444', title: 'SL' },
+  ].filter((l) => l.price > 0);
 
   // R is the unit the rest of this app reasons in — plans are sized by it,
   // closed trades are scored by it — and open positions were the one place it
@@ -104,22 +94,9 @@ function ActivePositionCard({ position }: { position: Position }) {
   const unrealizedDollars = currentPrice !== undefined ? (currentPrice - position.entry_price) * position.shares * sign : null;
   const currentR = currentPrice !== undefined && riskPerShare > 0 ? ((currentPrice - position.entry_price) * sign) / riskPerShare : null;
   // How much room is left before the stop, as a share of the current price.
-  const roomToStopPct = currentPrice !== undefined && currentPrice > 0 ? ((currentPrice - (position.partial_fill_price != null ? (position.runner_stop ?? position.entry_price) : position.stop_loss)) * sign * 100) / currentPrice : null;
-  // Time limit: which trading day this is, counted from the bars actually on the
-  // chart (bars after the entry bar; today's still-forming bar counts as "today").
-  // Only shown when the entry bar is inside the loaded window, so it is never a guess.
-  const maxHoldingDays = appSettings?.max_holding_days ?? 0;
-  const candles = analysis?.candles;
-  const entryDate = entryBarDate(position.symbol, position.opened_at);
-  const tradingDay =
-    candles && candles.length > 0 && candles[0].date <= entryDate ? candles.filter((c) => c.date > entryDate).length : null;
+  const roomToStopPct = currentPrice !== undefined && currentPrice > 0 ? ((currentPrice - position.stop_loss) * sign * 100) / currentPrice : null;
   const slipped =
     position.planned_entry_price != null && Math.abs(position.planned_entry_price - position.entry_price) > 0.005;
-  // Scale-out: part was sold at TP1, so `shares` is only what is still held and the stop in force
-  // is the runner's (the original stop_loss stays the R basis).
-  const scaledOut = position.partial_fill_price != null && position.original_shares != null;
-  const activeStop = scaledOut ? (position.runner_stop ?? position.entry_price) : position.stop_loss;
-
   return (
     <div className="card" ref={ref}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
@@ -130,17 +107,6 @@ function ActivePositionCard({ position }: { position: Position }) {
           <span className="text-muted" style={{ fontSize: 12 }}>
             {position.shares} shares @ {formatMoney(position.entry_price)}
           </span>
-          {scaledOut && (
-            <span
-              className="text-muted"
-              style={{ fontSize: 12 }}
-              title={`Sold ${position.partial_shares} of ${position.original_shares} shares at TP1 (profit ${formatMoney(position.partial_gross_pnl ?? null)} before fees). The rest runs to TP2 with its stop at ${formatMoney(activeStop)}${position.runner_trail_distance ? ', trailing' : ' (breakeven)'}.`}
-            >
-              · sold {position.partial_shares} @ {formatMoney(position.partial_fill_price ?? null)} (banked{' '}
-              {formatMoney(position.partial_gross_pnl ?? null)}), stop now {formatMoney(activeStop)}
-              {position.runner_trail_distance ? ' trailing' : ''}
-            </span>
-          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {unrealizedPct !== null && unrealizedDollars !== null && (
@@ -192,7 +158,7 @@ function ActivePositionCard({ position }: { position: Position }) {
           <div className="text-muted" style={{ fontSize: 11 }}>
             Stop Loss
           </div>
-          <div className="tabular-nums text-red">{formatMoney(position.partial_fill_price != null ? (position.runner_stop ?? position.entry_price) : position.stop_loss)}</div>
+          <div className="tabular-nums text-red">{formatMoney(position.stop_loss)}</div>
         </div>
         <div>
           {/* The number that actually matters minute to minute: how far the
@@ -213,27 +179,12 @@ function ActivePositionCard({ position }: { position: Position }) {
         </div>
         <div>
           <div className="text-muted" style={{ fontSize: 11 }}>
-            TP1 / TP2
-          </div>
-          <div className="tabular-nums text-green">
-            {formatMoney(position.tp1)} / {formatMoney(position.tp2)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted" style={{ fontSize: 11 }}>
             Opened
           </div>
           <div className="tabular-nums">{new Date(position.opened_at).toLocaleDateString(undefined, { timeZone: getDisplayTimeZone() })}</div>
           <div className="text-muted" style={{ fontSize: 10 }}>
             {formatRelativeTime(position.opened_at)}
           </div>
-          {maxHoldingDays > 0 && (
-            <div className="text-muted tabular-nums" style={{ fontSize: 10 }}>
-              {tradingDay !== null
-                ? `day ${tradingDay} of ${maxHoldingDays}`
-                : `closes after ${maxHoldingDays} trading days`}
-            </div>
-          )}
         </div>
       </div>
       <ThesisPanel positionId={position.id} />

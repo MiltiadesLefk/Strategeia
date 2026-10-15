@@ -21,14 +21,12 @@ const FAILED_VISIBLE_MS = 9000;
 
 // [pattern, what is running, what happened]. First match wins; the fallback names the path.
 const LABELS: [RegExp, string, string][] = [
-  [/^\/api\/trade-plans\/generate/, 'Generating trade plan', 'Trade plan ready'],
   [/^\/api\/scan\/auto-trade/, 'Scanning and evaluating symbols', 'Scan finished'],
   [/^\/api\/portfolio\/reset/, 'Resetting paper account', 'Paper account reset'],
   [/^\/api\/portfolio\/positions\/\d+\/close/, 'Closing position', 'Position closed'],
   [/^\/api\/portfolio\/positions\/\d+\/lesson/, 'Writing trade lesson', 'Lesson written'],
   [/^\/api\/portfolio\/positions\/\d+\/thesis\/(recheck|review)/, 'Checking thesis', 'Thesis checked'],
   [/^\/api\/portfolio\/positions/, 'Updating position', 'Position updated'],
-  [/^\/api\/trade-plans/, 'Updating trade plans', 'Trade plans updated'],
   [/^\/api\/backtests\/validate/, 'Starting validation', 'Validation started'],
   [/^\/api\/backtests\/.*cancel/, 'Cancelling run', 'Run cancelled'],
   [/^\/api\/backtests/, 'Starting backtest', 'Backtest started'],
@@ -39,8 +37,6 @@ const LABELS: [RegExp, string, string][] = [
   [/^\/api\/smart-money\/review\/\d+\/skip/, 'Skipping', 'Skipped'],
   [/^\/api\/smart-money\/\w+\/refresh/, 'Loading filings', 'Filings loaded'],
   [/^\/api\/signals\/finra\/refresh/, 'Loading FINRA short volume', 'FINRA data loaded'],
-  [/^\/api\/missed-trades\/refresh/, 'Replaying declined trades', 'Replay finished'],
-  [/^\/api\/replay/, 'Replaying plans', 'Replay finished'],
   [/^\/api\/news\/(collect|label)/, 'Collecting news', 'News updated'],
   [/^\/api\/forecast-lab\/models\/train/, 'Training model', 'Model trained'],
   [/^\/api\/forecast-lab/, 'Updating Forecast Lab', 'Forecast Lab updated'],

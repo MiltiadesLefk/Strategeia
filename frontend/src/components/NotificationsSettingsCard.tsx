@@ -20,7 +20,6 @@ export function NotificationsSettingsCard({ embedded = false }: { embedded?: boo
   const [weeklyOn, setWeeklyOn] = useState(false);
   const [positionAlerts, setPositionAlerts] = useState(true);
   const [stopAtr, setStopAtr] = useState(1);
-  const [tpPct, setTpPct] = useState(1);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -30,12 +29,10 @@ export function NotificationsSettingsCard({ embedded = false }: { embedded?: boo
     setWeeklyOn(settings.weekly_digest_enabled);
     setPositionAlerts(settings.price_alert_positions_enabled);
     setStopAtr(settings.price_alert_stop_atr);
-    setTpPct(settings.price_alert_tp1_pct);
   }, [settings]);
 
   const timeValid = TIME_PATTERN.test(morningTime);
   const stopValid = stopAtr > 0 && stopAtr <= 10;
-  const tpValid = tpPct > 0 && tpPct <= 20;
   const telegramReady = !!(settings?.telegram_bot_token && settings?.telegram_chat_id);
 
   function save() {
@@ -46,7 +43,6 @@ export function NotificationsSettingsCard({ embedded = false }: { embedded?: boo
         weekly_digest_enabled: weeklyOn,
         price_alert_positions_enabled: positionAlerts,
         price_alert_stop_atr: stopAtr,
-        price_alert_tp1_pct: tpPct,
       },
       {
         onSuccess: () => {
@@ -101,28 +97,24 @@ export function NotificationsSettingsCard({ embedded = false }: { embedded?: boo
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <ToggleSwitch checked={positionAlerts} onChange={setPositionAlerts} label="Alerts on open positions" />
         <div style={{ fontSize: 13 }}>
-          <strong>Alerts on open positions</strong>: a message when an open paper position gets close to its stop or its first
-          target (once per day for each). Checked every five minutes while the market is open.
+          <strong>Alerts on open positions</strong>: a message when an open paper position gets close to its stop
+          (once per day for each). Checked every five minutes while the market is open.
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <label>Close to the stop: within (ATRs)</label>
             <input type="number" min={0.1} max={10} step={0.1} value={stopAtr} onChange={(e) => setStopAtr(Number(e.target.value))} style={{ width: 100 }} />
           </div>
-          <div>
-            <label>Close to the first target: within (% of price)</label>
-            <input type="number" min={0.1} max={20} step={0.1} value={tpPct} onChange={(e) => setTpPct(Number(e.target.value))} style={{ width: 100 }} />
-          </div>
         </div>
-        {(!stopValid || !tpValid) && (
+        {!stopValid && (
           <div className="text-red" style={{ fontSize: 12 }}>
-            Stop distance must be above 0 and at most 10 ATRs; target distance above 0 and at most 20%.
+            Stop distance must be above 0 and at most 10 ATRs.
           </div>
         )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="btn btn-secondary" onClick={save} disabled={!timeValid || !stopValid || !tpValid || update.isPending}>
+        <button className="btn btn-secondary" onClick={save} disabled={!timeValid || !stopValid || update.isPending}>
           {update.isPending ? 'Saving…' : 'Save'}
         </button>
         {saved && (

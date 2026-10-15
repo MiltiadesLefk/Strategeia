@@ -43,17 +43,20 @@ const MIN_FULL_RUN_DAYS = 365; // the strategy needs about a year of bars before
 const OVERRIDE_FIELDS: { key: string; label: string; step: string; fallback: number }[] = [
   { key: 'slippage_bps', label: 'Slippage (bps)', step: '0.5', fallback: 5 },
   { key: 'commission_per_trade', label: 'Commission per trade ($)', step: '0.01', fallback: 0 },
-  { key: 'default_risk_pct', label: 'Risk per trade (%)', step: '0.1', fallback: 1 },
-  { key: 'min_confidence_for_trade', label: 'Minimum confidence (%)', step: '1', fallback: 30 },
   { key: 'max_concurrent_positions', label: 'Max open positions', step: '1', fallback: 5 },
-  { key: 'max_holding_days', label: 'Max holding days (0 = none)', step: '1', fallback: 0 },
+  { key: 'hold_stop_pct', label: 'Disaster stop (%)', step: '1', fallback: 25 },
+  { key: 'hold_target_weight_pct', label: 'Target weight (%)', step: '0.5', fallback: 5 },
 ];
 
+// A yes/no override (sent as true/false, left unset = the live setting).
+const BOOL_OVERRIDES = [{ key: 'hold_buy_only_dips', label: 'Buy only dips' }];
+
 const CLOSE_REASON_LABELS: Record<string, string> = {
-  stop_hit: 'Stop',
-  tp1_hit: 'Target (TP1)',
+  disaster_stop: 'Disaster stop',
+  stop_hit: 'Stop (older run)',
+  tp1_hit: 'Target (TP1, older run)',
   tp2_hit: 'Target (TP2)',
-  time_exit: 'Time limit',
+  time_exit: 'Time limit (older run)',
   open_at_end: 'Still open at the end',
 };
 const reasonLabel = (reason: string) => CLOSE_REASON_LABELS[reason] ?? reason;
@@ -87,6 +90,7 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
   const [endDate, setEndDate] = useState('');
   const [every, setEvery] = useState(1);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [boolOverrides, setBoolOverrides] = useState<Record<string, string>>({});
   const [includeFundamentals, setIncludeFundamentals] = useState(false);
   const [includeInsiders, setIncludeInsiders] = useState(false);
   const [includeEarnings, setIncludeEarnings] = useState(false);
@@ -120,11 +124,12 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
   }
 
   function submit() {
-    const body: Record<string, number> = {};
+    const body: Record<string, number | boolean> = {};
     for (const field of OVERRIDE_FIELDS) {
       const raw = overrides[field.key];
       if (raw !== undefined && raw !== '' && !Number.isNaN(Number(raw))) body[field.key] = Number(raw);
     }
+    for (const f of BOOL_OVERRIDES) if (boolOverrides[f.key]) body[f.key] = boolOverrides[f.key] === 'on';
     start.mutate(
       {
         symbols,
@@ -147,7 +152,7 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
       <div>
         <h2 style={{ margin: 0, fontSize: 18 }}>New run</h2>
         <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
-          Replays the live scoring and the paper engine over past days using only price history already stored on this machine. Nothing is downloaded when a run starts.
+          Runs the live hold rules and the paper engine over past days using only price history already stored on this machine. Nothing is downloaded when a run starts.
         </div>
       </div>
 
@@ -250,6 +255,16 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
                 value={overrides[f.key] ?? ''}
                 onChange={(e) => setOverrides((prev) => ({ ...prev, [f.key]: e.target.value }))}
               />
+            </label>
+          ))}
+          {BOOL_OVERRIDES.map((f) => (
+            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+              {f.label}
+              <select value={boolOverrides[f.key] ?? ''} onChange={(e) => setBoolOverrides((prev) => ({ ...prev, [f.key]: e.target.value }))}>
+                <option value="">Live setting ({live[f.key] ? 'on' : 'off'})</option>
+                <option value="on">On</option>
+                <option value="off">Off</option>
+              </select>
             </label>
           ))}
         </div>
@@ -411,7 +426,10 @@ function Cards({ m }: { m: BacktestMetrics }) {
       <StatCard label="Calmar" value={plain(r.calmar)} note="CAGR / max drawdown" />
       <StatCard label="Volatility" value={r.volatility_pct === null ? '—' : `${r.volatility_pct.toFixed(1)}%`} note="annualised, daily" />
       <StatCard label="Win rate" value={t.win_rate_pct === null ? '—' : `${t.win_rate_pct.toFixed(0)}%`} note={t.win_rate_low_pct === null ? sample : `95% range ${t.win_rate_low_pct.toFixed(0)}-${t.win_rate_high_pct?.toFixed(0)}%, ${sample}`} />
-      <StatCard label="Average R" value={formatR(t.average_r)} positive={t.average_r === null ? null : t.average_r > 0} note={t.average_r_low === null ? sample : `95% range ${signed(t.average_r_low)} to ${signed(t.average_r_high)}`} />
+      {t.average_r !== null && (
+        <StatCard label="Average R" value={formatR(t.average_r)} positive={t.average_r > 0} note={t.average_r_low === null ? sample : `95% range ${signed(t.average_r_low)} to ${signed(t.average_r_high)}`} />
+      )}
+      <StatCard label="Average return per trade" value={t.average_return_pct === null ? '—' : `${signed(t.average_return_pct)}%`} positive={t.average_return_pct === null ? null : t.average_return_pct > 0} note={t.average_return_pct_low === null ? sample : `95% range ${signed(t.average_return_pct_low)}% to ${signed(t.average_return_pct_high)}%`} />
       <StatCard label="Profit factor" value={t.profit_factor === null ? (t.closed_trades ? 'no losses' : '—') : plain(t.profit_factor)} note="gross profit / gross loss" />
       <StatCard label="Avg win / avg loss" value={`${formatMoney(t.average_win)} / ${formatMoney(t.average_loss)}`} note={`payoff ${plain(t.payoff_ratio)}`} />
       <StatCard label="Trades per year" value={t.trades_per_year === null ? '—' : t.trades_per_year.toFixed(1)} note={`avg hold ${t.average_holding_days === null ? '—' : `${t.average_holding_days.toFixed(1)} days`}`} />
@@ -503,12 +521,13 @@ function PeriodTables({ m }: { m: BacktestMetrics }) {
   );
 }
 
-type TradeSort = 'entry_date' | 'symbol' | 'direction' | 'exit_date' | 'close_reason' | 'realized_r' | 'realized_pnl' | 'holding_days';
+type TradeSort = 'entry_date' | 'symbol' | 'direction' | 'exit_date' | 'close_reason' | 'return_pct' | 'realized_r' | 'realized_pnl' | 'holding_days';
 
 function TradesTable({ trades }: { trades: BacktestTrade[] }) {
   const [sort, setSort] = useState<TradeSort>('entry_date');
   const [desc, setDesc] = useState(true);
   const [limit, setLimit] = useState(100);
+  const hasR = trades.some((t) => t.realized_r !== null);
   const sorted = useMemo(() => {
     const rows = [...trades];
     rows.sort((a, b) => {
@@ -553,7 +572,8 @@ function TradesTable({ trades }: { trades: BacktestTrade[] }) {
             {header('exit_date', 'Exit')}
             {header('close_reason', 'Ended by')}
             {header('holding_days', 'Days', true)}
-            {header('realized_r', 'R', true)}
+            {header('return_pct', 'Return', true)}
+            {hasR && header('realized_r', 'R (older run)', true)}
             {header('realized_pnl', 'P&L', true)}
           </tr>
         </thead>
@@ -574,9 +594,14 @@ function TradesTable({ trades }: { trades: BacktestTrade[] }) {
               <td className="tabular-nums" style={{ textAlign: 'right' }}>
                 {t.holding_days ?? '—'}
               </td>
-              <td className="tabular-nums" style={{ textAlign: 'right', color: returnColor(t.realized_r) }}>
-                {formatR(t.realized_r)}
+              <td className="tabular-nums" style={{ textAlign: 'right', color: returnColor(t.return_pct) }}>
+                {t.return_pct === null ? '—' : `${signed(t.return_pct)}%`}
               </td>
+              {hasR && (
+                <td className="tabular-nums" style={{ textAlign: 'right', color: returnColor(t.realized_r) }}>
+                  {formatR(t.realized_r)}
+                </td>
+              )}
               <td className="tabular-nums" style={{ textAlign: 'right', color: returnColor(t.realized_pnl) }}>
                 {formatMoney(t.realized_pnl)}
               </td>
@@ -609,7 +634,7 @@ function MixAndSplit({ m }: { m: BacktestMetrics }) {
                 <th>Reason</th>
                 <th style={{ textAlign: 'right' }}>Trades</th>
                 <th style={{ textAlign: 'right' }}>Share</th>
-                <th style={{ textAlign: 'right' }}>Avg R</th>
+                <th style={{ textAlign: 'right' }}>Avg return</th>
                 <th style={{ textAlign: 'right' }}>P&L</th>
               </tr>
             </thead>
@@ -619,7 +644,7 @@ function MixAndSplit({ m }: { m: BacktestMetrics }) {
                   <td>{reasonLabel(e.reason)}</td>
                   <td className="tabular-nums" style={{ textAlign: 'right' }}>{e.count}</td>
                   <td className="tabular-nums" style={{ textAlign: 'right' }}>{e.share_pct.toFixed(0)}%</td>
-                  <td className="tabular-nums" style={{ textAlign: 'right' }}>{formatR(e.average_r)}</td>
+                  <td className="tabular-nums" style={{ textAlign: 'right' }}>{e.average_return_pct === null ? '—' : `${signed(e.average_return_pct)}%`}</td>
                   <td className="tabular-nums" style={{ textAlign: 'right', color: returnColor(e.total_pnl) }}>{formatMoney(e.total_pnl)}</td>
                 </tr>
               ))}
@@ -635,7 +660,7 @@ function MixAndSplit({ m }: { m: BacktestMetrics }) {
               <th>Side</th>
               <th style={{ textAlign: 'right' }}>Trades</th>
               <th style={{ textAlign: 'right' }}>Win rate</th>
-              <th style={{ textAlign: 'right' }}>Avg R</th>
+              <th style={{ textAlign: 'right' }}>Avg return</th>
               <th style={{ textAlign: 'right' }}>P&L</th>
             </tr>
           </thead>
@@ -645,7 +670,7 @@ function MixAndSplit({ m }: { m: BacktestMetrics }) {
                 <td><DirectionBadge direction={d.direction} /></td>
                 <td className="tabular-nums" style={{ textAlign: 'right' }}>{d.trades}</td>
                 <td className="tabular-nums" style={{ textAlign: 'right' }}>{d.win_rate_pct === null ? '—' : `${d.win_rate_pct.toFixed(0)}%`}</td>
-                <td className="tabular-nums" style={{ textAlign: 'right' }}>{formatR(d.average_r)}</td>
+                <td className="tabular-nums" style={{ textAlign: 'right' }}>{d.average_return_pct === null ? '—' : `${signed(d.average_return_pct)}%`}</td>
                 <td className="tabular-nums" style={{ textAlign: 'right', color: returnColor(d.total_pnl) }}>{formatMoney(d.total_pnl)}</td>
               </tr>
             ))}
@@ -715,7 +740,8 @@ function BaselinePanel({ baseline, running }: { baseline: BacktestBaseline | und
   }
   const rows: [string, string, (v: number) => string][] = [
     ['total_return_pct', 'Total return', (v) => formatPct(v)],
-    ['average_r', 'Average R', (v) => formatR(v)],
+    ['average_return_pct', 'Average return per trade', (v) => `${signed(v)}%`],
+    ['average_r', 'Average R (older run)', (v) => formatR(v)],
     ['sharpe', 'Sharpe', (v) => plain(v)],
   ];
   return (
@@ -785,37 +811,73 @@ function CoveragePanel({ run }: { run: BacktestRun }) {
   const c = run.coverage;
   const s = run.summary;
   if (!c) return null;
+  const hold = c.profile === 'hold_price_only';
+  const skipped = s && typeof s.symbols_skipped === 'object' && s.symbols_skipped !== null && Object.keys(s.symbols_skipped as object).length > 0 ? ` Skipped symbols: ${Object.keys(s.symbols_skipped as object).join(', ')}.` : '';
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <h3 style={{ margin: 0 }}>What this run tested</h3>
       <div style={{ fontSize: 13 }}>{c.summary}</div>
-      <div className="split-row">
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>{c.profile === 'price_plus_dated_data' ? 'Scored (prices plus the dated data switched on)' : 'Scored (prices only)'}</div>
-          <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: 13 }}>
-            {c.active_parts.map((p) => (
-              <li key={p.part}>{p.label}: up to {p.points_max} points{p.note ? ` (${p.note})` : ''}</li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Not in this run (contribute 0)</div>
-          <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: 13 }}>
-            {c.inactive_parts.map((p) => (
-              <li key={p.part}>{p.label}: {p.reason}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      {datedAvailability(s) && (
-        <div className="text-muted" style={{ fontSize: 12 }}>
-          Dated data found: {datedAvailability(s)}
+      {hold && c.optimistic && (
+        <div className="badge badge-amber" style={{ alignSelf: 'flex-start', whiteSpace: 'normal' }} data-testid="optimistic-warning">
+          Optimistic result: today&apos;s index members only (survivors), daily bars, no costs beyond slippage. Read it as an upper bound.
         </div>
       )}
+      {hold ? (
+        <div className="split-row">
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Checks run</div>
+            <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: 13 }}>
+              {(c.checks_run ?? []).map((k) => (
+                <li key={k.check}>{k.label}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Checks not run</div>
+            <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: 13 }}>
+              {(c.checks_not_run ?? []).map((k) => (
+                <li key={k.check}>{k.label}: {k.reason}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="split-row">
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{c.profile === 'price_plus_dated_data' ? 'Scored (prices plus the dated data switched on)' : 'Scored (prices only)'}</div>
+              <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: 13 }}>
+                {c.active_parts.map((p) => (
+                  <li key={p.part}>{p.label}: up to {p.points_max} points{p.note ? ` (${p.note})` : ''}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>Not in this run (contribute 0)</div>
+              <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: 13 }}>
+                {c.inactive_parts.map((p) => (
+                  <li key={p.part}>{p.label}: {p.reason}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          {datedAvailability(s) && (
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              Dated data found: {datedAvailability(s)}
+            </div>
+          )}
+        </>
+      )}
       <div className="text-muted" style={{ fontSize: 12 }}>
-        Confidence bar {c.min_confidence_for_trade}% needs {c.bar_points_needed ?? 'more than the maximum'} of the {c.achievable_points} reachable points
-        {c.bar_reachable ? '.' : ', which is not reachable: no trade could be taken.'}
-        {s && typeof s.symbols_skipped === 'object' && s.symbols_skipped !== null && Object.keys(s.symbols_skipped as object).length > 0 && ` Skipped symbols: ${Object.keys(s.symbols_skipped as object).join(', ')}.`}
+        {hold ? (
+          c.min_confidence_note
+        ) : (
+          <>
+            Confidence bar {c.min_confidence_for_trade}% needs {c.bar_points_needed ?? 'more than the maximum'} of the {c.achievable_points} reachable points
+            {c.bar_reachable ? '.' : ', which is not reachable: no trade could be taken.'}
+          </>
+        )}
+        {skipped}
       </div>
     </div>
   );
@@ -1003,7 +1065,7 @@ export function BacktestsPage() {
         <div>
           <h1 style={{ margin: 0 }}>Backtest Lab</h1>
           <div className="text-muted" style={{ fontSize: 14 }}>
-            Replay the live rules over past years on stored prices, then compare the result with SPY and with random entries. Paper trading only; nothing here places an order.
+            Run the live hold rules over past years on stored prices, then compare the result with SPY and with random entries. Paper trading only; nothing here places an order.
           </div>
         </div>
         <button className="btn btn-secondary" onClick={() => setShowForm(!showForm)}>

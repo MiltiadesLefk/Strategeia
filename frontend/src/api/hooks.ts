@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import type {
-  ReplayOverrides,
-  ReplayResult,
   AnalysisResponse,
   AppSettings,
   ArchiveResponse,
@@ -26,7 +24,6 @@ import type {
   SettingsUpdateRequest,
   TestConnectionArg,
   TestConnectionResponse,
-  TradePlan,
   UniverseEntry,
   WatchlistResponse,
   WatchlistSymbolCheck,
@@ -34,7 +31,7 @@ import type {
 import type { CalibrationReport } from './types';
 import type { RebuyWatchItem } from './types';
 import type { CalendarResponse, EarningsPreview } from './types';
-import type { MissedTradeRefresh, MissedTradeReport } from './types';
+import type { MissedTradeReport } from './types';
 import type { ReviewBuyResponse, ReviewItem, ReviewList, SleeveReport } from './types';
 import type { StrategyHistory } from './types';
 import type { CacheClearResponse, CacheStatus } from './types';
@@ -67,7 +64,6 @@ export const qk = {
   analysis: (symbol: string, range: string) => ['analysis', symbol, range] as const,
   research: (symbol: string) => ['research', symbol] as const,
   archive: (symbol: string) => ['archive', symbol] as const,
-  tradePlans: ['trade-plans'] as const,
   positions: ['positions'] as const,
   stats: ['stats'] as const,
   calibration: ['calibration'] as const,
@@ -128,7 +124,6 @@ export function useRunAutoScanNow() {
   return useMutation({
     mutationFn: () => api.post<AutoScanResponse>('/api/scan/auto-trade'),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
       queryClient.invalidateQueries({ queryKey: qk.positions });
       queryClient.invalidateQueries({ queryKey: qk.stats });
       queryClient.invalidateQueries({ queryKey: qk.dashboard });
@@ -181,34 +176,6 @@ export function useArchive(symbol: string | null) {
   });
 }
 
-export function useTradePlans() {
-  return useQuery({ queryKey: qk.tradePlans, queryFn: () => api.get<TradePlan[]>('/api/trade-plans') });
-}
-
-export function useGenerateTradePlan() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ symbol, sleeve }: { symbol: string; sleeve?: string }) =>
-      api.post<TradePlan>('/api/trade-plans/generate', { symbol, ...(sleeve && sleeve !== 'core' ? { sleeve } : {}) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
-      // A plan generated under changed settings creates a new strategy version.
-      queryClient.invalidateQueries({ queryKey: qk.strategyVersions });
-    },
-  });
-}
-
-export function useClearTradePlans() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.delete<{ removed: number }>('/api/trade-plans'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
-      queryClient.invalidateQueries({ queryKey: qk.dashboard });
-    },
-  });
-}
-
 export function useStrategyVersions() {
   return useQuery({ queryKey: qk.strategyVersions, queryFn: () => api.get<StrategyHistory>('/api/strategy/versions') });
 }
@@ -232,7 +199,6 @@ export function useOpenPosition() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.positions });
       queryClient.invalidateQueries({ queryKey: qk.stats });
-      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
       queryClient.invalidateQueries({ queryKey: qk.dashboard });
     },
   });
@@ -286,7 +252,6 @@ export function useResetPortfolio(sleeve?: string | null) {
       queryClient.invalidateQueries({ queryKey: qk.positions });
       queryClient.invalidateQueries({ queryKey: qk.stats });
       queryClient.invalidateQueries({ queryKey: qk.equityCurve });
-      queryClient.invalidateQueries({ queryKey: qk.tradePlans });
       queryClient.invalidateQueries({ queryKey: qk.dashboard });
     },
   });
@@ -451,15 +416,6 @@ export function useCalibration() {
 /** What the trades the app declined would have earned. Read-only on the server. */
 export function useMissedTrades() {
   return useQuery({ queryKey: qk.missedTrades, queryFn: () => api.get<MissedTradeReport>('/api/missed-trades') });
-}
-
-/** Computes the missed-trade outcomes that are new or still open, then reloads the report. */
-export function useRefreshMissedTrades() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post<MissedTradeRefresh>('/api/missed-trades/refresh'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.missedTrades }),
-  });
 }
 
 /** Read-only numbers for the Settings page's data-cache card. */
@@ -923,14 +879,6 @@ export function useCancelValidation() {
   return useMutation({
     mutationFn: (id: number) => api.post<{ id: number; status: string }>(`/api/backtests/validations/${id}/cancel`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: validationKeys.list }),
-  });
-}
-
-// ---- Replay (read-only "What if?") ----
-
-export function useReplay() {
-  return useMutation({
-    mutationFn: (overrides: ReplayOverrides) => api.post<ReplayResult>('/api/replay', { overrides }),
   });
 }
 

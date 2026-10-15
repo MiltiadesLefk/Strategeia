@@ -69,7 +69,7 @@ function AlertForm({ symbol, onDone }: { symbol: string; onDone?: () => void }) 
         <div>
           <label>Alert me when {symbol}</label>
           <select value={condition} onChange={(e) => setCondition(e.target.value as PriceAlertCondition)} aria-label="Alert condition">
-            {Object.entries(CONDITION_LABELS).map(([key, label]) => (
+            {Object.entries(CONDITION_LABELS).filter(([key]) => key !== 'near_tp1').map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
               </option>
