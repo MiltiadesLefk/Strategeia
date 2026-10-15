@@ -20,7 +20,7 @@ def gate(passed: bool):
     from app.analysis.quality_gate import GateCheck
 
     checks = [GateCheck("trend", passed, "below the 200-day average")]
-    return lambda dp, symbol: GateResult(passed, checks)
+    return lambda dp, symbol, **k: GateResult(passed, checks)
 
 
 def test_a_passed_gate_hold_buys_in_the_auto_sleeve(session, monkeypatch):

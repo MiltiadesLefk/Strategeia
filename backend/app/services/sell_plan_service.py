@@ -69,7 +69,7 @@ def evaluate_signals(
         held_closes = bars["close"][dates >= pd.Timestamp(position.opened_at.date())]
         high = max([*map(float, held_closes), price])
         core: list[str] = []
-        if not check_quality(data_provider, symbol).passed:
+        if not check_quality(data_provider, symbol, session=session).passed:
             core.append("quality_gate")
         if days_under_ma(closes, settings.sell_ma200_days):
             core.append("below_200day")
@@ -136,7 +136,7 @@ def run_sell_plan(settings: AppSettings, data_provider: DataProvider, session: S
         if watch.symbol in held:
             continue
         try:
-            gate = check_quality(data_provider, watch.symbol, require_trend=False)
+            gate = check_quality(data_provider, watch.symbol, require_trend=False, session=session)
             if not (gate.passed and gate.dip):
                 continue
             sold = session.get(PaperPosition, watch.sold_position_id)
@@ -164,7 +164,7 @@ def run_hold_reviews(settings: AppSettings, data_provider: DataProvider, session
         if now - since < timedelta(days=settings.hold_review_days):
             continue
         try:
-            gate = check_quality(data_provider, position.symbol)
+            gate = check_quality(data_provider, position.symbol, session=session)
             with fresh_data_only():
                 price = float(data_provider.get_quote(position.symbol).price)
         except Exception:  # noqa: BLE001 - no fresh read: skip, unstamped, retried tomorrow

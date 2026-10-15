@@ -90,7 +90,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
             if not engine._owns(position):
                 continue
             try:
-                gate = check_quality(data_provider, position.symbol)
+                gate = check_quality(data_provider, position.symbol, session=session)
                 if gate.passed and gate.dip:
                     hold_add(session, engine, data_provider, settings, position)
                     notify(settings.telegram_bot_token, settings.telegram_chat_id, f"Hold scan added to {position.symbol} (dip, passed the quality gate).")

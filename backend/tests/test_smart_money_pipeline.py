@@ -64,7 +64,7 @@ def quality_gate_passes(monkeypatch):
     from app.services import hold_buy_service
 
     # the Bearish fake stands for "a stock that fails the gate" (it used to stand for a bad swing rating)
-    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(not isinstance(dp, Bearish), []))
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol, **k: GateResult(not isinstance(dp, Bearish), []))
 
 
 @pytest.fixture

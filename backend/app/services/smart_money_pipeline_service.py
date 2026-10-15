@@ -305,7 +305,7 @@ def _evaluate_hold(
     from app.services.hold_buy_service import check_quality, hold_buy
 
     try:
-        gate = check_quality(data_provider, candidate.symbol)
+        gate = check_quality(data_provider, candidate.symbol, session=session)
     except Exception as exc:  # one bad symbol must not stop the others
         logger.exception("Smart-money quality check of %s failed", candidate.symbol)
         session.rollback()
