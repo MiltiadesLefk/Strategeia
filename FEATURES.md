@@ -68,7 +68,8 @@ stops anything. The data is free and the money is fake: no real broker is connec
  PAPER POSITION opened ("hold": target weight, disaster stop; US stocks only while the market is open)
      │            smart money (09:27 fetch, 09:50 pipeline) buys through the same path, at half size if the gate fails
      ▼
- EXIT CHECKS every 15 min during US market hours ─ a FINAL daily close beyond the stop ─▶ position CLOSED (disaster_stop)
+ EXIT CHECKS every 15 min during US market hours ─ a FINAL daily close (or, in touch mode, a bar low) beyond the stop ─▶ position CLOSED (disaster_stop)
+ LIVE TOUCH STOP every 5 min during market hours (touch mode, the default) ─ live price at or under the stop ─▶ position CLOSED (disaster_stop)
  SELL PLAN 10:30 New York time ─ 1 signal: alert (+ raise the stop if in profit); 2+ signals: sell
      │
      ▼
@@ -376,9 +377,9 @@ and rules that decide what is bought. A version is made when `hold_buy` first ne
 or open a page; going back to old settings reuses the old number.
 
 **What counts** (changing it makes a new version): the hold settings (target weight, stop %, caps, buy-only-dips,
-failed-gate size, news discovery, dip adds, sell-plan and rebuy numbers), slippage, commission, position and sector caps,
+failed-gate size, stop trigger (close or touch), big-news buys and their numbers, the evidence bonus, news discovery, dip adds, sell-plan and rebuy numbers), slippage, commission, position and sector caps,
 auto-execute, the smart-money scoring settings, and the named constants in the code (the gate's `MA_DAYS`, `DIP_PCT`,
-`DIP_LOOKBACK`, `MIN_REVENUE_GROWTH_PCT`, the engine constants and the smart-money scoring). `RULES_REVISION` (now 2) is
+`DIP_LOOKBACK`, `MIN_REVENUE_GROWTH_PCT`, the engine constants, the big-news pattern lists, the evidence-bonus points and the smart-money scoring). `RULES_REVISION` (now 4) is
 bumped by hand when rule logic changes without moving a constant. `min_confidence_for_trade` is still listed but nothing
 reads it any more except the backtest service.
 
@@ -438,9 +439,14 @@ account, with a disaster stop (§27). The Risk Manager calculator on the Analysi
 - It walks **every daily bar since entry**, not just today's, so a close beyond the stop that later recovered is
   not missed. **The entry bar is skipped** (entry is priced at that day's close or current price, so the bar must not
   close out a trade that didn't exist yet).
-- A position closes **fully** at the first **final** daily bar whose **close** is beyond the stop (a long: at or below
-  it), at that close plus slippage, with the reason `disaster_stop`. A wick through the stop that closes back above it
-  does nothing, a gap-down fills at the close (the unfavourable choice), and a day still in progress is never used.
+- **Stop trigger (`hold_stop_mode`, Settings -> Portfolio builder).** In **close** mode a position closes **fully** at the
+  first **final** daily bar whose **close** is beyond the stop (a long: at or below it), at that close plus slippage, with
+  the reason `disaster_stop`; a wick that closes back above does nothing and a gap-down fills at the close. In **touch**
+  mode (the default) it closes as soon as the price reaches the stop, like a broker stop order: a live price check every
+  5 minutes during market hours closes a position whose live quote is at or under the stop, filled at the live price plus
+  slippage (a gap-down fills where it trades, never at the stop level), and the daily walk also counts a final bar whose
+  **low** reached the stop (filled at the stop, or at the open if the bar opened below it). A day still in progress is never
+  used by the daily walk, and a failed quote never closes anything. A backtest always uses close mode.
   `hold_stop_pct` 0 means alert-only: no stop, never an exit.
 - There is **no target, no time limit, no partial scale-out and no hourly check** any more. A still-open old swing row
   is managed by its stop alone through the same rule (a stop that was a swing stop closes at the daily close beyond it).
@@ -758,7 +764,7 @@ thousands of requests, so the app can **download each stock's history once and k
   survivors, and its results will look better than a real trader's would have. A dated membership history
   is not built.
 - The **test filter** `STRATEGEIA_DEV_TICKERS` narrows *every* screen to a few symbols. It's set to
-  **NVDA and AAPL** in `docker-compose.yml`, which survives Docker rebuilds.
+  five demo symbols (NVDA, AAPL, VST, SOFI, INTC) in `docker-compose.yml`, which survives Docker rebuilds.
 
 **Your own watchlist (Settings -> Watchlist).** The bundled file needs a rebuild to change, so the app
 also lets you keep your own list. It is saved to `runtime/universe.json`, next to `settings.json`, in the
@@ -1122,7 +1128,7 @@ Every call the app makes to a source is counted once, in one place, since the se
 | Watcher check interval (`watchers_poll_minutes`) | 5 | How often the app looks for watchers that are due, 1 to 60. Takes effect after a restart |
 | Auto-execute trade plans | on | Lets the hold scan and the smart-money pipeline open positions on their own (§8) |
 | Unattended auto-scan | off | The 10:00 hold scan (§8, §27) |
-| Hold settings (`hold_target_weight_pct` 4.5, `hold_stop_pct` 25, `hold_max_positions` 20, `hold_max_per_sector` 4, `hold_max_new_per_scan` 3, `hold_buy_only_dips`, `hold_add_on_dips` off, `hold_failed_gate_size_pct` 50, `hold_alert_drawdown_pct`) | see §27 | The portfolio builder card |
+| Hold settings (`hold_target_weight_pct` 4.5, `hold_stop_pct` 25, `hold_max_positions` 20, `hold_max_per_sector` 4, `hold_max_new_per_scan` 3, `hold_buy_only_dips`, `hold_add_on_dips` off, `hold_failed_gate_size_pct` 50, `hold_stop_mode` touch, `evidence_bonus_enabled` on, `big_news_buy_enabled` off, `big_news_size_pct` 50, `big_news_lookback_hours` 24, `hold_alert_drawdown_pct`) | see §27 | The portfolio builder card |
 | Sell plan and rebuy (`sell_ma200_days` 5, `sell_trail_pct` 10, `rebuy_cooldown_days` 30) | see §27 | Sell signals and the rebuy watch |
 | News discovery (`news_discovery_enabled` off, `news_discovery_max_per_run` 5) | off | Tickers named in headlines of watched stocks (§27) |
 | Max open positions (`max_concurrent_positions`) | 5 | Applies to non-hold sleeves and the fingerprint; hold positions use `hold_max_positions` |
@@ -1200,9 +1206,9 @@ Every call the app makes to a source is counted once, in one place, since the se
   at the last price, which nobody could trade at either.
 - **One-off market closures** (a national day of mourning, a storm) must be added to the calendar by
   hand when announced (§8).
-- **Exits:** a hold position closes only on a final daily close beyond its disaster stop, by the sell plan, or by
+- **Exits:** a hold position closes only when its disaster stop is reached (a live touch in the default mode, a final daily close in close mode), by the sell plan, or by
   hand (§7, §27). There is no target, no trailing stop beyond the sell plan's raise, and no partial exit. The wide stop
-  (25%, or the 200-day if lower) means a loss can be large before it triggers; a gap-down fills at the close.
+  (25%, or the 200-day if lower) means a loss can be large before it triggers; a gap-down fills at the live price (touch mode) or the close (close mode).
 - **The hold flow is new and mostly unproven live** (§27): news discovery, dip adds, thesis/insider/Congress/news sell
   signals, the scheduler timings and the 09:27 / 09:50 smart-money jobs have not run against real data yet, and the
   numbers are starting guesses.
@@ -1428,7 +1434,7 @@ the **hold scan** (§27): a time machine built on the same code that makes live 
 - the **decision** is made by `hold_scan_symbol`, the same per-symbol function the live 10:00 scan uses, with
   `price_only=True`, at most `hold_max_new_per_scan` buys a day, and
 - the **paper-trading engine** (§7) opens, marks and closes the positions, with all its rules: sizing by target weight,
-  slippage, the position and sector caps and the disaster stop on a final daily close.
+  slippage, the position and sector caps and the disaster stop (touch or close, `hold_stop_mode`).
 
 **Price-only, optimistic, judged by return %.** Only the **trend check** of the quality gate (and the dip flag) can run for
 a past date: net income and P/E are not known-at-T, and a missing figure never counts as a pass. So results are
@@ -2040,7 +2046,7 @@ claims anyone "knows" anything.
   14 days; a buy while the market is closed waits for the open and is re-checked from fresh data). The same stock can be
   held in core and in a smart-money sleeve; the queue and the alert say when it is.
 - **Reports.** A per-sleeve report compares closed trades with SPY and with random picks and says `not enough data`
-  below 100 trades. A position's exit is the hold rule (disaster stop on a final daily close; no target or time limit).
+  below 100 trades. A position's exit is the hold rule (disaster stop, touch or close; no target or time limit).
   A smart-money buy whose gate fails buys at `hold_failed_gate_size_pct` of a slice (§27).
 - Nothing here trades real money: it is paper trading only.
 
@@ -2272,13 +2278,18 @@ The **Forecast Lab** page (`/forecast-lab`) trains a small LightGBM model on the
 
 ## 27. Portfolio builder: the app picks stocks to hold (paper money only)
 
-The app no longer opens swing trades. Every position is a **hold**: bought at a target weight of the account (`hold_target_weight_pct`, 4.5%), with a wide disaster stop on a daily close (`hold_stop_pct`, 25%, or the 200-day average if lower) and no profit target or time limit. No real money moves anywhere.
+The app no longer opens swing trades. Every position is a **hold**: bought at a target weight of the account (`hold_target_weight_pct`, 4.5%), with a wide disaster stop (`hold_stop_pct`, 25%, or the 200-day average if lower) and no profit target or time limit. No real money moves anywhere.
 
-- **Daily scan (10:00 ET).** Each stock on the watchlist goes through the **quality gate**: above the 200-day average, revenue not shrinking, profitable, not expensive. A pass is bought (caps: `hold_max_positions`, `hold_max_per_sector`, `hold_max_new_per_scan`).
+There are three ways to buy, in one portfolio under the same caps. Each buy reason names its lane ("quality lane", "smart money lane", "big news lane").
+
+- **Daily scan (10:00 ET), the quality lane.** Each stock on the watchlist goes through the **quality gate**: above the 200-day average, revenue not shrinking, profitable, not expensive. A pass is bought at a full slice (caps: `hold_max_positions`, `hold_max_per_sector`, `hold_max_new_per_scan`).
+- **Evidence bonus (`evidence_bonus_enabled`, on by default).** For each watchlist stock the scan adds up a small score from what is public about it: an insider buying cluster +2, one insider buy +1, a Congress buy +1, a big headline +1 (cap +3); a negative headline gives -1 and blocks the buy. Insider and Congress sells never count, and missing data counts 0. The score only sets the order (higher first, which matters when the per-scan cap is reached) and skips a stock with negative news; it never lets a stock past a failed quality check and never makes a buy bigger. It is small on purpose: the studies kept with the project did not show a proven edge for these signals. The buy reason shows it ("evidence +2: ..."). The live scan only; the backtest does not use it. It reads the news of every candidate, so a large watchlist makes the scan slower.
+- **Big-news lane (off by default, `big_news_buy_enabled`).** The same scan also looks for strong news: a headline in the last `big_news_lookback_hours` (24) matching fixed word patterns (FDA approval, contract award, takeover offer, guidance raise or earnings beat, a buyback over a billion dollars, an analyst upgrade), or a material-agreement 8-K (item 1.01). Candidates are the watchlist, tickers named with an exchange prefix or cashtag in the headlines of watched stocks, and companies with a recent item 1.01 8-K from the SEC's market-wide filings feed. There is no general market-wide news feed behind it, so it is a narrow finder, and headlines from free sources are noisy. A recent bad headline (bankruptcy, delisting, restatement, going concern, an SEC investigation, a downgrade, a guidance cut) or an urgent 8-K blocks the buy. The stock is bought at a full slice if it also passes the quality gate, and at `big_news_size_pct` (50) of a slice if it fails. Rules only; the AI never picks.
+- **Every whole-market find (big news or smart money) is analysed and kept.** The gate is run even when the stock is not bought, the result is stored, a Telegram alert says what was found and whether it passed, and the stock is added to the saved watchlist for good (it does not leave when the news fades). If the server has the `STRATEGEIA_DEV_TICKERS` test filter set, that filter overrides the saved list, so the stock is saved but not scanned until the filter is removed. The first automatic add saves a copy of the bundled list (about 500 names) first, but the Settings editor accepts at most 200 symbols and a scan reads only the first `scan_universe_size` entries, so a stock added at the end of a long list is not reached by the daily scan.
 - **News discovery (off by default, `news_discovery_enabled`).** The same scan also tries tickers named with an exchange prefix or a cashtag ("NYSE: XYZ", "$XYZ") in the headlines of the watched stocks, when they are outside the list and can be quoted live. They get exactly the same gate and buy path, and share the per-scan cap. Rules pick the tickers, never the AI.
 - **Dip add (off by default, `hold_add_on_dips`).** The same scan tops up a held stock toward its target weight when it passes the gate today and is in a dip. A half-size smart-money buy therefore only grows to a full slice once it passes the gate.
-- **Smart money.** A stock that insiders, Congress or funds are buying goes through the same check, but a failed gate no longer stops the buy: it is bought at half a slice (`hold_failed_gate_size_pct`, 50). Cap and engine refusals still go to the review queue.
+- **Smart money (the whole market by default, `smart_money_scope`).** A stock that insiders, Congress or funds are buying goes through the same check, but a failed gate no longer stops the buy: it is bought at half a slice (`hold_failed_gate_size_pct`, 50), a pass at a full slice. The stock is analysed, alerted and added to the watchlist as above. Cap and engine refusals still go to the review queue. If a candidate waits for the market to open and is redone, its alert can be sent again. Congress filings arrive up to 45 days after the trade.
 - **Sell plan (10:30 ET).** Each holding is checked for bad signals: the gate fails, N closes under the 200-day (`sell_ma200_days`, 5), the thesis tracker flags it, several insiders or Congress members selling, and clearly negative news (counts only as a second signal). One signal sends an alert and, if the position is in profit, raises the stop to breakeven or `sell_trail_pct` (10%) below the high. Two or more sell the whole position (reason `sell_plan`). Fund 13F sells are not used (no per-stock feed). Rules only: the AI never sells.
 - **Rebuy watch.** A stock sold by the stop or the sell plan can be bought again after `rebuy_cooldown_days` (30), only if a fresh gate read passes without the 200-day rule and the dip rule fires (close 10% under the 63-day high). A rebuy that is stopped again leaves the watch for good. Shown on the Portfolio page and at `GET /api/portfolio/rebuy-watch`.
-- **Caveats.** None of this has run live yet. The numbers above are starting guesses. The studies behind the gate are optimistic (survivors, daily bars, no costs) and show the gate alone is about equal to SPY.
-- **Backtest in hold mode (§18).** The Backtest Lab replays this scan with `hold_scan_symbol(price_only=True)`: only the trend check and dip rule run, because profit and P/E are not known for a past date. A random-hold-entry baseline and walk-forward validation (stop %, target weight, buy-only-dips, slippage) judge it by **return %**. The result is optimistic (survivors, daily bars) and not comparable with the live gate, which also checks growth, profit and valuation.
+- **Caveats.** None of this has run live yet, and the big-news lane, the evidence bonus, the live touch stop and the automatic watchlist adds were written on 2026-10-16 and have not been through the full test, build and screen check yet. The numbers above are starting guesses. The studies behind the gate are optimistic (survivors, daily bars, no costs) and show the gate alone is about equal to SPY.
+- **Backtest in hold mode (§18).** The Backtest Lab replays this scan with `hold_scan_symbol(price_only=True)`: only the trend check and dip rule run, because profit and P/E are not known for a past date. The big-news lane, the evidence bonus and the live touch stop have no replay: a backtest uses close-mode stops. A random-hold-entry baseline and walk-forward validation (stop %, target weight, buy-only-dips, slippage) judge it by **return %**. The result is optimistic (survivors, daily bars) and not comparable with the live gate, which also checks growth, profit and valuation.

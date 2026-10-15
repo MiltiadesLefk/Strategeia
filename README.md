@@ -72,8 +72,8 @@ This builds and runs both services:
 `docker compose up --build` with no rebuild needed. Which list is used, strongest first: the
 `STRATEGEIA_DEV_TICKERS` environment variable (a deliberate server-side override), then the list you
 saved in the app, then the bundled `backend/data/sp500.csv`. The supplied `docker-compose.yml` sets
-`STRATEGEIA_DEV_TICKERS=NVDA,AAPL`, so until you delete that line the app uses only those two
-symbols and the Watchlist card says your saved list is being ignored.
+`STRATEGEIA_DEV_TICKERS=NVDA,AAPL,VST,SOFI,INTC`, so until you delete that line the app uses only those
+symbols and the Watchlist card says your saved list is being ignored (stocks the app adds by itself are saved but not scanned).
 
 **Auth**: the dashboard has its own login screen — one user, one username+password, no
 signup (`api/routers/auth.py`). Set `AUTH_USERNAME` (defaults to `admin` if left unset)
@@ -205,15 +205,16 @@ scripts/            verify.py (tests + type-check + lint in one command) and ui_
 ## Portfolio builder (hold mode)
 
 The app picks stocks to hold, not to swing trade: a daily quality-gate scan buys at a target weight, smart-money
-buys that fail the gate still buy at half size, an optional news scan looks at tickers outside the list, and a
-daily sell plan plus a rebuy watch handle exits. Paper money only. See FEATURES.md, section 27.
+buys that fail the gate still buy at half size, an optional big-news lane buys on strong headlines, every stock the
+smart-money or big-news lanes find is analysed, alerted and added to your watchlist, and a daily sell plan plus a rebuy
+watch handle exits. Paper money only. See FEATURES.md, section 27.
 
 ## Known limitations (v1)
 
-- Paper-trading exit rule: a position closes fully only when a final daily close is beyond its disaster stop
-  (`hold_stop_pct`, 25%, or the 200-day average if lower; Settings -> Portfolio builder), when the daily sell plan sells
-  it, or by hand. There is no profit target, no time limit and no partial exit, so a loss can be large before the stop
-  triggers (a gap-down fills at the close). Much of the hold flow (news discovery, dip adds, the sell signals, the
+- Paper-trading exit rule: a position closes fully only when the price reaches its disaster stop (touch mode, the default,
+  checked every 5 minutes in market hours, or a final daily close in close mode; `hold_stop_pct`, 25%, or the 200-day
+  average if lower; Settings -> Portfolio builder), when the daily sell plan sells it, or by hand. There is no profit target, no time limit and no partial exit, so a loss can be large before the stop
+  triggers (a gap-down fills at the live price or the close). Much of the hold flow (the big-news lane, the evidence bonus, the touch stop, news discovery, dip adds, the sell signals, the
   scheduled jobs) has not run against live data yet, and the numbers are starting guesses.
 - The bundled `backend/data/sp500.csv` is the default list; you can replace it with your own in
   Settings -> Watchlist (up to 200 symbols, saved in `runtime/universe.json`). It holds the current S&P 500 members plus three crypto pairs (about
