@@ -657,6 +657,8 @@ class AppSettings(BaseModel):
     sell_ma200_days: int = Field(default=5, ge=1, le=60)
     sell_trail_pct: float = Field(default=10.0, ge=0, le=50)
     rebuy_cooldown_days: int = Field(default=30, ge=0, le=365)
+    # O10: days between dated reviews of an open hold position (a message only, decides nothing); 0 = off.
+    hold_review_days: int = Field(default=90, ge=0, le=365)
 
     # F2: the daily hold scan also looks at tickers named in the morning's headlines that are outside
     # the universe (off by default). They get the same gate, caps and buy path; this caps how many are tried.

@@ -153,6 +153,36 @@ def run_sell_plan(settings: AppSettings, data_provider: DataProvider, session: S
     return out
 
 
+def run_hold_reviews(settings: AppSettings, data_provider: DataProvider, session: Session) -> list[str]:
+    """O10: a dated message per open hold position every `hold_review_days`. Never sells or moves a stop."""
+    sent: list[str] = []
+    if is_simulated() or settings.hold_review_days <= 0:
+        return sent
+    now = utcnow_naive()
+    for position in session.exec(select(PaperPosition).where(PaperPosition.status == "open", PaperPosition.mode == "hold")).all():
+        since = position.last_reviewed_at or position.opened_at
+        if now - since < timedelta(days=settings.hold_review_days):
+            continue
+        try:
+            gate = check_quality(data_provider, position.symbol)
+            with fresh_data_only():
+                price = float(data_provider.get_quote(position.symbol).price)
+        except Exception:  # noqa: BLE001 - no fresh read: skip, unstamped, retried tomorrow
+            logger.info("Review of %s skipped", position.symbol, exc_info=True)
+            continue
+        pnl = (price / position.entry_price - 1) * 100
+        notify(settings.telegram_bot_token, settings.telegram_chat_id,
+               f"Review {position.symbol}: held {(now - position.opened_at).days} days, {pnl:+.1f}%. "
+               f"Passes: {', '.join(c.name for c in gate.checks if c.ok) or 'none'}. "
+               f"Fails: {', '.join(c.name for c in gate.checks if not c.ok) or 'none'}. "
+               f"Sell signals: {position.sell_signals or 'none'}.")
+        position.last_reviewed_at = now
+        session.add(position)
+        session.commit()
+        sent.append(position.symbol)
+    return sent
+
+
 def _update_rebuy_watch(session: Session) -> None:
     """A rebuy stopped or sold again leaves the watch for good; a new stop/sale joins it."""
     closed = session.exec(

@@ -34,7 +34,7 @@ from app.services.kill_switch_service import evaluate_kill_switches
 from app.services.telegram_service import notify as telegram_notify
 from app.services.lesson_service import is_real_llm, run_lesson_catchup
 from app.services.thesis_service import run_thesis_sweep
-from app.services.sell_plan_service import run_sell_plan
+from app.services.sell_plan_service import run_hold_reviews, run_sell_plan
 from app.services.insider_coverage_service import run_insider_coverage_tick
 from app.watchers.runner import run_due_watchers, run_morning_fetch
 
@@ -327,6 +327,7 @@ def _sell_plan_job() -> None:
         data_provider = get_data_provider(settings)
         with Session(engine) as session:
             run_sell_plan(settings, data_provider, session)
+            run_hold_reviews(settings, data_provider, session)
     except Exception:
         logger.exception("Scheduled sell plan failed")
 

@@ -170,6 +170,7 @@ class PaperPosition(SQLModel, table=True):
     # sell plan raised its stop (the hold exit scan only looks at bars after that day).
     sell_signals: Optional[str] = None
     stop_raised_at: Optional[datetime] = None
+    last_reviewed_at: Optional[datetime] = None  # O10: the last dated review message (informational)
     status: str = "open"
     closed_at: Optional[datetime] = None
     close_price: Optional[float] = None

@@ -19,6 +19,7 @@ type Draft = Pick<
   | 'sell_ma200_days'
   | 'sell_trail_pct'
   | 'rebuy_cooldown_days'
+  | 'hold_review_days'
 >;
 
 const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: number }[] = [
@@ -33,6 +34,7 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'sell_ma200_days', label: 'Sell plan: closes under the 200-day that count as a signal', hint: 'In a row.' },
   { key: 'sell_trail_pct', label: 'Sell plan: stop trails this % below the high (profit, one signal)', hint: '0 = move the stop to breakeven instead.' },
   { key: 'rebuy_cooldown_days', label: 'Rebuy watch: days to wait after a sale', hint: 'Then the check must pass and the stock must be in a dip.' },
+  { key: 'hold_review_days', label: 'Review each holding every (days)', hint: 'A message with a fresh quality check; never sells. 0 = off.' },
 ];
 
 /** Portfolio builder controls. Saved on their own button. */
@@ -51,6 +53,7 @@ export function HoldSettingsCard() {
         hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
         hold_add_on_dips: data.hold_add_on_dips, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
         sell_ma200_days: data.sell_ma200_days, sell_trail_pct: data.sell_trail_pct, rebuy_cooldown_days: data.rebuy_cooldown_days,
+        hold_review_days: data.hold_review_days,
       });
     }
   }, [data]);

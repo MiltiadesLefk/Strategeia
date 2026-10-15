@@ -25,6 +25,31 @@ def test_rebuy_gate_drops_only_the_200_day_rule():
     assert all(c.name != "trend" for c in evaluate_quality_gate(70.0, falling, None, [], require_trend=False).checks)
 
 
+def test_hold_review_once_per_period(monkeypatch):
+    from datetime import timedelta
+    from types import SimpleNamespace
+
+    from app.analysis.quality_gate import GateCheck, GateResult
+    from app.config import AppSettings
+    from app.services import sell_plan_service as sp
+
+    msgs: list[str] = []
+    monkeypatch.setattr(sp, "notify", lambda *a: msgs.append(a[2]))
+    monkeypatch.setattr(sp, "check_quality", lambda *a, **k: GateResult(False, [GateCheck("trend", True, ""), GateCheck("profit", False, "")]))
+    provider = SimpleNamespace(get_quote=lambda _s: SimpleNamespace(price=110.0))
+    e = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(e)
+    with Session(e) as s:
+        s.add(PaperPosition(symbol="NOVA", direction="long", entry_price=100, stop_loss=75, tp1=0, tp2=0, shares=1, mode="hold",
+                            opened_at=utcnow_naive() - timedelta(days=91)))
+        s.commit()
+        assert sp.run_hold_reviews(AppSettings(hold_review_days=0), provider, s) == []
+        assert sp.run_hold_reviews(AppSettings(), provider, s) == ["NOVA"]
+        assert sp.run_hold_reviews(AppSettings(), provider, s) == []
+        assert len(msgs) == 1 and "+10.0%" in msgs[0] and "Fails: profit" in msgs[0]
+        assert s.exec(select(PaperPosition)).one().last_reviewed_at is not None
+
+
 def test_watch_lifecycle():
     e = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(e)

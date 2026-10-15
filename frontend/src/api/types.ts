@@ -507,6 +507,7 @@ export interface AppSettings {
   sell_ma200_days: number;
   sell_trail_pct: number;
   rebuy_cooldown_days: number;
+  hold_review_days: number;
   hold_add_on_dips: boolean;
 
   /** Notifications (Telegram): morning note, weekly digest, alerts on open positions. */
@@ -593,6 +594,7 @@ export interface SettingsUpdateRequest {
   sell_ma200_days?: number;
   sell_trail_pct?: number;
   rebuy_cooldown_days?: number;
+  hold_review_days?: number;
   hold_add_on_dips?: boolean;
 
   morning_note_enabled?: boolean;
