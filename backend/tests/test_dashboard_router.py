@@ -50,7 +50,7 @@ MARKING_GET_ROUTES = ["/api/dashboard/summary", "/api/portfolio/positions", "/ap
 class DailyBarsProvider:
     """Serves the same quiet daily bars (range 99-101, never near the stop or
     TP1) for every symbol, except that symbols in `stop_touched` get one
-    post-entry bar that trades through the stop and then recovers. The latest
+    post-entry bar that closes beyond the stop and then recovers. The latest
     bar is back at 100, so only a walk over every bar since entry sees it."""
 
     name = "fake"
@@ -63,7 +63,7 @@ class DailyBarsProvider:
         for i in range(BAR_COUNT):
             o, h, low, c = ENTRY, ENTRY + 1, ENTRY - 1, ENTRY
             if symbol in self._stop_touched and i == DIP_BAR:
-                o, h, low, c = 99.0, 99.5, 85.0, 97.0
+                o, h, low, c = 99.0, 99.5, 85.0, 88.0
             rows.append(
                 {"date": FIRST_BAR + timedelta(days=i), "open": o, "high": h, "low": low, "close": c, "volume": 1e6}
             )
@@ -170,8 +170,8 @@ def test_dashboard_load_still_closes_a_position_whose_stop_was_touched(db):
     positions = _positions(db)
     aapl = positions["AAPL"]
     assert aapl.status == "closed"
-    assert aapl.close_reason == "stop_hit"
-    assert aapl.close_price < STOP  # the stop is a market order: it pays slippage
+    assert aapl.close_reason == "disaster_stop"
+    assert aapl.close_price < STOP  # it closed on a close beyond the stop
     assert aapl.realized_pnl < 0
     assert positions["MSFT"].status == "open"
     assert _snapshot_count(db) == 1

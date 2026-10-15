@@ -126,13 +126,6 @@ def test_hold_overrides_are_recorded_and_reach_the_run(env):
     assert "min_confidence_for_trade" in run["coverage"]["min_confidence_note"]
 
 
-def test_an_old_run_without_hold_coverage_still_describes_itself():
-    from app.backtest.coverage import describe_coverage
-
-    old = describe_coverage(16)  # the score-points shape older stored runs carry
-    assert old["profile"] == "price_only" and old["achievable_points"] and "checks_run" not in old
-
-
 def test_only_whitelisted_settings_can_be_overridden_and_crypto_is_rejected(env):
     client, _, _ = env
     assert post(client, overrides={"llm_provider": "openai"}).status_code == 422

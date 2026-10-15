@@ -4,11 +4,10 @@ overlay prompt that carries it, and the check on the figures the AI quotes."""
 from __future__ import annotations
 
 import json
-import logging
 from datetime import date
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 
 from app.analysis.ground_truth import (
     GROUND_TRUTH_BEGIN,
@@ -20,13 +19,8 @@ from app.analysis.ground_truth import (
     render_ground_truth,
 )
 from app.analysis.trend import ChartAnalysis
-from app.config import AppSettings
-from app.data_providers.base import NewsItem, OptionsSummary
+from app.data_providers.base import OptionsSummary
 from app.llm_providers.base import LLMResult
-from app.llm_providers.prompts import AI_OPINION_DATA_MARKER, build_ai_opinion_prompt
-from app.portfolio.models import TradePlanRecord
-from app.services import trade_plan_service
-from tests.test_trade_plan_service import FakeUptrendDataProvider
 
 TODAY = date(2026, 10, 1)
 
@@ -139,27 +133,6 @@ def test_rendering_is_deterministic():
 # ------------------------------------------------------- the overlay prompt
 
 
-def _prompt(**kwargs):
-    return build_ai_opinion_prompt(
-        "NVDA", _chart(), 5.0, None, [], [NewsItem(headline="Buyback of $5 billion announced", source="Wire", url="https://x", published_at="2026-01-01")],
-        date(2026, 10, 20), "long", 56, ["keyword hit"], **kwargs,
-    )
-
-
-def test_the_overlay_prompt_carries_the_ground_truth_block():
-    prompt = _prompt()
-    data = prompt.split(AI_OPINION_DATA_MARKER, 1)[1]
-    assert data.startswith(GROUND_TRUTH_BEGIN)
-    assert "Price (last close of the daily chart): $547.00" in data
-    assert "Buyback of $5 billion announced" in data  # headlines still follow, as data
-    assert "untrusted" in prompt  # the existing headline guard is still in the preamble
-
-
-def test_a_supplied_snapshot_is_the_one_rendered():
-    prompt = _prompt(ground_truth=_snapshot(atr=9.99))
-    assert "ATR(14): $9.99" in prompt
-
-
 # ------------------------------------------------------------- claim check
 
 
@@ -264,52 +237,3 @@ class LLM:
         return LLMResult(self.reply if tier == "decision" else "a take", self.name, 1)
 
 
-def _generate(session, monkeypatch, llm, **settings):
-    values = dict(telegram_bot_token="", telegram_chat_id="", ai_trading_overlay_enabled=True, auto_execute_trade_plans=False)
-    values.update(settings)
-    monkeypatch.setattr("app.services.trade_plan_service.load_app_settings", lambda: AppSettings(**values))
-    return trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), llm, session)
-
-
-def test_the_overlay_prompt_in_a_real_evaluation_has_the_block_with_real_numbers(session, monkeypatch):
-    llm = LLM("Disagree.")
-    _generate(session, monkeypatch, llm)
-    prompt = next(p for p in llm.prompts if GROUND_TRUTH_BEGIN in p)
-    assert "Latest quote: $547.00" in prompt
-    assert "Rule-based verdict (context only): LONG" in prompt
-    assert "points by dimension: technical" in prompt
-
-
-def test_quoted_figures_not_in_the_data_are_stored_and_returned(session, monkeypatch, caplog):
-    llm = LLM("Disagree: price will drop to $412.50 and fall 3.7% from here.")
-    with caplog.at_level(logging.WARNING, logger="app.services.trade_plan_service"):
-        response = _generate(session, monkeypatch, llm)
-
-    expected = "model quoted $412.50, not in the data given\nmodel quoted 3.7%, not in the data given"
-    assert response.ai_grounding_warnings == expected
-    assert session.exec(select(TradePlanRecord)).first().ai_grounding_warnings == expected
-    assert "$412.50" in caplog.text
-
-
-def test_clean_reasoning_stores_no_warnings(session, monkeypatch):
-    response = _generate(session, monkeypatch, LLM("Disagree: price is $547.00, stretched at RSI 71."))
-    assert response.ai_grounding_warnings is None
-
-
-def test_warnings_never_change_the_decision_or_the_confidence(session, monkeypatch):
-    clean = _generate(session, monkeypatch, LLM("Disagree: the setup is stretched."))
-    flagged = _generate(session, monkeypatch, LLM("Disagree: it will fall to $412.50, a 3.7% drop."))
-
-    assert clean.ai_grounding_warnings is None and flagged.ai_grounding_warnings
-    for field in (
-        "status", "direction", "confidence_score", "confidence_points", "ai_overlay_score", "ai_trade_verdict",
-        "entry", "stop", "tp1", "suggested_shares", "reason",
-    ):
-        assert getattr(clean, field) == getattr(flagged, field), field
-
-
-def test_overlay_off_checks_nothing(session, monkeypatch):
-    llm = LLM("price $412.50")
-    response = _generate(session, monkeypatch, llm, ai_trading_overlay_enabled=False)
-    assert response.ai_grounding_warnings is None
-    assert not any(GROUND_TRUTH_BEGIN in p for p in llm.prompts)

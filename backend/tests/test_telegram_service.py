@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 
-from app.services.telegram_service import notify_trade_plan, send_message
+from app.services.telegram_service import send_message
 
 
 class FakeResponse:
@@ -68,19 +67,3 @@ def test_send_message_network_error_is_caught(monkeypatch):
     assert "failed" in result.message.lower()
 
 
-def test_notify_trade_plan_silently_skips_when_unconfigured(monkeypatch):
-    def _fail_if_called(*a, **k):
-        raise AssertionError("must not hit the network when telegram isn't configured")
-
-    monkeypatch.setattr("app.services.telegram_service.httpx.post", _fail_if_called)
-    # Must not raise even though nothing is configured.
-    notify_trade_plan("", "", "New trade plan: AAPL LONG")
-
-
-def test_notify_trade_plan_swallows_api_errors(monkeypatch):
-    monkeypatch.setattr(
-        "app.services.telegram_service.httpx.post",
-        lambda url, json, timeout: FakeResponse(200, {"ok": False, "description": "unauthorized"}),
-    )
-    # Must not raise — a Telegram outage/misconfig must never break trade-plan generation.
-    notify_trade_plan("tok", "chat123", "New trade plan: AAPL LONG")

@@ -13,7 +13,6 @@ from itertools import product
 import httpx
 import pytest
 from pydantic import ValidationError
-from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import AppSettings
 from app.llm_providers.base import LLMResult, web_search_wanted
@@ -36,9 +35,9 @@ from app.llm_providers.research_mode import (
     wrap_research_prompt,
 )
 from app.schemas.settings_schemas import SettingsUpdateRequest
-from app.services import analysis_service, research_service, trade_plan_service
+from app.services import analysis_service, research_service
 from app.strategy.snapshot import build_snapshot, fingerprint
-from tests.test_llm_tiers import FakeCompletedProcess, PostRecorder, RunRecorder
+from tests.test_llm_tiers import PostRecorder, RunRecorder
 
 RUN = "app.llm_providers.claude_code_cli_provider.subprocess.run"
 WEB = AppSettings(research_mode="allow_web_search")
@@ -375,19 +374,3 @@ def test_narration_call_sites_never_pass_research():
     assert spy.calls == 2
 
 
-def test_the_trade_plan_take_and_the_overlay_never_pass_research(monkeypatch):
-    from tests.test_trade_plan_service import FakeUptrendDataProvider
-
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
-    SQLModel.metadata.create_all(engine)
-    monkeypatch.setattr(
-        "app.services.trade_plan_service.load_app_settings",
-        # research mode is ON here: it must still not reach these calls
-        lambda: AppSettings(
-            telegram_bot_token="", telegram_chat_id="", ai_trading_overlay_enabled=True, research_mode="allow_web_search"
-        ),
-    )
-    spy = PurposeSpy(text='{"stance": "bullish", "confidence": 80, "reasoning": "ok"}')
-    with Session(engine) as session:
-        trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), spy, session)
-    assert spy.calls == 2  # the plan's take and the overlay verdict, neither with a purpose

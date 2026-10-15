@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
 
-from app.analysis.ground_truth import GroundTruthSnapshot, build_ground_truth, render_ground_truth
 from app.analysis.trend import ChartAnalysis
-from app.data_providers.base import CompanyOverview, FinancialYear, NewsItem
 
 # Shared ground rules every persona below inherits verbatim. These encode the
 # hard constraint from CLAUDE.md's "Analysis math is deliberately non-ML"
@@ -155,78 +152,6 @@ AI_OPINION_SYSTEM_PREAMBLE = (
 AI_OPINION_DATA_MARKER = "\n\nData:\n"
 
 
-def build_ai_opinion_prompt(
-    symbol: str,
-    chart: ChartAnalysis,
-    volume_ratio: float,
-    overview: CompanyOverview | None,
-    financial_years: list[FinancialYear],
-    news: list[NewsItem],
-    earnings_date: date | None,
-    rule_based_direction: str | None,
-    rule_based_confidence: int,
-    rule_based_news_reasons: list[str] | None = None,
-    past_lessons: str = "",
-    ground_truth: GroundTruthSnapshot | None = None,
-) -> str:
-    # The fixed fact block, computed without AI (analysis/ground_truth.py). A
-    # caller with none gets one built from the arguments, so the prompt always
-    # carries it.
-    if ground_truth is None:
-        ground_truth = build_ground_truth(
-            symbol, chart, volume_ratio=volume_ratio, earnings_date=earnings_date,
-            rule_based_direction=rule_based_direction, rule_based_confidence_pct=rule_based_confidence,
-        )
-    fundamentals_txt ="Fundamentals: not available for this symbol (e.g. a crypto pair).\n"
-    if overview is not None:
-        parts = []
-        if overview.market_cap:
-            parts.append(f"market cap ${overview.market_cap:,.0f}")
-        if overview.pe_ratio:
-            parts.append(f"P/E {overview.pe_ratio:.1f}")
-        if overview.revenue_ttm:
-            parts.append(f"TTM revenue ${overview.revenue_ttm:,.0f}")
-        if overview.eps_ttm:
-            parts.append(f"TTM EPS ${overview.eps_ttm:.2f}")
-        if overview.week52_low and overview.week52_high:
-            parts.append(f"52-week range ${overview.week52_low:.2f}-${overview.week52_high:.2f}")
-        fundamentals_txt = f"Fundamentals: {', '.join(parts) if parts else 'no figures available'}.\n"
-
-    years_txt = ""
-    if financial_years:
-        years_list = "; ".join(f"{y.year}: revenue ${y.revenue:,.0f}, net income ${y.net_income:,.0f}" for y in financial_years[-3:])
-        years_txt = f"Recent annual financials: {years_list}.\n"
-
-    earnings_txt = (
-        f"Next earnings date: {earnings_date.isoformat()}.\n" if earnings_date else "No upcoming earnings date on file.\n"
-    )
-
-    if news:
-        news_txt = "Recent headlines:\n" + "\n".join(f"- ({item.source}) {item.headline}" for item in news) + "\n"
-        news_txt += (
-            f"Rule-based news read (simple keyword matching, shown for contrast — form your own view): "
-            f"{'; '.join(rule_based_news_reasons)}.\n"
-            if rule_based_news_reasons
-            else "Rule-based news read (simple keyword matching): no keyword matches found in these headlines.\n"
-        )
-    else:
-        news_txt = "Recent headlines: none available.\n"
-
-    verdict_txt = (
-        f"Rule-based engine's verdict (context only, form your own view): "
-        f"{rule_based_direction.upper() if rule_based_direction else 'no trade / no clear direction'}, "
-        f"{rule_based_confidence}% confidence.\n"
-    )
-
-    return (
-        f"{AI_OPINION_SYSTEM_PREAMBLE}{AI_OPINION_DATA_MARKER}"
-        f"{render_ground_truth(ground_truth)}\n\n"
-        f"{fundamentals_txt}{years_txt}{earnings_txt}{news_txt}{verdict_txt}{past_lessons}\n"
-        "Give your own independent stance, trade_verdict and confidence now, as the single-line "
-        "JSON object specified above — nothing else."
-    )
-
-
 def build_chart_insight_prompt(symbol: str, chart: ChartAnalysis) -> str:
     levels = ""
     if chart.trend == "Bullish" and chart.resistance:
@@ -255,40 +180,3 @@ def build_research_summary_prompt(
         "Write the research summary note now (1-2 sentences, plain text, nothing else)."
     )
 
-
-def build_trade_plan_take_prompt(
-    symbol: str,
-    direction: str,
-    entry: float,
-    stop: float,
-    tp1: float,
-    rr1: float,
-    confidence_score: int,
-    chart: ChartAnalysis,
-    volume_ratio: float,
-    signal_reasons: list[str] | None = None,
-) -> str:
-    risk_per_share = abs(entry - stop)
-    reward_per_share = abs(tp1 - entry)
-    key_level = chart.support[0] if direction == "long" and chart.support else (chart.resistance[0] if chart.resistance else None)
-    key_level_label = "support" if direction == "long" else "resistance"
-    key_level_txt = f"Nearest {key_level_label} the stop is set against: ${key_level:.2f}.\n" if key_level is not None else ""
-    fundamentals_txt = (
-        f"Fundamental/news signals (already scored by a separate rule-based engine): {'; '.join(signal_reasons)}.\n"
-        if signal_reasons
-        else ""
-    )
-    return (
-        f"{TRADE_PLAN_SYSTEM_PREAMBLE}\n\n"
-        "Data:\n"
-        f"Symbol: {symbol}\nDirection: {direction}\nEntry: ${entry:.2f}\nStop: ${stop:.2f}\n"
-        f"Target 1: ${tp1:.2f}\nRisk per share: ${risk_per_share:.2f}\nReward per share (to target 1): "
-        f"${reward_per_share:.2f}\nRisk:Reward: {rr1:.1f}:1\nRule-based confidence score: {confidence_score}%\n"
-        f"Underlying trend: {chart.trend}\nMomentum: {chart.momentum}\nRSI(14): {chart.rsi14:.0f}\n"
-        f"Price vs 20-day EMA: {chart.pct_from_ema20 * 100:+.1f}%\nVolume vs 20-day average: {volume_ratio:.1f}x\n"
-        f"{key_level_txt}{fundamentals_txt}\n"
-        "Write the trade plan's 'analyst take' note now (1-2 sentences, plain text, nothing else). Explain "
-        "briefly WHY this setup exists — reference the trend/momentum/RSI/volume context (and the "
-        "fundamental/news signals, if any are listed) — not just restate the entry/stop/target numbers, "
-        "which the reader can already see elsewhere on the card."
-    )

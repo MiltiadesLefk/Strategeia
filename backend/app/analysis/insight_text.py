@@ -27,11 +27,3 @@ def research_summary_text(symbol: str, chart: ChartAnalysis, has_upcoming_earnin
         f"with {chart.momentum.lower()} momentum on the {chart.trend.lower()} trend.{earnings_txt}"
     )
 
-
-def trade_plan_take_text(
-    symbol: str, direction: str, rr1: float, confidence_score: int
-) -> str:
-    return (
-        f"{symbol} offers a {direction} setup with a {rr1:.1f}:1 risk:reward ratio to the first target. "
-        f"Rule-based confidence: {confidence_score}%. Confirm the thesis before sizing up further."
-    )

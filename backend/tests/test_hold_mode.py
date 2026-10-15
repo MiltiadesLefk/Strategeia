@@ -23,7 +23,7 @@ def hold_position(session, **kw):
 
 def sweep(session, bars, last_day, **kw):
     engine = PaperTradingEngine(
-        session, BarsProvider(bars), STARTING_CASH, max_holding_days=3,
+        session, BarsProvider(bars), STARTING_CASH, 
         clock=clock_at_et(last_day + timedelta(days=1), 12), **kw,
     )
     return engine.mark_to_market(snapshot=False)

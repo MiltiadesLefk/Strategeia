@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -395,20 +395,12 @@ def normalize_api_model(value: str, *, allow_slash: bool = True) -> str:
         )
     return cleaned
 
-# What happens when the AI Trading Overlay says it would not take the trade.
-# One choice, not a set of flags: "cancel" and "hold" fire on the identical
-# trigger and cancel always wins (a cancelled evaluation never reaches the
-# auto-execute step), so as two independent booleans one combination was
-# always dead and the UI could show a setting as ON that could never once
-# fire. See notes/Decisions.md.
-AiOverlayObjectionAction = Literal["cancel", "hold", "none"]
-
 # Whether research-purpose AI calls may search the web (research_mode setting).
 ResearchMode = Literal["our_data_only", "allow_web_search"]
 
-# What a watcher event does once it is recorded: nothing more ("record"), send a
-# Telegram alert ("alert"), or alert and also run a full evaluation of the symbol
-# ("alert_and_reevaluate").
+# What a watcher event does once it is recorded: nothing more ("record") or send a
+# Telegram alert ("alert"). "alert_and_reevaluate" (swing re-evaluation) is retired: still accepted
+# from an old settings.json, it now only alerts.
 WatchersAction = Literal["record", "alert", "alert_and_reevaluate"]
 
 
@@ -522,65 +514,14 @@ class AppSettings(BaseModel):
     stooq_enabled: bool = False
     finnhub_api_key: str = ""
 
-    # Master switch, opt-in and off by default: when on, generate_trade_plan
-    # asks the LLM for its own independent read of ALL the same raw data
-    # (technicals, fundamentals, news, earnings) — stored as ai_opinion_* on
-    # the trade plan. Costs one extra LLM call per symbol evaluated,
-    # including ones the rule-based engine rejects. With this off, neither
-    # ai_overlay_* setting below does anything. See notes/Decisions.md.
-    ai_trading_overlay_enabled: bool = False
-
-    # The short "AI take" paragraph on each trade plan. It only narrates numbers the rules already
-    # computed and never changes a decision, so it is not part of the strategy fingerprint. Off: the
-    # plan carries the rule-based "Analyst's take" template and no model is called for it.
-    ai_plan_take_enabled: bool = True
-
     # The AI Insight note on the chart. Narration only, like the
     # take above, so not part of the strategy fingerprint. Off: the rule-based insight text, no model call.
     ai_chart_insight_enabled: bool = True
 
-    # Two independent questions about how much the overlay's opinion counts,
-    # both meaningful only when ai_trading_overlay_enabled is also on — off,
-    # neither changes anything, so a default install behaves exactly as it
-    # always has. Both default to their active setting because turning the
-    # overlay on at all is itself opt-in: the reasonable assumption is you
-    # wanted the second opinion to matter. Neither lets the overlay
-    # ORIGINATE a trade — direction still comes from the rule-based trend and
-    # nowhere else, and the score contribution is one-directional (a penalty,
-    # never a bonus). See analysis/ai_overlay_scoring.py and
-    # notes/Decisions.md.
-
-    # (1) Does an objection cost confidence points? The overlay becomes a
-    # scored dimension like every other confluence check (0 to -3, scaled by
-    # the model's own stated conviction) instead of sitting in a box next to
-    # a number it couldn't touch. A marginal plan can fall under
-    # min_confidence_for_trade this way, so this alone can reach the
-    # trade/no-trade decision — independently of the action below.
-    ai_overlay_scores_confidence: bool = True
-
-    # What an objection actually DOES, as a single three-way choice:
-    #   "cancel" — the evaluation becomes an explicit no_trade decision with
-    #              the overlay named as the reason, instead of a plan.
-    #   "hold"   — the plan is written normally, but auto-execute leaves it
-    #              "pending" for manual review instead of opening the
-    #              position. The one moment a second opinion is worth having
-    #              is the moment before capital commits.
-    #   "none"   — the objection is recorded and scored but stops nothing.
-    #              Useful for measuring whether the overlay's objections
-    #              actually correlate with losing trades before giving it
-    #              stopping power.
-    # These were two booleans (ai_overlay_vetoes_trade /
-    # ai_overlay_blocks_auto_execute) and should not have been: they fire on
-    # the same trigger and cancel strictly wins, so "both on" was
-    # indistinguishable from "cancel" and the UI showed a live-looking
-    # toggle that could never fire. Old settings.json files are migrated in
-    # _migrate_overlay_objection_action below.
-    ai_overlay_objection_action: AiOverlayObjectionAction = "cancel"
-
     # The confidence bar a setup must clear to become a tradeable plan at
     # all; below it (or on a Neutral trend) the evaluation is persisted as an
-    # explicit no_trade decision instead. Was a hardcoded constant in
-    # trade_plan_service.py.
+    # explicit no_trade decision instead. Hold mode scores nothing and does not read it; kept for old
+    # runs and the strategy fingerprint.
     #
     # The default is 30, not the 40 that constant held, and the change is a
     # rescale rather than a loosening. Confidence used to be squeezed onto a
@@ -600,24 +541,6 @@ class AppSettings(BaseModel):
     # version: research never decides a trade.
     research_mode: ResearchMode = "our_data_only"
 
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_overlay_objection_action(cls, data):
-        """Carry a settings.json written before ai_overlay_objection_action
-        existed onto the new field. Without this, pydantic silently drops
-        the two retired booleans (BaseModel ignores extras) and anyone who
-        had deliberately turned the veto off would find it back on after an
-        upgrade — a real behaviour change, applied invisibly."""
-        if not isinstance(data, dict) or data.get("ai_overlay_objection_action") is not None:
-            return data
-        vetoes = data.get("ai_overlay_vetoes_trade")
-        holds = data.get("ai_overlay_blocks_auto_execute")
-        if vetoes is None and holds is None:
-            return data
-        data = dict(data)
-        data["ai_overlay_objection_action"] = "cancel" if vetoes else "hold" if holds else "none"
-        return data
-
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     # Thesis tracker: send one Telegram message the first time an open position's thesis is
@@ -631,14 +554,6 @@ class AppSettings(BaseModel):
     committee_max_llm_calls: int = Field(default=14, ge=6, le=40)
     committee_debate_rounds: int = Field(default=1, ge=1, le=3)
     committee_risk_rounds: int = Field(default=1, ge=1, le=3)
-    # The committee as a gate on a trade the rules already approved (committee/gate.py). Off by
-    # default. Runs only at the moment a position would really open, in auto-scan and the
-    # market-open redo, for at most `committee_gate_max_per_scan` symbols per pass. It can only
-    # stop a trade: "cancel" turns the plan into a no-trade, "hold" leaves it pending for you.
-    committee_gate_enabled: bool = False
-    committee_gate_action: Literal["cancel", "hold"] = "cancel"
-    committee_gate_max_per_scan: int = Field(default=5, ge=1, le=20)
-
     scan_universe_size: int = 50
 
     # News cards: an AI (the configured provider's routine model) labels each
@@ -681,12 +596,10 @@ class AppSettings(BaseModel):
     # events. Master switch off by default: no real watcher ships yet, and a
     # watcher that alerts or re-evaluates on its own is something to opt into.
     # An event is always recorded first; watchers_action says what happens next.
-    # The default also runs a full evaluation of the symbol, which goes through the
-    # same gates as any other (and is queued for the next open when the market is
-    # closed). watchers_poll_minutes is how often the scheduler wakes to see which
+    # watchers_poll_minutes is how often the scheduler wakes to see which
     # watchers are due; each watcher has its own, slower, interval too.
     watchers_enabled: bool = False
-    watchers_action: WatchersAction = "alert_and_reevaluate"
+    watchers_action: WatchersAction = "alert"
     watchers_poll_minutes: int = 5
 
     # Large funds (SEC CIK numbers, digits only) whose quarterly 13F holdings the
@@ -708,7 +621,6 @@ class AppSettings(BaseModel):
     smart_money_min_score: float = Field(default=3.0, ge=0, le=30)
     smart_money_max_open_positions: int = Field(default=5, ge=1, le=50)
     smart_money_max_new_per_week: int = Field(default=2, ge=0, le=20)
-    smart_money_max_holding_days: int = Field(default=120, ge=0, le=200)  # the exit scan reads 1y of bars
     # Market-wide scope: at most this many feed companies are read per poll; the rest carry over.
     smart_money_max_companies_per_poll: int = Field(default=150, ge=10, le=2000)
     # Candidates the pipeline evaluates per run (each one is a full evaluation and a price read).
@@ -721,18 +633,6 @@ class AppSettings(BaseModel):
     # direction (a size you could not actually fill without moving the book).
     max_positions_per_sector: int = 2
     max_position_pct_of_adv: float = 1.0
-
-    # A third way out after the stop and TP1: a position that has been open this
-    # many TRADING days (bars, so weekends and holidays don't count) without
-    # touching either is closed at that day's close. Plans are labelled "1-4
-    # weeks", so 20 trading days (four weeks) is the top of the plan's own
-    # horizon: a trade still unresolved after it has outlived the thesis it was
-    # sized for and is only holding a slot and a sector cap hostage. 0 turns the
-    # limit off (positions then close only at the stop, TP1 or by hand). The
-    # upper bound (SettingsUpdateRequest) keeps the limit inside the 3-month
-    # window the exit scan reads, since the scan must see the position's entry
-    # bar to count days.
-    max_holding_days: int = 20
 
     # Portfolio-builder hold mode (PORTOFOLIO_BUILDER.md D2-D5): no target, no time exit.
     # The only automatic exit is a disaster stop on a daily CLOSE this % below the entry
@@ -773,16 +673,6 @@ class AppSettings(BaseModel):
     # portfolio/liquidity_slippage.py). Part of the strategy fingerprint while on.
     liquidity_slippage_enabled: bool = False
     liquidity_slippage_coefficient: float = 100.0
-
-    # Partial scale-out at TP1 (opt-in, off = a position closes fully at TP1 exactly as
-    # before, results unchanged): sell `scale_out_fraction` of the shares at TP1, then
-    # move the rest's stop to breakeven (or trail it `scale_out_trail_r` x the original
-    # risk behind the best price) and let it run to TP2, the stop or the time limit.
-    # Part of the strategy fingerprint while on.
-    scale_out_enabled: bool = False
-    scale_out_fraction: float = 0.5
-    scale_out_stop_mode: Literal["breakeven", "trail"] = "breakeven"
-    scale_out_trail_r: float = 1.0
 
     # Kill switches and drift alarms: a sleeve that trips one stops OPENING new
     # positions (open ones are managed as usual, nothing is closed) and a Telegram

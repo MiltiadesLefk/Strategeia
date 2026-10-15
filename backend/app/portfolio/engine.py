@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 
 import pandas as pd
@@ -20,25 +20,6 @@ from app.markets import (
     us_closure_reason,
 )
 from app.portfolio.excursion import LastBar, compute_excursion
-from app.portfolio.intraday import (
-    ENTRY_DAY_DAILY_ONLY,
-    ENTRY_DAY_DATA_GRACE,
-    ENTRY_DAY_HOURLY,
-    HOURLY_BAR,
-    HOURLY_INTERVAL,
-    RESOLUTION_DAILY,
-    RESOLUTION_DAILY_AMBIGUOUS,
-    RESOLUTION_HOURLY,
-    RESOLUTION_HOURLY_AMBIGUOUS,
-    HourlyBars,
-    bars_after_entry,
-    confirms_daily_range,
-    day_end,
-    entry_hour_row,
-    first_touch,
-    levels_touched,
-    market_day_of,
-)
 from app.portfolio.kill_switch_models import active_pause
 from app.portfolio.liquidity_slippage import impact_bps
 from app.portfolio.models import AccountState, EquitySnapshot, PaperPosition, Sleeve, TradePlanRecord
@@ -52,6 +33,8 @@ from app.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
+RESOLUTION_DAILY = "daily"  # PaperPosition.exit_resolution of an exit found on a daily bar
+
 # Returns "now" as a naive-UTC datetime, the convention for every stored
 # timestamp (timeutil.utcnow_naive).
 Clock = Callable[[], datetime]
@@ -63,40 +46,13 @@ class ExitFound:
     the bars the position lived through (for the best/worst-price record)."""
 
     fill_price: float
-    reason: str  # "stop_hit" | "tp1_hit" | "time_exit"
+    reason: str  # "disaster_stop"
     resolution: str  # PaperPosition.exit_resolution
-    # Daily bars up to and including the exit bar. For an exit located on an hourly
-    # bar the exit day's daily bar is replaced by `hourly` (below), so only the
-    # `daily_before` complete daily bars before it count.
+    # Daily bars up to and including the exit bar.
     bars_walked: int
-    # The hourly bars of the exit day up to and including the exit hour, when the
-    # exit was found on one; None for an exit found on a daily bar.
-    hourly: pd.DataFrame | None = None
-    # Daily bars to count before `hourly` (0 for an entry-day exit).
-    daily_before: int = 0
     # Total slippage in bps the market fill paid (flat + liquidity); None when the
     # liquidity model is off or the exit was a limit fill.
     slippage_bps: float | None = None
-
-
-@dataclass(frozen=True)
-class PartialFound:
-    """The scan found TP1 on a position that is to scale out: the limit fill of the
-    part sold there, how it was placed, and where a later sweep resumes."""
-
-    fill_price: float
-    resolution: str
-    bar_day: str  # market-time ISO date of the bar (or hour) TP1 was reached on
-    at: datetime | None = None  # the hour's start (naive UTC) when found on an hourly bar
-
-
-@dataclass(frozen=True)
-class ScaleOutScan:
-    """What one scan of a scale-out position found: the partial sale at TP1 (when it
-    happened in this scan) and, independently, a final exit of the remainder."""
-
-    partial: PartialFound | None
-    exit: ExitFound | None
 
 
 def default_clock() -> datetime:
@@ -216,13 +172,8 @@ class PaperTradingEngine:
         max_positions_per_sector: int | None = None,
         max_position_pct_of_adv: float | None = None,
         clock: Clock | None = None,
-        max_holding_days: int | None = None,
-        intraday_exits: bool = True,
         sleeve: Sleeve | None = None,
         liquidity_slippage_coefficient: float | None = None,
-        scale_out_fraction: float | None = None,
-        scale_out_stop_mode: str = "breakeven",
-        scale_out_trail_r: float = 1.0,
         exit_scan_period: str = EXIT_SCAN_PERIOD,
     ):
         self._session = session
@@ -238,26 +189,12 @@ class PaperTradingEngine:
         self._liquidity_coefficient = (
             liquidity_slippage_coefficient if liquidity_slippage_coefficient and liquidity_slippage_coefficient > 0 else None
         )
-        # Partial scale-out at TP1 (None / 0 = off: a position closes fully at TP1, as ever).
-        # See _scan_scaled for the rules; the engine is otherwise untouched while this is off.
-        self._scale_out_fraction = scale_out_fraction if scale_out_fraction and 0 < scale_out_fraction < 1 else None
-        self._scale_out_trail = scale_out_stop_mode == "trail"
-        self._scale_out_trail_r = scale_out_trail_r if scale_out_trail_r and scale_out_trail_r > 0 else 1.0
         self._commission_per_trade = commission_per_trade
         self._max_positions_per_sector = max_positions_per_sector
         self._max_position_pct_of_adv = max_position_pct_of_adv
         self._clock = resolve_clock(clock)
-        # Trading bars a position may stay open before it is closed at that
-        # bar's close; None or 0 = no limit. See _first_exit.
-        self._max_holding_days = max_holding_days if max_holding_days and max_holding_days > 0 else None
-        # Whether the exit scan may fetch hourly bars to order a stop and a target
-        # inside one daily bar and to check the rest of the entry day. On for the
-        # live app. A caller that replays history with a provider that has no hourly
-        # bars for the simulated dates (a backtest) turns it off and keeps the plain
-        # daily rules, rather than asking for bars it cannot get on every step.
-        self._intraday_exits = intraday_exits
-        # How much daily history the exit scan reads. The core's 3 months suit its 60-day limit at most; a
-        # sleeve with a longer time limit (smart money, 120 days) passes a longer one. Nothing else changes.
+        # How much daily history the exit scan reads. The core's 3 months suit
+        # a position held a few weeks; a sleeve that holds longer (smart money) passes a longer one.
         self._exit_scan_period = exit_scan_period
 
     def now(self) -> datetime:
@@ -268,7 +205,7 @@ class PaperTradingEngine:
     def is_market_open_for(self, symbol: str) -> bool:
         """Whether open_position would accept `symbol` right now, by the
         engine's own clock — lets a caller decide what to do with a plan
-        (trade_plan_service defers it) before attempting the fill."""
+        (the market-open redo defers it) before attempting the fill."""
         return is_market_open_for(symbol, self.now())
 
     # --------------------------------------------------------------- sleeve
@@ -597,7 +534,7 @@ class PaperTradingEngine:
 
     def available_cash(self) -> float:
         """Public read of deployable buying power, for callers that need to
-        size a position before opening it (see trade_plan_service)."""
+        size a position before opening it (see hold_buy_service)."""
         return self._available_cash(self.get_account_state())
 
     def close_position(
@@ -629,7 +566,7 @@ class PaperTradingEngine:
         risk_per_share = abs(position.entry_price - position.stop_loss)
         sign = 1 if position.direction == "long" else -1
         gross_pnl = (close_price - position.entry_price) * position.shares * sign
-        # A scaled-out position books what it sold at TP1 too: one trade, one P&L, one R.
+        # A row that sold part at TP1 before scale-out was retired books that too: one trade, one P&L, one R.
         gross_pnl += position.partial_gross_pnl or 0.0
         # Round-trip cost: whatever was charged at open, plus this exit.
         fees = (position.fees_paid or 0.0) + self._commission_per_trade
@@ -758,88 +695,6 @@ class PaperTradingEngine:
         dates = pd.to_datetime(bars["date"], utc=True, errors="coerce").dt.tz_localize(None)
         return bool((dates <= pd.Timestamp(opened_at)).any())
 
-    def _first_exit(
-        self, position: PaperPosition, bars: pd.DataFrame, *, holding_limit: int | None = None
-    ) -> tuple[float, str] | None:
-        """(fill price, reason) of the first exit on the daily `bars`, or None.
-        See _scan_exit; this never looks at hourly bars."""
-        found = self._scan_exit(position, bars, holding_limit=holding_limit)
-        return None if found is None else (found.fill_price, found.reason)
-
-    def _scan_exit(
-        self,
-        position: PaperPosition,
-        bars: pd.DataFrame,
-        *,
-        holding_limit: int | None = None,
-        hourly: HourlyBars | None = None,
-    ) -> ExitFound | None:
-        """The first exit on the daily `bars` (chronological), or None.
-
-        Walks bars in chronological order and returns the FIRST stop/TP1
-        touch, not merely whatever the latest bar happens to show.
-
-        Checking only the most recent bar (the previous behaviour) silently
-        dropped every exit that happened and then reversed: a position could
-        trade clean through its stop, recover, and still sit open at a paper
-        profit. That error is one-directional — it only ever deletes losses —
-        so it inflated win rate and total return together.
-
-        Within a single bar, stop is checked before TP1: when both levels sit
-        inside one bar's range, daily OHLC cannot say which came first, so the
-        engine takes the unfavourable branch rather than the flattering one.
-        With `hourly` (that symbol's hourly bars) such a day is looked at hour
-        by hour first, and the first level touched wins; the same unfavourable
-        rule applies one level down (both in one hour: the stop), and without
-        usable hourly bars for that day the daily rule stands and the exit is
-        marked as having been decided that way. A bar that OPENS beyond the stop
-        needs no hourly look: the open itself triggered the stop.
-
-        `holding_limit` (trading bars since the entry bar, which is bar 0 and
-        is not in `bars`) adds the third exit, a time limit: on the first bar
-        numbered at or past it, a position that neither the stop nor TP1
-        touched is closed at that bar's CLOSE. It comes last on purpose: on the
-        limit bar the stop and TP1 are still checked first, because a level
-        touched during the day happened before the close the time exit acts on.
-        It fills at the close like the entry does (the decision is made on a
-        finished bar), as a market order, so it pays slippage like a stop. A bar
-        that has not finished yet (today's, while the session runs) can never
-        trigger it: acting on its "close" would be acting on a price the day
-        then moves away from. That bar is also the last one, so the position
-        simply waits for a later run."""
-        is_long = position.direction == "long"
-        for number, (_, bar) in enumerate(bars.iterrows(), start=1):
-            high, low, bar_open = float(bar["high"]), float(bar["low"]), float(bar["open"])
-            stop_touched, tp_touched = levels_touched(position.direction, position.stop_loss, position.tp1, high, low)
-            if stop_touched or tp_touched:
-                resolution = RESOLUTION_DAILY
-                if stop_touched and tp_touched:
-                    opens_beyond_stop = bar_open <= position.stop_loss if is_long else bar_open >= position.stop_loss
-                    if not opens_beyond_stop:
-                        located = self._locate_in_hours(position, bar, hourly) if hourly is not None else None
-                        if located is not None:
-                            return ExitFound(
-                                located.fill_price,
-                                located.reason,
-                                located.resolution,
-                                number,
-                                hourly=located.hourly,
-                                daily_before=number - 1,
-                                slippage_bps=self._exit_bps(position, market=located.reason == "stop_hit"),
-                            )
-                        resolution = RESOLUTION_DAILY_AMBIGUOUS
-                if stop_touched:
-                    fill = self._exit_fill_price(position.direction, bar_open, position.stop_loss, is_stop=True)
-                    fill = self._slip(fill, buying=not is_long, symbol=position.symbol, shares=position.shares)
-                    return ExitFound(fill, "stop_hit", resolution, number, slippage_bps=self._exit_bps(position))
-                fill = self._exit_fill_price(position.direction, bar_open, position.tp1, is_stop=False)
-                return ExitFound(fill, "tp1_hit", resolution, number)
-            if holding_limit is not None and number >= holding_limit and self._bar_is_final(position.symbol, bar):
-                fill = self._slip(
-                    float(bar["close"]), buying=position.direction == "short", symbol=position.symbol, shares=position.shares
-                )
-                return ExitFound(fill, "time_exit", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
-        return None
 
     def _scan_hold_exit(self, position: PaperPosition, bars: pd.DataFrame) -> ExitFound | None:
         """Hold mode: the first FINAL daily bar whose CLOSE is beyond the disaster stop closes
@@ -860,411 +715,6 @@ class PaperTradingEngine:
                 return ExitFound(fill, "disaster_stop", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
         return None
 
-    def _hourly_fill(
-        self,
-        position: PaperPosition,
-        hour_open: float,
-        reason: str,
-        *,
-        stop: float | None = None,
-        target: float | None = None,
-        shares: float | None = None,
-    ) -> float:
-        """Fill for a level touched on an hourly bar: the same gap rules as a daily
-        bar, with the hour's own open (a stop pays slippage, a target is a limit).
-        `stop` / `target` / `shares` override the position's own for a scaled-out runner."""
-        is_stop = reason == "stop_hit"
-        level = (position.stop_loss if stop is None else stop) if is_stop else (position.tp1 if target is None else target)
-        fill = self._exit_fill_price(position.direction, hour_open, level, is_stop=is_stop)
-        if not is_stop:
-            return fill
-        return self._slip(
-            fill, buying=position.direction == "short", symbol=position.symbol,
-            shares=position.shares if shares is None else shares,
-        )
-
-    def _locate_in_hours(
-        self,
-        position: PaperPosition,
-        bar: pd.Series,
-        hourly: HourlyBars,
-        *,
-        stop: float | None = None,
-        target: float | None = None,
-        shares: float | None = None,
-    ) -> ExitFound | None:
-        """Which level a daily bar that held BOTH of them reached first, from that
-        day's hourly bars; None when that cannot be said honestly (no hourly data
-        for the day, or the hours do not themselves reach both levels, so one is
-        missing and the order they show may be wrong)."""
-        try:
-            bar_day = pd.Timestamp(bar["date"]).date()
-        except (KeyError, ValueError, TypeError):
-            return None
-        stop_level = position.stop_loss if stop is None else stop
-        target_level = position.tp1 if target is None else target
-        hours = hourly.day_rows(bar_day)
-        if hours is None or not confirms_daily_range(position.direction, stop_level, target_level, hours):
-            return None
-        touch = first_touch(position.direction, stop_level, target_level, hours)
-        if touch is None:
-            return None
-        fill = self._hourly_fill(
-            position, float(hours["open"].iloc[touch.row]), touch.reason, stop=stop, target=target, shares=shares
-        )
-        resolution = RESOLUTION_HOURLY_AMBIGUOUS if touch.both else RESOLUTION_HOURLY
-        return ExitFound(
-            fill, touch.reason, resolution, 0, hourly=hours.iloc[: touch.row + 1],
-            slippage_bps=self._exit_bps(position, market=touch.reason == "stop_hit", shares=shares),
-        )
-
-    # ------------------------------------------------------------- scale-out
-
-    def _split_shares(self, shares: int) -> tuple[int, int] | None:
-        """(sold at TP1, kept) for a position of `shares`, or None when scale-out is
-        off or the position is too small to split into two whole, non-empty parts
-        (it then exits fully at TP1 like any other)."""
-        if self._scale_out_fraction is None:
-            return None
-        sold = math.floor(shares * self._scale_out_fraction + 1e-9)
-        if sold < 1 or shares - sold < 1:
-            return None
-        return sold, shares - sold
-
-    def _is_scaled(self, position: PaperPosition) -> bool:
-        """Whether the scale-out scan rules this position: it already sold part at TP1
-        (whatever the setting says now: a runner is managed to its end), or scale-out
-        is on and it can be split. Everything else takes the unchanged full-exit path."""
-        return position.partial_fill_price is not None or self._split_shares(position.shares) is not None
-
-    def _runner_params(self, position: PaperPosition) -> tuple[float, float | None]:
-        """(the remainder's starting stop, the trail distance or None) once TP1 sells
-        part: breakeven is the entry fill. A recorded partial keeps what it was given
-        at the time; a first one takes the engine's current mode."""
-        if position.partial_fill_price is not None:
-            stop0 = position.runner_stop if position.runner_stop is not None else position.entry_price
-            return stop0, position.runner_trail_distance
-        risk = abs(position.entry_price - position.stop_loss)
-        distance = risk * self._scale_out_trail_r if self._scale_out_trail and risk > 0 else None
-        return position.entry_price, distance
-
-    @staticmethod
-    def _runner_stop_level(direction: str, stop0: float, distance: float | None, best: float | None) -> float:
-        """The remainder's stop going into a bar: breakeven, or in trail mode the best
-        price of the EARLIER bars minus the trail distance (never worse than breakeven).
-        The bar's own extreme is not used for its own stop: the daily bar cannot say
-        whether the high came before the low."""
-        if distance is None or best is None:
-            return stop0
-        return max(stop0, best - distance) if direction == "long" else min(stop0, best + distance)
-
-    @staticmethod
-    def _bar_day(bar: pd.Series):
-        try:
-            return pd.Timestamp(bar["date"]).date()
-        except (KeyError, ValueError, TypeError):
-            return None
-
-    def _apply_partial(self, position: PaperPosition, found: PartialFound) -> None:
-        """Books the part sold at TP1: its cash (a limit fill, so no slippage), its
-        profit, and the remainder's new stop, all on the SAME position row. After this
-        `shares` is what is still held. Keeps the attribute-expiry refresh pattern."""
-        split = self._split_shares(position.shares)
-        if split is None:
-            return
-        sold, kept = split
-        sign = 1 if position.direction == "long" else -1
-        stop0, distance = self._runner_params(position)
-        account = self.get_account_state()
-        if position.direction == "long":
-            account.current_cash += sold * found.fill_price
-        else:
-            account.current_cash -= sold * found.fill_price
-        account.current_cash -= self._commission_per_trade
-        position.original_shares = position.shares
-        position.partial_shares = sold
-        position.shares = kept
-        position.partial_fill_price = found.fill_price
-        position.partial_gross_pnl = (found.fill_price - position.entry_price) * sold * sign
-        position.partial_resolution = found.resolution
-        position.partial_bar_day = found.bar_day
-        position.partial_at = found.at
-        position.runner_stop = stop0
-        position.runner_trail_distance = distance
-        position.fees_paid = (position.fees_paid or 0.0) + self._commission_per_trade
-        self._session.add(position)
-        self._session.add(account)
-        self._session.commit()
-        self._session.refresh(position)  # commit() expires attributes
-
-    def _kept_shares(self, position: PaperPosition) -> int:
-        """What the runner holds: the shares left after a recorded partial, or what the
-        split of a not-yet-sold position would leave."""
-        if position.partial_fill_price is not None:
-            return position.shares
-        return (self._split_shares(position.shares) or (0, position.shares))[1]
-
-    def _runner_hour_exit(
-        self, position: PaperPosition, hours: pd.DataFrame, touch, base_row: int, stop0: float, number: int
-    ) -> ExitFound:
-        """The remainder's exit located on an hourly bar of the partial day (`touch` is a
-        first_touch over hours[base_row:], whose first row is the TP1 hour)."""
-        abs_row = base_row + touch.row
-        reason = "stop_hit" if touch.reason == "stop_hit" else "tp2_hit"
-        kept = self._kept_shares(position)
-        # Row 0 is the hour TP1 was reached in: a stop there is placed after the partial, so it
-        # fills at its own level, not the hour's open (which came before the partial).
-        hour_open = stop0 if touch.in_entry_hour else float(hours["open"].iloc[abs_row])
-        fill = self._hourly_fill(position, hour_open, touch.reason, stop=stop0, target=position.tp2, shares=kept)
-        return ExitFound(
-            fill, reason, RESOLUTION_HOURLY_AMBIGUOUS if touch.both else RESOLUTION_HOURLY, number,
-            hourly=hours.iloc[: abs_row + 1], daily_before=number - 1,
-            slippage_bps=self._exit_bps(position, market=reason == "stop_hit", shares=kept),
-        )
-
-    def _scan_scaled(
-        self,
-        position: PaperPosition,
-        bars: pd.DataFrame,
-        *,
-        holding_limit: int | None = None,
-        hourly: HourlyBars | None = None,
-    ) -> ScaleOutScan:
-        """_scan_exit for a position that scales out at TP1 (see _is_scaled).
-
-        Stage 1 (nothing sold yet) is _scan_exit's walk with one change: TP1 sells
-        part instead of closing, then the SAME bar is read as the first bar of stage 2.
-        Stage 2 (the remainder, "runner") has its own stop (breakeven, or trailing) and
-        its target is TP2. Every invariant of the full-exit scan carries over: every bar
-        since entry is walked (a resumed runner restarts at its partial's day, never
-        later), a stop is a market order that fills at a gap-open, a target is a limit
-        that fills at a gap-open, the stop is taken before the target within a bar (hourly
-        bars settle a day holding both), and the time limit closes what neither touched
-        at a finished bar's close.
-
-        One honest assumption: on the bar TP1 was reached the daily range cannot say if
-        its low came before or after TP1, so a low through the runner's stop counts as
-        coming after (the runner is stopped at its level, no gap fill). That is the
-        unfavourable branch, as everywhere else in the engine."""
-        direction = position.direction
-        is_long = direction == "long"
-        stage2 = position.partial_fill_price is not None
-        stop0, distance = self._runner_params(position)
-        partial_day = position.partial_bar_day
-        kept = self._kept_shares(position)
-        partial: PartialFound | None = None
-        best: float | None = None  # best price of the runner's earlier bars, for the trail
-        for number, (_, bar) in enumerate(bars.iterrows(), start=1):
-            high, low, bar_open = float(bar["high"]), float(bar["low"]), float(bar["open"])
-            bar_day = self._bar_day(bar)
-            if stage2 and partial_day is not None and bar_day is not None and bar_day.isoformat() < partial_day:
-                continue  # before the partial: stage 1 already walked these
-            first_runner_bar = False
-            if not stage2:
-                stop_touched, tp_touched = levels_touched(direction, position.stop_loss, position.tp1, high, low)
-                if not (stop_touched or tp_touched):
-                    if holding_limit is not None and number >= holding_limit and self._bar_is_final(position.symbol, bar):
-                        fill = self._slip(
-                            float(bar["close"]), buying=not is_long, symbol=position.symbol, shares=position.shares
-                        )
-                        return ScaleOutScan(
-                            None, ExitFound(fill, "time_exit", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position))
-                        )
-                    continue
-                resolution = RESOLUTION_DAILY
-                if stop_touched and tp_touched:
-                    opens_beyond_stop = bar_open <= position.stop_loss if is_long else bar_open >= position.stop_loss
-                    if not opens_beyond_stop:
-                        located = self._locate_in_hours(position, bar, hourly) if hourly is not None else None
-                        if located is not None:
-                            if located.reason == "stop_hit":
-                                return ScaleOutScan(None, replace(located, bars_walked=number, daily_before=number - 1))
-                            # TP1 first, found on the hours: sell there, read the rest of the day for the runner.
-                            hours = located.hourly
-                            row = len(hours) - 1
-                            at = pd.Timestamp(hours["start"].iloc[-1]).to_pydatetime()
-                            partial = PartialFound(located.fill_price, located.resolution, bar_day.isoformat(), at)
-                            day_hours = hourly.day_rows(bar_day)
-                            if day_hours is not None:
-                                tail = day_hours.iloc[row:].reset_index(drop=True)
-                                touch = first_touch(direction, stop0, position.tp2, tail, entry_row=0)
-                                if touch is not None:
-                                    return ScaleOutScan(
-                                        partial, self._runner_hour_exit(position, day_hours, touch, row, stop0, number)
-                                    )
-                            stage2, partial_day, first_runner_bar = True, bar_day.isoformat(), True
-                        else:
-                            resolution = RESOLUTION_DAILY_AMBIGUOUS
-                    # (opens beyond the stop: the open itself triggered it, no hourly look)
-                if not stage2:
-                    if stop_touched:
-                        fill = self._exit_fill_price(direction, bar_open, position.stop_loss, is_stop=True)
-                        fill = self._slip(fill, buying=not is_long, symbol=position.symbol, shares=position.shares)
-                        return ScaleOutScan(
-                            None, ExitFound(fill, "stop_hit", resolution, number, slippage_bps=self._exit_bps(position))
-                        )
-                    fill = self._exit_fill_price(direction, bar_open, position.tp1, is_stop=False)
-                    if bar_day is None:
-                        # Without the bar's date a resumed runner could not be placed in time: exit fully.
-                        return ScaleOutScan(None, ExitFound(fill, "tp1_hit", resolution, number))
-                    partial = PartialFound(fill, resolution, bar_day.isoformat())
-                    stage2, partial_day, first_runner_bar = True, bar_day.isoformat(), True
-            else:
-                first_runner_bar = bar_day is not None and partial_day is not None and bar_day.isoformat() == partial_day
-
-            # ---- stage 2: the remainder, on this bar
-            stop_level = self._runner_stop_level(direction, stop0, distance, best)
-            stop_touched, tp_touched = levels_touched(direction, stop_level, position.tp2, high, low)
-            if stop_touched:
-                resolution = RESOLUTION_DAILY
-                if tp_touched:
-                    opens_beyond_stop = bar_open <= stop_level if is_long else bar_open >= stop_level
-                    if not first_runner_bar and not opens_beyond_stop:
-                        located = (
-                            self._locate_in_hours(position, bar, hourly, stop=stop_level, target=position.tp2, shares=kept)
-                            if hourly is not None
-                            else None
-                        )
-                        if located is not None:
-                            reason = "stop_hit" if located.reason == "stop_hit" else "tp2_hit"
-                            return ScaleOutScan(
-                                partial, replace(located, reason=reason, bars_walked=number, daily_before=number - 1)
-                            )
-                    resolution = RESOLUTION_DAILY_AMBIGUOUS
-                # On the partial bar the stop did not exist before TP1: no gap fill, its own level.
-                fill = stop_level if first_runner_bar else self._exit_fill_price(direction, bar_open, stop_level, is_stop=True)
-                fill = self._slip(fill, buying=not is_long, symbol=position.symbol, shares=kept)
-                return ScaleOutScan(
-                    partial, ExitFound(fill, "stop_hit", resolution, number, slippage_bps=self._exit_bps(position, shares=kept))
-                )
-            if tp_touched:
-                fill = self._exit_fill_price(direction, bar_open, position.tp2, is_stop=False)
-                return ScaleOutScan(partial, ExitFound(fill, "tp2_hit", RESOLUTION_DAILY, number))
-            if holding_limit is not None and number >= holding_limit and self._bar_is_final(position.symbol, bar):
-                fill = self._slip(float(bar["close"]), buying=not is_long, symbol=position.symbol, shares=kept)
-                return ScaleOutScan(
-                    partial, ExitFound(fill, "time_exit", RESOLUTION_DAILY, number, slippage_bps=self._exit_bps(position, shares=kept))
-                )
-            extreme = high if is_long else low
-            best = extreme if best is None else (max(best, extreme) if is_long else min(best, extreme))
-        return ScaleOutScan(partial, None)
-
-    def _scan_entry_day(self, position: PaperPosition, hourly: HourlyBars) -> ExitFound | None:
-        """Checks the part of the ENTRY day after the position existed, hour by hour.
-
-        The daily walk skips the entry bar on purpose (entry is priced at that
-        day's close or quote, so the bar's earlier low must not stop out a position
-        that did not exist yet). Positions now open mid-session, so a stop or target
-        touched LATER the same day would never be seen, and a missed stop only ever
-        deletes losses. The hourly bars cover that remainder.
-
-        The hour the position was opened in is partly before the entry, and an
-        hourly bar cannot say which part its extremes came from. Only the STOP is
-        checked in it (a stop touched before the entry costs a trade that was never
-        exposed, which can only understate results); a target there is ignored (it
-        may have been reached before the entry, and crediting that is the flattering
-        direction). A stop in that hour fills at the stop price, not the bar's open,
-        which is before the position existed. Every later hour is checked in full.
-
-        Records on the position how far the check got (entry_day_check): "hourly"
-        once the whole day is covered, "daily_only" when the hourly bars never
-        arrived or stayed incomplete past a day's grace (the entry day then stays
-        unchecked, as before, and the row says so). Until one of those, nothing is
-        recorded and the next sweep looks again. Returns the exit found, if any."""
-        symbol, opened_at, now = position.symbol, pd.Timestamp(position.opened_at), self.now()
-        day = market_day_of(symbol, position.opened_at)
-        end = day_end(symbol, day)
-        if end is None:
-            self._record_entry_day_check(position, ENTRY_DAY_DAILY_ONLY)  # no session that day: no hours exist
-            return None
-        rows = hourly.day_rows(day)
-        if rows is None:
-            if now >= end + ENTRY_DAY_DATA_GRACE:
-                self._record_entry_day_check(position, ENTRY_DAY_DAILY_ONLY)
-            return None
-        after = bars_after_entry(rows, opened_at)
-        entry_row = entry_hour_row(after, opened_at)
-        if position.partial_fill_price is not None:
-            # A runner already sold part at TP1: resume from that hour with the runner's rules.
-            if position.partial_at is None:
-                # The partial came on a later daily bar, after this day: nothing of it is left to check.
-                self._record_entry_day_check(position, ENTRY_DAY_DAILY_ONLY)
-                return None
-            at = pd.Timestamp(position.partial_at)
-            starts = [row for row, start in enumerate(after["start"]) if start >= at]
-            if not starts:
-                return self._entry_day_tail(position, rows, end, now)
-            return self._entry_day_runner(position, rows, after, entry_row, starts[0], end, now)
-        touch = first_touch(position.direction, position.stop_loss, position.tp1, after, entry_row=entry_row)
-        if touch is not None and touch.reason == "tp1_hit" and self._split_shares(position.shares) is not None:
-            # Scale-out: TP1 sells part (a limit, filled at the hour's open or better), the rest runs on.
-            fill = self._hourly_fill(position, float(after["open"].iloc[touch.row]), "tp1_hit")
-            at = pd.Timestamp(after["start"].iloc[touch.row]).to_pydatetime()
-            self._apply_partial(position, PartialFound(fill, RESOLUTION_HOURLY, day.isoformat(), at))
-            return self._entry_day_runner(position, rows, after, entry_row, touch.row, end, now)
-        if touch is not None:
-            position.entry_day_check = ENTRY_DAY_HOURLY  # saved with the close
-            if touch.in_entry_hour:
-                fill = self._hourly_fill(position, position.stop_loss, "stop_hit")  # at the level: see docstring
-                held = after.iloc[0:0]
-            else:
-                fill = self._hourly_fill(position, float(after["open"].iloc[touch.row]), touch.reason)
-                held = after.iloc[(0 if entry_row is None else entry_row + 1) : touch.row + 1]
-            resolution = RESOLUTION_HOURLY_AMBIGUOUS if touch.both else RESOLUTION_HOURLY
-            return ExitFound(
-                fill, touch.reason, resolution, 0, hourly=held,
-                slippage_bps=self._exit_bps(position, market=touch.reason == "stop_hit"),
-            )
-        return self._entry_day_tail(position, rows, end, now)
-
-    def _entry_day_tail(self, position: PaperPosition, rows: pd.DataFrame, end: datetime, now: datetime) -> None:
-        """Bookkeeping when the entry day's hours showed no exit: covered, or still waiting."""
-        if now >= end and rows["start"].iloc[-1] + HOURLY_BAR >= end:
-            self._record_entry_day_check(position, ENTRY_DAY_HOURLY)
-        elif now >= end + ENTRY_DAY_DATA_GRACE:
-            self._record_entry_day_check(position, ENTRY_DAY_DAILY_ONLY)
-        return None
-
-    def _entry_day_runner(
-        self,
-        position: PaperPosition,
-        rows: pd.DataFrame,
-        after: pd.DataFrame,
-        entry_row: int | None,
-        start_row: int,
-        end: datetime,
-        now: datetime,
-    ) -> ExitFound | None:
-        """The rest of the entry day for a runner (the part left after TP1), hour by
-        hour from `start_row`, the hour TP1 was reached in. In that hour only the
-        runner's stop can fire (it is placed after TP1, so it fills at its own level);
-        TP2 and the stop count in full from the next hour on."""
-        stop0, _ = self._runner_params(position)
-        tail = after.iloc[start_row:].reset_index(drop=True)
-        touch = first_touch(position.direction, stop0, position.tp2, tail, entry_row=0)
-        if touch is None:
-            return self._entry_day_tail(position, rows, end, now)
-        position.entry_day_check = ENTRY_DAY_HOURLY  # saved with the close
-        abs_row = start_row + touch.row
-        reason = "stop_hit" if touch.reason == "stop_hit" else "tp2_hit"
-        hour_open = stop0 if touch.in_entry_hour else float(after["open"].iloc[abs_row])
-        fill = self._hourly_fill(position, hour_open, touch.reason, stop=stop0, target=position.tp2)
-        held = after.iloc[(0 if entry_row is None else entry_row + 1) : abs_row + 1]
-        return ExitFound(
-            fill, reason, RESOLUTION_HOURLY_AMBIGUOUS if touch.both else RESOLUTION_HOURLY, 0, hourly=held,
-            slippage_bps=self._exit_bps(position, market=reason == "stop_hit"),
-        )
-
-    def _record_entry_day_check(self, position: PaperPosition, status: str) -> None:
-        position.entry_day_check = status
-        self._session.add(position)
-        self._session.commit()
-
-    def _fetch_hourly(self, symbol: str, period: str) -> pd.DataFrame:
-        # fresh_data_only: an exit decision made on a cached hourly frame is the same
-        # stale-data failure the daily fetch guards against.
-        with fresh_data_only():
-            return self._data_provider.get_ohlcv(symbol, period=period, interval=HOURLY_INTERVAL)
 
     def _bar_is_final(self, symbol: str, bar: pd.Series) -> bool:
         """Whether `bar` is finished as of the engine's clock. A bar is read by
@@ -1280,116 +730,44 @@ class PaperTradingEngine:
         return is_daily_bar_final(symbol, bar_day, self.now())
 
     @staticmethod
-    def _held_bars(scope: pd.DataFrame | None, found: ExitFound) -> pd.DataFrame:
-        """The bars a position lived through, for its best/worst-price record: the
-        complete daily bars before the exit, then either the exit day's daily bar
-        or, for an exit found on an hourly bar, that day's hours up to the exit hour
-        (the last of which the record treats as the exit bar)."""
-        if found.hourly is None:
-            return scope.iloc[: found.bars_walked]
-        columns = ["open", "high", "low"]
-        before = scope.iloc[: found.daily_before][columns] if scope is not None else found.hourly.iloc[0:0][columns]
-        return pd.concat([before, found.hourly[columns]], ignore_index=True)
+    def _held_bars(scope: pd.DataFrame, found: ExitFound) -> pd.DataFrame:
+        """The bars a position lived through, for its best/worst-price record: the complete daily
+        bars before the exit, then the exit bar."""
+        return scope.iloc[: found.bars_walked]
 
     def mark_to_market(self, *, snapshot: bool = True) -> list[PaperPosition]:
-        """Closes any open position whose stop or TP1 was touched on any bar
-        since entry, or that has run out its holding limit (max_holding_days).
-        v1 exit rule: whichever of stop or TP1 hits first closes the full
-        position; TP2 is informational only. With scale-out ON (opt-in, see
-        _scan_scaled) TP1 instead sells part and the rest runs to TP2, its own
-        stop or the time limit. The time
-        limit is the third way out and only ever applies when neither level was
-        touched (see _first_exit).
-
-        Hourly bars sharpen two daily-bar blind spots, fetched only when needed
-        (see _scan_exit and _scan_entry_day): which level a day holding both
-        reached first, and what happened later on the entry day itself.
+        """Closes any open position of this sleeve whose FINAL daily close is beyond its disaster stop
+        (see _scan_hold_exit). The take-profit, time-limit and scale-out exits of swing trading are gone: a
+        swing row still open in an old database is managed by its stop alone.
 
         `snapshot=False` lets a read-only caller evaluate exits without
-        appending a point to the equity curve — see api/routers/portfolio.py."""
+        appending a point to the equity curve - see api/routers/portfolio.py."""
         closed: list[PaperPosition] = []
         open_positions = self._open_positions()  # this sleeve's only: another sleeve's exits are its own engine's job
-        # One hourly history per symbol per sweep, fetched only when a position needs
-        # it: the entry day not yet checked, or a daily bar holding both levels.
-        hourly_books: dict[str, HourlyBars] = {}
 
         for position in open_positions:
             try:
-                # fresh_data_only: the provider cache will serve the last
-                # known-good response when a fetch fails, which is right for
-                # rendering a research page and wrong for deciding an exit —
-                # closing a position against a bar from days ago is the same
-                # stale-data failure the multi-bar rewrite above exists to
-                # prevent. A failed fetch skips the position instead.
+                # fresh_data_only: the provider cache will serve the last known-good response when a
+                # fetch fails, which is right for rendering a research page and wrong for deciding an
+                # exit. A failed fetch skips the position instead.
                 with fresh_data_only():
                     bars = self._data_provider.get_ohlcv(position.symbol, period=self._exit_scan_period, interval="1d")
             except AllProvidersFailedError:
                 continue
             if bars.empty:
                 continue
-            if position.mode == "hold":
-                scope = self._bars_after_entry(bars, position.opened_at)
-                found = None if scope.empty else self._scan_hold_exit(position, scope)
-                if found is not None:
-                    closed.append(
-                        self.close_position(
-                            position, found.fill_price, found.reason, snapshot=False,
-                            held_bars=self._held_bars(scope, found) if self._entry_bar_in_window(bars, position.opened_at) else None,
-                            last_bar="complete", resolution=found.resolution, slippage_bps=found.slippage_bps,
-                        )
-                    )
-                continue
-            hourly = None
-            if self._intraday_exits:
-                symbol = position.symbol
-                hourly = hourly_books.get(symbol)
-                if hourly is None:
-                    hourly = hourly_books[symbol] = HourlyBars(
-                        symbol, self.now(), lambda period, symbol=symbol: self._fetch_hourly(symbol, period)
-                    )
-            # The entry day comes before every daily bar in time, so it is checked first.
-            found = None
-            if hourly is not None and position.entry_day_check is None:
-                found = self._scan_entry_day(position, hourly)
+            scope = self._bars_after_entry(bars, position.opened_at)
+            found = None if scope.empty else self._scan_hold_exit(position, scope)
             if found is not None:
-                held = self._held_bars(None, found)  # an entry-day exit: the hours are the whole record
-            else:
-                scope = self._bars_after_entry(bars, position.opened_at)
-                if scope.empty:
-                    continue
-                # The time limit counts bars from the entry bar, so it only applies
-                # when that bar is in the window (see _entry_bar_in_window).
-                entry_in_window = self._entry_bar_in_window(bars, position.opened_at)
-                holding_limit = self._max_holding_days if entry_in_window else None
-                if self._is_scaled(position):
-                    scan = self._scan_scaled(position, scope, holding_limit=holding_limit, hourly=hourly)
-                    if scan.partial is not None and position.partial_fill_price is None:
-                        self._apply_partial(position, scan.partial)
-                    found = scan.exit
-                else:
-                    found = self._scan_exit(position, scope, holding_limit=holding_limit, hourly=hourly)
-                if found is None:
-                    continue
-                # The bars up to the exit bar are what the position lived through (for the
-                # best/worst-price record); a stop or TP1 hit happened part-way through its
-                # bar, a time exit is the finished bar's close. Only when the entry bar is in
-                # the window: otherwise the early bars of the trade are missing and the
-                # range would be understated.
-                held = self._held_bars(scope, found) if entry_in_window else None
-            # snapshot=False: one equity snapshot for the whole sweep below,
-            # rather than re-quoting every open position once per close.
-            closed.append(
-                self.close_position(
-                    position,
-                    found.fill_price,
-                    found.reason,
-                    snapshot=False,
-                    held_bars=held,
-                    last_bar="complete" if found.reason == "time_exit" else "exit",
-                    resolution=found.resolution,
-                    slippage_bps=found.slippage_bps,
+                # snapshot=False: one equity snapshot for the whole sweep below,
+                # rather than re-quoting every open position once per close.
+                closed.append(
+                    self.close_position(
+                        position, found.fill_price, found.reason, snapshot=False,
+                        held_bars=self._held_bars(scope, found) if self._entry_bar_in_window(bars, position.opened_at) else None,
+                        last_bar="complete", resolution=found.resolution, slippage_bps=found.slippage_bps,
+                    )
                 )
-            )
 
         if snapshot:
             self._record_equity_snapshot()

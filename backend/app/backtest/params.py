@@ -68,14 +68,6 @@ class BacktestParams(BaseModel):
         """True when any dated part is on (the fundamentals part also reads stored revenue filings)."""
         return self.include_fundamentals or self.include_insiders or self.include_earnings
 
-    def dated_switches(self) -> dict[str, bool]:
-        """The three switches as keyword arguments for coverage.describe_coverage."""
-        return {
-            "include_fundamentals": self.include_fundamentals,
-            "include_insiders": self.include_insiders,
-            "include_earnings": self.include_earnings,
-        }
-
     @field_validator("symbols")
     @classmethod
     def _clean_symbols(cls, value: list[str]) -> list[str]:
@@ -104,13 +96,11 @@ def effective_settings(base: AppSettings, overrides: SettingsOverrides | None = 
     """A copy of `base` with the backtest's fixed choices and the run's
     overrides applied. `base` itself (and the settings file) is never touched.
 
-    Fixed: no LLM and no AI overlay (an AI that has read the future cannot be
+    Fixed: no LLM (an AI that has read the future cannot be
     tested honestly), no Telegram, no Finnhub, auto-execute on (the backtest is
     the auto-trade path), no scheduled scan."""
     changes: dict[str, Any] = {
         "llm_provider": "none",
-        "ai_trading_overlay_enabled": False,
-        "committee_gate_enabled": False,
         "telegram_bot_token": "",
         "telegram_chat_id": "",
         "finnhub_enabled": False,

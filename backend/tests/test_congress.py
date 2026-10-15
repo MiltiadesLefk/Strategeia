@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.analysis.congress_scoring import build_congress_signal, score_congress_net
 from app.api.deps import get_app_settings, get_session
 from app.config import AppSettings
 from app.data_providers.base import DataProviderError
@@ -245,30 +244,6 @@ def test_a_dead_index_raises_so_the_runner_can_back_off(session):
 # --------------------------------------------------------------------------
 # silent signal
 # --------------------------------------------------------------------------
-
-
-def test_score_is_signed_by_direction_and_capped():
-    assert score_congress_net("long", 3, 0)[0] == 1
-    assert score_congress_net("short", 3, 0)[0] == -1
-    assert score_congress_net("long", 0, 4)[0] == -2  # a net of 4 members is the strong reading
-    assert score_congress_net("long", 0, 3)[0] == -1
-    assert score_congress_net("short", 5, 0)[0] == -2
-    assert score_congress_net("short", 0, 4)[0] == 2
-    assert score_congress_net("long", 1, 0)[0] == 0  # one member is noise
-    assert score_congress_net(None, 5, 0)[0] == 0
-
-
-def test_signal_is_unavailable_without_data_and_scores_with_it(session):
-    assert build_congress_signal("long", None, "NVDA").available is False
-    assert build_congress_signal("long", session, "NVDA").available is False
-    for doc in (PELOSI, GREENE):
-        ingest_ptr(session, filing_of(doc), pdf_bytes(doc))
-    with as_of(datetime(2025, 2, 1)):
-        sig = build_congress_signal("long", session, "NVDA")
-        quiet = build_congress_signal("long", session, "ZZZZ")
-    # Pelosi bought and sold NVDA stock, Greene bought: net +1 is below the bar.
-    assert sig.available and sig.would_score == 0 and sig.value == "+1"
-    assert quiet.available and quiet.would_score == 0
 
 
 # --------------------------------------------------------------------------

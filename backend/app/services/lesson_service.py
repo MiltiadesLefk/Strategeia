@@ -54,7 +54,7 @@ from app.markets import is_daily_bar_final
 from app.portfolio.models import PaperPosition, TradePlanRecord
 from app.analysis.live_evidence import EXTRA_LABELS, extra_scores_from_json
 from app.portfolio.calibration import LEGACY_POINTS_MAX
-from app.services.trade_plan_service import clamp_points
+from app.analysis.confidence import clamp_points
 from app.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)

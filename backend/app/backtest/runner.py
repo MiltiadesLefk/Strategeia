@@ -121,7 +121,7 @@ def _new_scratch_db():
 
     scratch = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(scratch)
-    # generate_trade_plan looks pending plans up by symbol on every call.
+    # plans are looked up by symbol on many calls.
     with scratch.begin() as conn:
         conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_scratch_plan ON tradeplanrecord (symbol, status)")
     return scratch
@@ -168,7 +168,7 @@ def run_backtest(
 
     try:
         with Session(scratch) as session:
-            exit_engine = build_sleeve_engine(session, provider, settings, clock=current_as_of, hold=True, intraday_exits=False)
+            exit_engine = build_sleeve_engine(session, provider, settings, clock=current_as_of, hold=True)
             for index, day in enumerate(days):
                 if should_cancel is not None and should_cancel():
                     cancelled = True

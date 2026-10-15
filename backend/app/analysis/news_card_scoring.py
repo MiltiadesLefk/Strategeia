@@ -1,4 +1,4 @@
-"""AI-labelled news as a silent signal (see analysis/shadow_signals.py).
+"""AI-labelled news as a silent signal (a ShadowSignal reading).
 
 What it reads: the news cards (app/knowledge/news_cards.py) for the symbol whose
 headline was published in the last few days. Only cards that are about this
@@ -30,7 +30,6 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session
 
-from app.analysis.shadow_signals import ShadowContext, ShadowSignal, shadow_signal
 from app.knowledge import current_as_of
 from app.knowledge.news_cards import cards_for_symbol
 
@@ -53,36 +52,6 @@ def _news_time(payload: dict) -> datetime | None:
         return None
 
 
-def net_news_weight(cards: list[dict]) -> tuple[int, int]:
-    """(net weighted sentiment, number of cards that counted)."""
-    net = counted = 0
-    for card in cards:
-        weight = MATERIALITY_WEIGHT.get(str(card.get("materiality")))
-        if weight is None or not card.get("is_about_this_company"):
-            continue
-        counted += 1
-        net += weight * SENTIMENT_SIGN.get(str(card.get("sentiment")), 0)
-    return net, counted
-
-
-def score_news_cards(direction: str | None, cards: list[dict]) -> tuple[int, str, str]:
-    """(points, reason, value) for the recent cards."""
-    net, counted = net_news_weight(cards)
-    value = f"net {net:+d} from {counted} material item{'s' if counted != 1 else ''}"
-    if counted == 0:
-        return 0, f"{len(cards)} labelled headline(s) in the last {RECENT_WINDOW_DAYS} days, none material and about this company.", value
-    if abs(net) < NET_THRESHOLD:
-        return 0, f"Labelled news in the last {RECENT_WINDOW_DAYS} days is too light or too mixed to count ({value}).", value
-    bullish = net > 0
-    if direction not in ("long", "short"):
-        return 0, f"Labelled news leans {'positive' if bullish else 'negative'} ({value}), but there is no clear direction to sign it by.", value
-    supports = bullish == (direction == "long")
-    points = NEWS_CARD_SCORE_CAP if supports else -NEWS_CARD_SCORE_CAP
-    lean = "positive" if bullish else "negative"
-    verb = "supports" if supports else "argues against"
-    return points, f"AI-labelled news in the last {RECENT_WINDOW_DAYS} days leans {lean} ({value}), which {verb} a {direction}.", value
-
-
 def recent_cards(session: Session, symbol: str) -> list[dict]:
     """The labelled headlines for `symbol` published in the recent window, as known now."""
     cutoff = current_as_of() - timedelta(days=RECENT_WINDOW_DAYS)
@@ -94,46 +63,3 @@ def recent_cards(session: Session, symbol: str) -> list[dict]:
     return recent
 
 
-def ai_news_score(
-    session: Session | None, symbol: str, direction: str | None, cap: int
-) -> tuple[bool, int, list[str]]:
-    """(available, points, reasons) for the news part of the score, read from the AI's labels.
-
-    The AI only labelled each headline (event, sentiment, materiality); these fixed rules turn the labels
-    into points: every NET_THRESHOLD of net weighted sentiment is one point, up to `cap`, signed for the
-    trade's direction. `available` is False when no recent headline has been labelled, and then the caller
-    keeps the keyword score instead. Labelled but not material is available with 0 points.
-    """
-    if session is None:
-        return False, 0, []
-    recent = recent_cards(session, symbol)
-    if not recent:
-        return False, 0, []
-    net, counted = net_news_weight(recent)
-    if direction not in ("long", "short") or counted == 0 or abs(net) < NET_THRESHOLD:
-        return True, 0, []
-    bullish = net > 0
-    magnitude = min(cap, abs(net) // NET_THRESHOLD)
-    supports = bullish == (direction == "long")
-    points = magnitude if supports else -magnitude
-    lean = "positive" if bullish else "negative"
-    verb = "supports" if supports else "argues against"
-    value = f"net {net:+d} from {counted} material item{'s' if counted != 1 else ''}"
-    return True, points, [f"AI-labelled news leans {lean} ({value}), which {verb} a {direction}"]
-
-
-def build_news_card_signal(direction: str | None, session: Session | None, symbol: str) -> ShadowSignal:
-    if session is None:
-        return ShadowSignal(SIGNAL_NAME, None, 0, "No database session to read news cards from.", available=False)
-    recent = recent_cards(session, symbol)
-    if not recent:
-        return ShadowSignal(
-            SIGNAL_NAME, None, 0, f"No labelled news for this symbol in the last {RECENT_WINDOW_DAYS} days.", available=False
-        )
-    points, reason, value = score_news_cards(direction, recent)
-    return ShadowSignal(SIGNAL_NAME, value, points, reason, available=True)
-
-
-@shadow_signal(SIGNAL_NAME)
-def _news_card_shadow_scorer(context: ShadowContext) -> ShadowSignal:
-    return build_news_card_signal(context.direction, context.session, context.symbol)

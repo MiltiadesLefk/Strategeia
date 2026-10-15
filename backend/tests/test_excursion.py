@@ -191,65 +191,30 @@ def test_stop_hit_stores_the_excursion_up_to_the_stop(session: Session):
         (100, 101, 99, 100),  # entry bar: spent, never counted
         (100, 104, 98, 102),
         (101, 106, 99, 104),
-        (100, 101, 90, 92),  # stop bar: fills at the 95 stop; its 90 low is after the exit
+        (100, 101, 90, 92),  # closes beyond the 95 stop: exits at that close, the finished bar counts whole
         (95, 130, 50, 100),  # after the exit: must not matter
     ]
     engine, position = open_long(session, BarsProvider(make_bars(start, rows)), opened)
 
     engine.mark_to_market(snapshot=False)
 
-    assert position.close_reason == "stop_hit"
+    assert position.close_reason == "disaster_stop"
     assert position.mfe_pct == pytest.approx(6.0)  # 106
-    assert position.mae_pct == pytest.approx(5.0)  # the 95 fill
+    assert position.mae_pct == pytest.approx(10.0)  # the exit bar's 90 low
     assert position.mfe_r == pytest.approx(1.2)
-    assert position.mae_r == pytest.approx(1.0)
+    assert position.mae_r == pytest.approx(2.0)
 
 
 def test_entry_bar_range_is_not_counted(session: Session):
     opened = datetime(2026, 1, 5, 20, 0)
-    rows = [(100, 140, 60, 100), (100, 102, 99, 101), (100, 111, 100, 110)]  # huge entry bar, TP1 on the last
+    rows = [(100, 140, 60, 100), (100, 102, 99, 101), (100, 101, 90, 92)]  # huge entry bar, a close beyond the stop on the last
     engine, position = open_long(session, BarsProvider(make_bars(datetime(2026, 1, 5), rows)), opened)
 
     engine.mark_to_market(snapshot=False)
 
-    assert position.close_reason == "tp1_hit"
-    assert position.mfe_pct == pytest.approx(10.0)  # the 110 fill; the entry bar's 140 is not counted
-    assert position.mae_pct == pytest.approx(1.0)  # 99, not the entry bar's 60
-
-
-def test_tp1_hit_stores_the_excursion(session: Session):
-    opened = datetime(2026, 1, 5, 20, 0)
-    rows = [(100, 101, 99, 100), (100, 104, 98, 102), (105, 111, 96, 110)]
-    engine, position = open_long(session, BarsProvider(make_bars(datetime(2026, 1, 5), rows)), opened)
-
-    engine.mark_to_market(snapshot=False)
-
-    assert position.close_reason == "tp1_hit"
-    assert position.mfe_r == pytest.approx(2.0)  # the 110 fill
-    assert position.mae_pct == pytest.approx(2.0)  # 98 on the first bar; the 96 low is on the exit bar
-    assert position.mae_r == pytest.approx(0.4)
-
-
-def test_time_exit_counts_the_whole_final_bar(session: Session):
-    # Friday 4 Sep 2026 entry; the time exit fires at the close of the 2nd bar after it.
-    opened = datetime(2026, 9, 4, 15, 0)
-    rows = [(100, 101, 99, 100), (100, 103, 98, 101), (101, 105, 97, 102)]
-    bars = make_bars(datetime(2026, 9, 4), rows)
-    # Skip the weekend/holiday: keep real trading dates for the three bars.
-    for bar, day in zip(bars, ("2026-09-04", "2026-09-08", "2026-09-09")):
-        bar["date"] = pd.Timestamp(day)
-    now = datetime(2026, 9, 10, 16, 0)
-    engine, position = open_long(session, BarsProvider(bars), opened, max_holding_days=2, clock=lambda: now)
-    # open_long opened through the engine with this clock (a trading day at 12:00 ET): re-date the open.
-    position.opened_at = opened
-    session.add(position)
-    session.commit()
-
-    engine.mark_to_market(snapshot=False)
-
-    assert position.close_reason == "time_exit"
-    assert position.mfe_pct == pytest.approx(5.0)  # the finished last bar's 105 high counts
-    assert position.mae_pct == pytest.approx(3.0)  # and its 97 low
+    assert position.close_reason == "disaster_stop"
+    assert position.mfe_pct == pytest.approx(2.0)  # 102; the entry bar's 140 is not counted
+    assert position.mae_pct == pytest.approx(10.0)  # the exit bar's 90, not the entry bar's 60
 
 
 def test_manual_close_fetches_the_bars_best_effort(session: Session):
@@ -312,7 +277,7 @@ def test_no_figures_when_the_entry_bar_is_outside_the_history_window(session: Se
 
     engine.mark_to_market(snapshot=False)
 
-    assert position.close_reason == "stop_hit"
+    assert position.close_reason == "disaster_stop"
     assert position.mfe_pct is None and position.mae_pct is None
 
 

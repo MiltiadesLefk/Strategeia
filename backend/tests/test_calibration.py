@@ -37,7 +37,7 @@ from app.portfolio.signal_stats import (
     wilson_interval,
 )
 
-from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE as POINTS_MAX  # noqa: E402
+from app.analysis.confidence import MAX_SCORE_FOR_CONFIDENCE as POINTS_MAX  # noqa: E402
 
 
 def pct(points: int) -> int:

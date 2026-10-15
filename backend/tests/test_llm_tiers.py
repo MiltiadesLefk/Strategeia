@@ -27,8 +27,8 @@ from app.llm_providers.orcarouter_provider import OrcaRouterProvider
 from app.main import app
 from app.schemas import settings_schemas
 from app.schemas.settings_schemas import SettingsUpdateRequest
-from app.services import analysis_service, research_service, trade_plan_service
-from app.strategy.snapshot import build_snapshot, describe_changes
+from app.services import analysis_service, research_service
+from app.strategy.snapshot import build_snapshot
 
 client = TestClient(app)
 
@@ -407,62 +407,6 @@ def session():
         yield s
 
 
-def _plan(session, monkeypatch, llm, overlay: bool):
-    from tests.test_trade_plan_service import FakeUptrendDataProvider
-
-    monkeypatch.setattr(
-        "app.services.trade_plan_service.load_app_settings",
-        lambda: AppSettings(telegram_bot_token="", telegram_chat_id="", ai_trading_overlay_enabled=overlay),
-    )
-    return trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), llm, session)
-
-
-def test_overlay_verdict_is_requested_on_the_decision_tier_and_the_take_on_the_routine_tier(session, monkeypatch):
-    llm = TierSpy(
-        text='{"stance": "bullish", "confidence": 80, "reasoning": "Strong setup."}',
-        model_by_tier={"routine": "cheap-model", "decision": "strong-model"},
-    )
-    response = _plan(session, monkeypatch, llm, overlay=True)
-    # one narrative (the plan's take) and one overlay verdict; they must not share a tier
-    assert sorted(llm.tiers) == ["decision", "routine"]
-    assert response.ai_opinion_stance == "bullish"
-    assert response.ai_decision_model == "strong-model"
-    assert response.ai_provider == "spy"
-
-
-def test_overlay_off_makes_no_decision_call_and_records_no_decision_model(session, monkeypatch):
-    llm = TierSpy(model_by_tier={"routine": "cheap-model", "decision": "strong-model"})
-    response = _plan(session, monkeypatch, llm, overlay=False)
-    assert llm.tiers == ["routine"]
-    assert response.ai_decision_model is None
-
-
-def test_decision_model_is_stored_on_the_plan_row(session, monkeypatch):
-    from sqlmodel import select
-
-    from app.portfolio.models import TradePlanRecord
-
-    llm = TierSpy(
-        text='{"stance": "bullish", "confidence": 80, "reasoning": "ok"}',
-        model_by_tier={"decision": "strong-model"},
-    )
-    _plan(session, monkeypatch, llm, overlay=True)
-    assert session.exec(select(TradePlanRecord)).first().ai_decision_model == "strong-model"
-
-
-def test_a_failed_decision_call_leaves_the_decision_model_empty(session, monkeypatch):
-    class DecisionFails(TierSpy):
-        def generate(self, prompt, *, max_tokens=300, temperature=0.4, tier="routine"):
-            if tier == "decision":
-                self.tiers.append(tier)
-                return LLMResult("", self.name, 1, error="boom")
-            return super().generate(prompt, max_tokens=max_tokens, temperature=temperature, tier=tier)
-
-    response = _plan(session, monkeypatch, DecisionFails(), overlay=True)
-    assert response.ai_decision_model is None
-    assert response.ai_opinion_stance is None
-
-
 # --- settings validation -------------------------------------------------------
 
 
@@ -641,49 +585,8 @@ def _fp(**settings) -> dict:
     return build_snapshot(AppSettings(**settings))
 
 
-def test_overlay_fingerprint_follows_the_decision_model_while_the_overlay_is_on():
-    on = dict(ai_trading_overlay_enabled=True)
-    for provider, routine_field, decision_field, value in [
-        ("claude_code_cli", "claude_cli_model", "claude_cli_decision_model", "opus"),
-        ("openrouter", "openrouter_model", "openrouter_decision_model", "x/strong"),
-        ("orcarouter", "orcarouter_model", "orcarouter_decision_model", "o/strong"),
-        ("openai", "openai_model", "openai_decision_model", "gpt-strong"),
-        ("gemini", "gemini_model", "gemini_decision_model", "gem-strong"),
-    ]:
-        base = _fp(**on, llm_provider=provider)
-        with_decision = _fp(**on, llm_provider=provider, **{decision_field: value})
-        assert with_decision != base  # setting a decision model mints a version
-        assert with_decision["overlay"]["llm_model"] == value
-        # once a decision model is set, the routine (narrative) model stops mattering
-        assert _fp(**on, llm_provider=provider, **{decision_field: value, routine_field: "other-routine"}) == with_decision
-
-
-def test_routine_model_alone_still_counts_while_no_decision_model_is_set():
-    # With a blank decision model the verdict comes from the routine model, so changing it
-    # changes the verdict's source: same behaviour as before the tiers existed.
-    on = dict(ai_trading_overlay_enabled=True, llm_provider="claude_code_cli")
-    assert _fp(**on, claude_cli_model="opus") != _fp(**on)
-
-
 def test_decision_model_changes_never_bump_while_the_overlay_is_off():
     assert _fp(claude_cli_decision_model="opus", llm_provider="claude_code_cli") == _fp()
     assert _fp(openai_decision_model="gpt-5") == _fp()
 
 
-def test_other_providers_decision_model_does_not_count():
-    on = dict(ai_trading_overlay_enabled=True, llm_provider="openai")
-    assert _fp(**on, gemini_decision_model="g", claude_cli_decision_model="opus") == _fp(**on)
-
-
-def test_an_install_that_never_sets_a_decision_model_keeps_its_fingerprint():
-    # The recorded overlay model is the routine model, exactly what it was recorded as before tiers.
-    snap = _fp(ai_trading_overlay_enabled=True, llm_provider="openai", openai_model="gpt-4o-mini")
-    assert snap["overlay"]["llm_model"] == "gpt-4o-mini"
-    assert _fp(ai_trading_overlay_enabled=True, llm_provider="none")["overlay"]["llm_model"] is None
-
-
-def test_change_text_names_the_overlay_model():
-    on = dict(ai_trading_overlay_enabled=True, llm_provider="openai")
-    before = _fp(**on)
-    after = _fp(**on, openai_decision_model="gpt-5")
-    assert "overlay LLM model gpt-4o-mini -> gpt-5" in describe_changes(before, after)

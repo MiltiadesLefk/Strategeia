@@ -18,19 +18,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 
-from app.config import AppSettings
 from app.markets import is_us_trading_day
-from app.portfolio import missed_trades
-from app.portfolio.engine import PaperTradingEngine
-from app.portfolio.missed_trade_models import (
-    OUTCOME_NO_DATA,
-    OUTCOME_NOT_SIMULATABLE,
-    OUTCOME_OPEN,
-    OUTCOME_RESOLVED,
-    MissedTradeOutcome,
-)
 from app.portfolio.missed_trades import (
     CATEGORY_AI_VETO,
     CATEGORY_HELD_BY_AI,
@@ -48,22 +38,12 @@ from app.portfolio.missed_trades import (
     DETAIL_STALE_PRICE,
     classify_plan,
 )
-from app.portfolio.models import PaperPosition, TradePlanRecord
-from app.llm_providers.null_provider import NullLLMProvider
-from app.services import trade_plan_service
-from app.data_providers.base import QuoteData
-from test_trade_plan_service import (
-    FakeConfiguredLLMProvider,
-    FakeFlatDataProvider,
-    FakeUptrendDataProvider,
-    _default_settings,
-)
+from app.portfolio.models import TradePlanRecord
 
 # ------------------------------------------------------------------ fixtures
 
 # Zero slippage and commission unless a test says otherwise, so R is exactly the
 # hand-computed price ratio.
-CLEAN = AppSettings(slippage_bps=0.0, commission_per_trade=0.0, max_holding_days=20)
 
 TREND_BARS = 100  # history length: the decision is taken right after bar index 99
 LONG_ENTRY, LONG_STOP, LONG_TP1, LONG_RISK = 199.0, 193.03, 207.955, 5.97
@@ -230,108 +210,3 @@ def test_executed_and_superseded_plans_are_not_missed_trades(status):
 AAPL, MSFT = "AAPL", "MSFT"  # both Information Technology in the bundled universe
 
 
-def _generate(session, provider, settings, llm=None, *, symbol=AAPL, account=100_000.0, clock=None):
-    response = trade_plan_service.generate_trade_plan(
-        symbol, account, 1.0, provider, llm or NullLLMProvider(), session, settings=settings, clock=clock
-    )
-    return session.get(TradePlanRecord, response.id)
-
-
-def _classified(session, provider, settings, llm=None, **kw):
-    plan = _generate(session, provider, settings, llm, **kw)
-    result = classify_plan(plan)
-    assert result is not None, (plan.status, plan.reason, plan.auto_execute_note)
-    return result
-
-
-def test_real_neutral_trend_decision(session):
-    result = _classified(session, FakeFlatDataProvider(), _default_settings(ai_trading_overlay_enabled=False))
-    assert (result.category, result.simulate) == (CATEGORY_NEUTRAL_TREND, False)
-
-
-def test_real_low_confidence_decision(session):
-    class WeakBullish(FakeFlatDataProvider):
-        def get_ohlcv(self, symbol, period="6mo", interval="1d"):
-            closes = [100.0 + i * 0.05 for i in range(150)]
-            return pd.DataFrame(
-                {"open": closes, "high": [c + 0.1 for c in closes], "low": [c - 0.1 for c in closes], "close": closes, "volume": 1e6}
-            )
-
-        def get_quote(self, symbol):
-            return QuoteData(symbol=symbol, price=107.0, change_pct_24h=0.1, volume=1e6, avg_volume_20d=1e6)
-
-    plan = _generate(session, WeakBullish(), _default_settings(ai_trading_overlay_enabled=False))
-    assert plan.status == "no_trade"
-    result = classify_plan(plan)
-    assert (result.category, result.simulate) == (CATEGORY_LOW_CONFIDENCE, True)
-    # The direction the reason names is the one the evaluation had.
-    assert missed_trades._direction_from_text(plan) == "long"
-
-
-@pytest.mark.parametrize(
-    "llm_json",
-    [
-        '{"stance": "bearish", "confidence": 78, "reasoning": "Looks exhausted."}',
-        '{"stance": "neutral", "trade_verdict": "pass", "confidence": 80, "reasoning": "I would not take it."}',
-    ],
-)
-def test_real_ai_veto_decision(session, llm_json):
-    plan = _generate(session, FakeUptrendDataProvider(), _default_settings(), FakeConfiguredLLMProvider(llm_json))
-    assert plan.status == "no_trade"
-    result = classify_plan(plan)
-    assert (result.category, result.simulate) == (CATEGORY_AI_VETO, True)
-    assert missed_trades._direction_from_text(plan) == "long"
-
-
-def test_real_held_by_ai_plan(session):
-    settings = _default_settings(ai_overlay_objection_action="hold", ai_overlay_scores_confidence=False)
-    llm = FakeConfiguredLLMProvider('{"stance": "bearish", "confidence": 62, "reasoning": "Looks exhausted."}')
-    result = _classified(session, FakeUptrendDataProvider(), settings, llm)
-    assert (result.category, result.simulate) == (CATEGORY_HELD_BY_AI, True)
-
-
-def test_real_insufficient_cash_refusal(session):
-    result = _classified(
-        session, FakeUptrendDataProvider(), _default_settings(ai_trading_overlay_enabled=False), account=1.0
-    )
-    assert (result.category, result.detail) == (CATEGORY_NOT_EXECUTED, DETAIL_INSUFFICIENT_CASH)
-
-
-def test_real_duplicate_cap_and_sector_refusals(session):
-    base = dict(ai_trading_overlay_enabled=False)
-    # the first plan opens a position; later symbols then meet the duplicate check, the cap and the sector limit
-    first = _generate(session, FakeUptrendDataProvider(), _default_settings(**base), symbol=AAPL)
-    assert first.status == "executed"
-    dup = classify_plan(_generate(session, FakeUptrendDataProvider(), _default_settings(**base), symbol=AAPL))
-    assert (dup.category, dup.detail, dup.simulate) == (CATEGORY_NOT_EXECUTED, DETAIL_DUPLICATE_POSITION, False)
-    capped = classify_plan(
-        _generate(session, FakeUptrendDataProvider(), _default_settings(max_concurrent_positions=1, **base), symbol="NVDA")
-    )
-    assert (capped.category, capped.detail) == (CATEGORY_NOT_EXECUTED, DETAIL_POSITION_CAP)
-    sector = classify_plan(
-        _generate(session, FakeUptrendDataProvider(), _default_settings(max_positions_per_sector=1, **base), symbol=MSFT)
-    )
-    assert (sector.category, sector.detail) == (CATEGORY_NOT_EXECUTED, DETAIL_SECTOR_CAP)
-
-
-def test_real_stale_price_refusal(session):
-    class Drifted(FakeUptrendDataProvider):
-        def get_quote(self, symbol):
-            return QuoteData(symbol=symbol, price=600.0, change_pct_24h=1.0, volume=5e6, avg_volume_20d=1e6)
-
-    result = _classified(session, Drifted(), _default_settings(ai_trading_overlay_enabled=False))
-    assert (result.category, result.detail) == (CATEGORY_NOT_EXECUTED, DETAIL_STALE_PRICE)
-
-
-def test_real_plan_left_pending_when_auto_execute_is_off(session):
-    settings = _default_settings(ai_trading_overlay_enabled=False, auto_execute_trade_plans=False)
-    result = _classified(session, FakeUptrendDataProvider(), settings)
-    assert (result.category, result.detail) == (CATEGORY_NOT_EXECUTED, DETAIL_AWAITING_MANUAL)
-
-
-def test_real_off_hours_plan_awaiting_its_redo(session):
-    sunday = datetime(2026, 9, 27, 16, 28)
-    result = _classified(
-        session, FakeUptrendDataProvider(), _default_settings(ai_trading_overlay_enabled=False), clock=lambda: sunday
-    )
-    assert (result.category, result.detail, result.simulate) == (CATEGORY_NOT_EXECUTED, DETAIL_MARKET_CLOSED_REDO, False)

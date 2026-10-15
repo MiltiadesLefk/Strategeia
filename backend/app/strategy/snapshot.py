@@ -1,16 +1,10 @@
 """What defines "the strategy", and how to fingerprint it.
 
 A snapshot holds everything that changes what plan / no-trade / position comes
-out of the same market data, in three groups:
+out of the same market data, in groups (the AI overlay and committee gate groups of swing trading are gone):
 
 - `settings`: the user-editable values that feed a decision (the confidence
   bar, risk per trade, execution costs, the portfolio caps, auto-execute).
-- `overlay`: present ONLY while the AI Trading Overlay is on. The overlay's
-  verdict can stop a trade, so its switches, the model that gives the verdict
-  (the decision model if one is set, else the routine model: see
-  `AppSettings.effective_decision_model`) and the constants that turn a verdict into a score all belong to the
-  strategy while it is on, and none of them do while it is off (with it off
-  they cannot change anything), so toggling them then must not mint a version.
 - `rules`: the named constants in the code that define the rules (score caps,
   thresholds, the stop and target rules, the exit-scan and entry-drift
   constants). Collected at call time, so a code change to a threshold gives
@@ -19,13 +13,10 @@ out of the same market data, in three groups:
 Deliberately OUT, so changing them never creates a version:
 - Secrets and keys (API keys, the Telegram token and chat id).
 - Which model writes the narrative text (the routine model): it changes the
-  prose, not a decision. (The overlay's decision model is IN, while the overlay
-  is on. With no decision model set it is the routine model, so then the
-  routine model counts too; once a decision model is set, the routine one
-  stops mattering.)
+  prose, not a decision.
 - `research_mode` (whether research calls may search the web): research only
   produces background a person reads, never a plan, a no-trade or a position,
-  and the overlay and the narration ignore it, so it cannot change a decision.
+  and the narration ignores it, so it cannot change a decision.
 - `scan_universe_size`, `auto_scan_enabled` and `finnhub_enabled`: they change
   WHICH symbols are evaluated, when, or where the data comes from, not what the
   rules decide for a given symbol and given data. Measuring "the rules" across a
@@ -83,18 +74,11 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_add_on_dips": "hold adds on dips",
 
     "auto_execute_trade_plans": "auto-execute",
-    "ai_trading_overlay_enabled": "AI overlay",
     "smart_money_followed_member_multiplier": "smart-money followed-member multiplier",
     "smart_money_scope": "smart-money scope",
     "smart_money_min_score": "smart-money min score",
     "smart_money_max_open_positions": "smart-money max open positions",
     "smart_money_max_new_per_week": "smart-money max new per week",
-}
-
-# Only meaningful while the overlay is on (see module docstring).
-OVERLAY_SETTINGS: dict[str, str] = {
-    "ai_overlay_scores_confidence": "overlay scores confidence",
-    "ai_overlay_objection_action": "overlay objection action",
 }
 
 # The code-side rules: module -> named constants to record. Resolved with
@@ -103,63 +87,8 @@ OVERLAY_SETTINGS: dict[str, str] = {
 # that import it. A name that no longer exists raises, loudly, instead of
 # silently dropping out of the fingerprint.
 RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
-    "app.analysis.trend": (
-        "TREND_SLOPE_LOOKBACK", "MOMENTUM_ROC_LOOKBACK", "MOMENTUM_STRONG_THRESHOLD",
-        "RSI_STRONG_BULL", "RSI_STRONG_BEAR",
-    ),
-    "app.analysis.scanner_scoring": (
-        "VOLUME_RATIO_THRESHOLD", "NEAR_LEVEL_PCT", "RSI_OVEREXTENDED_LONG", "RSI_OVEREXTENDED_SHORT",
-        "POTENTIAL_SETUP_SCORE", "WATCHING_SCORE",
-    ),
-    "app.analysis.fundamental_scoring": (
-        "FUNDAMENTAL_SCORE_CAP", "NEWS_SCORE_CAP", "NEAR_52W_HIGH_PCT", "NEAR_52W_LOW_PCT",
-        "EARNINGS_IMMINENT_DAYS", "POSITIVE_NEWS_KEYWORDS", "NEGATIVE_NEWS_KEYWORDS",
-    ),
-    "app.analysis.market_confirmation": (
-        "MARKET_CONFIRMATION_SCORE_CAP", "MARKET_PROXY_SYMBOL", "VIX_REGIME_SCORE_CAP",
-        "VIX_ELEVATED_THRESHOLD", "VIX_PROXY_SYMBOL",
-    ),
-    "app.analysis.options_scoring": ("OPTIONS_SCORE_CAP", "PUT_CALL_BULLISH_THRESHOLD", "PUT_CALL_BEARISH_THRESHOLD"),
-    "app.analysis.insider_scoring": (
-        "INSIDER_SCORE_CAP", "MIN_NET_BUY_VALUE", "STRONG_NET_BUY_VALUE", "PLAN_SELL_WEIGHT",
-        "MIN_WEIGHTED_SELL_VALUE", "STRONG_WEIGHTED_SELL_VALUE",
-    ),
-    "app.data_providers.sec_edgar_provider": ("INSIDER_WINDOW_DAYS",),
-    "app.analysis.live_evidence": ("EXTRA_MAX_POINTS",),
-    "app.analysis.price_evidence": (
-        "RELATIVE_STRENGTH_SCORE_CAP", "RELATIVE_STRENGTH_DAYS", "RELATIVE_STRENGTH_GAP_PCT",
-        "VOLUME_TREND_SCORE_CAP", "VOLUME_TREND_DAYS", "ACCUMULATION_RATIO",
-    ),
-    "app.analysis.options_consensus_evidence": (
-        "OPTIONS_OI_SCORE_CAP", "BULLISH_OI_RATIO", "BEARISH_OI_RATIO", "MIN_TOTAL_OI",
-        "CONSENSUS_SCORE_CAP", "STRONG_GROWTH_PCT", "WEAK_FALL_PCT",
-    ),
-    "app.analysis.fed_event_window": ("FED_WINDOW_PENALTY",),
-    "app.analysis.post_mentions": ("POST_MENTION_PENALTY",),
-    "app.analysis.financial_health_scoring": ("FINANCIAL_HEALTH_SCORE_CAP", "HEALTHY_NET_MARGIN_PCT", "WEAK_NET_MARGIN_PCT"),
-    "app.analysis.valuation_scoring": ("VALUATION_SCORE_CAP", "CHEAP_PE", "EXPENSIVE_PE", "FAST_GROWTH_PCT", "DCF_UPSIDE_PCT", "DCF_DOWNSIDE_PCT",
-        "PEER_CHEAP_RATIO", "PEER_EXPENSIVE_RATIO"),
-    "app.analysis.congress_scoring": ("CONGRESS_SCORE_CAP", "WINDOW_DAYS", "MIN_NET_MEMBERS", "STRONG_NET_MEMBERS"),
-    "app.analysis.fund_signals": ("FUND_SCORE_CAP", "OWNERSHIP_SCORE_CAP", "FUND_SIGNAL_MAX_AGE_DAYS", "STRONG_NET_FUNDS",
-        "OWNERSHIP_CHANGE_DAYS", "MIN_STAKE_CHANGE_PP", "OWNERSHIP_REPORTING_FLOOR_PCT"),
-    "app.analysis.short_volume_scoring": ("SHORT_VOLUME_SCORE_CAP", "HIGH_RATIO_DELTA"),
-    "app.analysis.filing_8k_scoring": ("FILING_8K_SCORE_CAP", "RECENT_WINDOW_DAYS"),
-    "app.analysis.news_card_scoring": ("NEWS_CARD_SCORE_CAP", "RECENT_WINDOW_DAYS", "NET_THRESHOLD"),
-    "app.analysis.earnings_history_scoring": (
-        "SURPRISE_TRACK_RECORD_CAP", "MIN_QUARTERS_FOR_TRACK_RECORD", "MEANINGFUL_SURPRISE_PCT",
-        "CONSISTENCY_THRESHOLD", "REACTION_LOOKAHEAD_DAYS",
-    ),
-    "app.analysis.expected_move": ("EXPECTED_MOVE_SCORE_CAP", "ELEVATED_RATIO_THRESHOLD", "MIN_DAYS_FOR_RELIABLE_READ"),
-    "app.analysis.macro_calendar": ("MACRO_EVENT_SCORE_CAP", "MACRO_EVENT_LOOKAHEAD_DAYS"),
-    "app.analysis.confidence": (
-        "STOP_BUFFER_PCT", "FALLBACK_STOP_PCT", "ATR_PERIOD", "ATR_STOP_MULTIPLE", "TECHNICAL_SCORE_CAP",
-        "MAX_SCORE_FOR_CONFIDENCE", "CONFIDENCE_FLOOR", "CONFIDENCE_CEILING",
-    ),
     # The hold gate's own rules (hold_stop_pct and hold_target_weight_pct are settings above).
     "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS", "MIN_REVENUE_GROWTH_PCT"),
-    "app.risk.position_sizing": ("FALLBACK_R_MULTIPLES", "MIN_RR_FOR_LEVEL_TARGET"),
-    # Which silent signals have been promoted into real scoring (none yet).
-    "app.analysis.shadow_signals": ("LIVE_SIGNALS",),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),
     "app.smartmoney.scoring": (
         "WINDOW_DAYS", "RECENT_DAYS", "OLD_RECENCY_FACTOR", "INSIDER_SCORE_CAP", "INSIDER_PER_BUYER",
@@ -173,13 +102,6 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     # The pipeline's own rules: which bars the liquidity floor reads, the new-per-week window, the exit-scan window.
     "app.smartmoney.pipeline_rules": (
         "NEW_POSITION_WINDOW_DAYS", "SMART_MONEY_EXIT_SCAN_PERIOD", "LIQUIDITY_LOOKBACK_BARS", "LIQUIDITY_MIN_BARS",
-    ),
-}
-
-# Recorded under `overlay`, only while the overlay is on.
-OVERLAY_RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
-    "app.analysis.ai_overlay_scoring": (
-        "AI_OVERLAY_SCORE_CAP", "AI_OVERLAY_STRONG_CONFIDENCE", "AI_OVERLAY_MODERATE_CONFIDENCE",
     ),
 }
 
@@ -228,25 +150,6 @@ def build_snapshot(settings: AppSettings) -> dict[str, Any]:
         "settings": {name: normalize(values[name]) for name in DECISION_SETTINGS},
         "rules": {"rules_revision": RULES_REVISION, **_collect_constants(RULE_CONSTANTS)},
     }
-    if settings.ai_trading_overlay_enabled:
-        # The model that answers the verdict, not the one that writes narratives.
-        # No provider records none; an unpinned Claude CLI records "" (so an
-        # install that never sets a decision model keeps its fingerprint).
-        decision_model = settings.effective_decision_model()
-        snapshot["overlay"] = {
-            **{name: normalize(values[name]) for name in OVERLAY_SETTINGS},
-            "llm_provider": settings.llm_provider,
-            "llm_model": None if settings.llm_provider == "none" else normalize(decision_model),
-            **_collect_constants(OVERLAY_RULE_CONSTANTS),
-        }
-    if settings.committee_gate_enabled:
-        # Only while on, so an install that never uses it keeps its fingerprint. The committee
-        # decides through its decision model, so that model is part of what made the decision.
-        snapshot["committee_gate"] = {
-            "committee_gate_action": values["committee_gate_action"],
-            "llm_provider": settings.llm_provider,
-            "llm_model": None if settings.llm_provider == "none" else normalize(settings.effective_decision_model()),
-        }
     if settings.ml_style_enabled:
         # Only while on, so an install that never uses it keeps its fingerprint.
         snapshot["ml"] = {"ml_min_expected_r": normalize(values["ml_min_expected_r"])}
@@ -274,20 +177,6 @@ def fingerprint(snapshot: dict[str, Any]) -> str:
 def _label(group: str, key: str) -> str:
     if group == "settings":
         return DECISION_SETTINGS.get(key, key)
-    if group == "committee_gate":
-        return {
-            "committee_gate_action": "committee gate action",
-            "llm_provider": "committee LLM provider",
-            "llm_model": "committee LLM model",
-        }.get(key, key)
-    if group == "overlay":
-        if key in OVERLAY_SETTINGS:
-            return OVERLAY_SETTINGS[key]
-        if key == "llm_provider":
-            return "overlay LLM provider"
-        if key == "llm_model":
-            return "overlay LLM model"
-        return key.split(".", 1)[-1].replace("_", " ").lower()
     # rules: "confidence.ATR_STOP_MULTIPLE" -> "ATR STOP MULTIPLE" would
     # shout; lower-case it and keep the module out of the way.
     if key == "rules_revision":
@@ -312,19 +201,15 @@ def describe_changes(old: dict[str, Any] | None, new: dict[str, Any]) -> list[st
     """Human-readable differences from `old` to `new`, one line each
     ("min confidence 30 -> 38"). `old` None means there is nothing to compare
     with (the first version) and gives an empty list. Keys present on one side
-    only (the overlay group appearing or disappearing) read as set / removed."""
+    only (a group appearing or disappearing) read as set / removed."""
     if old is None:
         return []
     lines: list[str] = []
-    for group in ("settings", "overlay", "ml", "liquidity_slippage", "rules"):
+    for group in ("settings", "ml", "liquidity_slippage", "rules"):
         before = old.get(group) or {}
         after = new.get(group) or {}
-        if group == "overlay" and before and not after:
-            continue  # overlay switched off: the "AI overlay on -> off" line already says it
         for key in sorted(set(before) | set(after)):
             label = _label(group, key)
-            if group == "overlay" and "." in key and key not in before:
-                continue  # the overlay's rule constants appearing along with it: noise, "AI overlay off -> on" covers it
             if key not in before:
                 lines.append(f"{label} set to {_show(after[key])}")
             elif key not in after:

@@ -3,17 +3,16 @@
 The tracker (`watchers/smart_money_watcher.py`) only records `new` candidates. This service takes each
 one through the SAME evaluation every other symbol gets and routes the outcome:
 
-    new -> liquidity floor -> (market closed? wait for the open) -> generate_trade_plan(source="smart_money")
+    new -> liquidity floor -> (market closed? wait for the open) -> the hold scan step
         tradeable, bought automatically ........ auto_bought   (sleeve smart-money-auto)
         rated bad, or tradeable but not bought .. needs_review  (the review queue: the person decides)
         illiquid / no prices / error ............ skipped, with the reason
 
 Boundaries that matter (CLAUDE.md, NEW_PLAN section 2):
 
-* Nothing here sets a direction, entry, stop, target or size. They come from `generate_trade_plan`
-  (`analysis/` + `risk/`) exactly as for a manual plan, with every gate: the confidence bar, the AI
-  overlay and committee gate (which can only stop a trade), the engine's session, cash, duplicate,
-  position-cap and sector checks, and `auto_execute_trade_plans`. The score only decides WHICH symbol
+* Nothing here sets a direction, entry, stop, target or size. They come from the hold buy
+  (`hold_buy_service`) exactly as for the daily scan, with the quality gate, the engine's session, cash,
+  duplicate, position-cap and sector checks, and `auto_execute_trade_plans`. The score only decides WHICH symbol
   gets looked at; the candidate id, score and components are recorded on the plan for later reports,
   never read by a decision.
 * Long only (spot): the evaluation runs with `long_only=True`, so a bearish trend is a no-trade
@@ -37,7 +36,6 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from app.committee.gate import CommitteeGateBudget
 from app.config import AppSettings
 from app.data_providers.base import AllProvidersFailedError, DataProvider, DataProviderError
 from app.data_providers.cache import fresh_data_only
@@ -58,7 +56,6 @@ from app.portfolio.models import DeferredEvaluation, PaperPosition, Sleeve, Trad
 from app.services.deferred_evaluation_service import MAX_REDO_ATTEMPTS, PENDING, queue_market_open_redo
 from app.services.sleeve_service import build_sleeve_engine, ensure_smart_money_sleeves
 from app.services.telegram_service import notify
-from app.services.trade_plan_service import generate_trade_plan
 from app.smartmoney.liquidity import REASON_NO_PRICES, check_liquidity
 from app.smartmoney.models import (
     STATUS_AUTO_BOUGHT,
@@ -268,7 +265,6 @@ def evaluate_candidate(
     llm_provider: LLMProvider,
     *,
     clock: Clock | None = None,
-    committee_gate: CommitteeGateBudget | None = None,
     after_open_wait: bool = False,
 ) -> str:
     """Run one candidate through the pipeline and return its new status ("evaluating" = waiting for the open).
@@ -412,11 +408,10 @@ def run_pipeline(
         .where(SmartMoneyCandidate.status == STATUS_NEW)
         .order_by(SmartMoneyCandidate.created_at, SmartMoneyCandidate.id)
     ).all()[:max_candidates]
-    gate = CommitteeGateBudget(settings.committee_gate_max_per_scan)
     for row in rows:
         symbol = row.symbol
         try:
-            status = evaluate_candidate(session, row, settings, data_provider, llm_provider, clock=clock, committee_gate=gate)
+            status = evaluate_candidate(session, row, settings, data_provider, llm_provider, clock=clock)
         except Exception:
             logger.exception("Smart-money pipeline failed on %s", symbol)
             session.rollback()
@@ -526,7 +521,6 @@ def handle_redo(
     deferral: DeferredEvaluation,
     *,
     clock: Clock | None = None,
-    gate: CommitteeGateBudget | None = None,
 ) -> str:
     """Carry out a deferral that has a candidate id, now that the market is open. Resolves the deferral row
     and returns a one-line outcome. The caller has already checked the redo window is open."""
@@ -557,7 +551,7 @@ def handle_redo(
             _retire_waiting_plan(session, deferral.trade_plan_id)
             return finish("done", f"Redone at {when}: bought {candidate.symbol} (position #{position.id}) in the manual sleeve.")
         status = evaluate_candidate(
-            session, candidate, settings, data_provider, llm_provider, clock=clock, committee_gate=gate, after_open_wait=True
+            session, candidate, settings, data_provider, llm_provider, clock=clock, after_open_wait=True
         )
         _retire_waiting_plan(session, deferral.trade_plan_id)
         return finish("done", f"Redone at {when}: {candidate.symbol} is now {status}.")

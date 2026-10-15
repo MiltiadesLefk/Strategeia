@@ -48,16 +48,6 @@ def test_risk_calculate_rejects_risk_pct_over_100():
     assert resp.status_code == 422
 
 
-def test_trade_plan_generate_rejects_negative_risk_pct():
-    resp = client.post("/api/trade-plans/generate", json={"symbol": "AAPL", "account_size": 10000, "risk_pct": -5})
-    assert resp.status_code == 422
-
-
-def test_trade_plan_generate_rejects_negative_account_size():
-    resp = client.post("/api/trade-plans/generate", json={"symbol": "AAPL", "account_size": -1, "risk_pct": 1})
-    assert resp.status_code == 422
-
-
 def test_settings_update_rejects_negative_starting_cash():
     resp = client.put("/api/settings", json={"paper_starting_cash": -100})
     assert resp.status_code == 422

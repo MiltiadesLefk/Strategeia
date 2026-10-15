@@ -42,7 +42,6 @@ def build_sleeve_engine(
     *,
     clock: Clock | None = None,
     hold: bool = False,
-    intraday_exits: bool = True,
 ) -> PaperTradingEngine:
     """The engine for `sleeve` (None = core) with the shared strategy settings.
     Only the starting cash differs by sleeve: core follows Settings -> Paper
@@ -59,14 +58,9 @@ def build_sleeve_engine(
         max_positions_per_sector=settings.hold_max_per_sector if hold else settings.max_positions_per_sector,
         max_position_pct_of_adv=settings.max_position_pct_of_adv,
         clock=clock,
-        # The smart-money sleeves hold longer (their own time limit) and so read a longer bar window.
-        max_holding_days=settings.smart_money_max_holding_days if is_smart_money else settings.max_holding_days,
         liquidity_slippage_coefficient=settings.liquidity_slippage_coefficient if settings.liquidity_slippage_enabled else None,
-        scale_out_fraction=settings.scale_out_fraction if settings.scale_out_enabled else None,
-        scale_out_stop_mode=settings.scale_out_stop_mode,
-        scale_out_trail_r=settings.scale_out_trail_r,
         sleeve=None if is_core else sleeve,
-        intraday_exits=intraday_exits,
+        # The smart-money sleeves hold longer, so they read a longer bar window.
         **({"exit_scan_period": SMART_MONEY_EXIT_SCAN_PERIOD} if is_smart_money else {}),
     )
 

@@ -104,33 +104,3 @@ def test_selling_that_does_not_exceed_the_buying_scores_nothing_net():
     assert score_insider_activity("long", modest_buyer, SellSplit(2, 9_000_000.0, 0, 0.0))[0] == -1  # sold more than bought: $7M net
 
 
-def test_discretionary_selling_is_read_from_the_archive_without_plan_sales(tmp_path):
-    from datetime import datetime
-
-    from sqlmodel import Session, SQLModel, create_engine
-
-    from app.analysis.insider_scoring import discretionary_sells, insider_sell_split
-    from app.knowledge import FactKind, record_fact
-
-    engine = create_engine(f"sqlite:///{tmp_path / 'k.db'}")
-    SQLModel.metadata.create_all(engine)
-    now = datetime.utcnow()
-    with Session(engine) as session:
-        assert discretionary_sells(session, "NVDA") is None  # nothing stored: unknown, not zero
-
-        def sale(i, value, plan):
-            record_fact(
-                session, kind=FactKind.INSIDER_TRADE, source="test", symbol="NVDA", dedupe_key=f"s{i}", known_at=now,
-                effective_at=now, payload={
-                    "code": "S", "table": "non_derivative", "value": value, "shares": 1, "price": value,
-                    "is_10b5_1": plan, "transaction_date": now.date().isoformat(), "accession": f"a{i}", "row_index": 0,
-                    "form": "4", "acquired_disposed": "D",
-                },
-            )
-
-        sale(1, 6_000_000.0, False)
-        sale(2, 90_000_000.0, True)  # a scheduled plan sale: never counted
-        session.commit()
-        assert discretionary_sells(session, "NVDA") == (1, 6_000_000.0)
-        split = insider_sell_split(session, "NVDA")
-        assert (split.plan_count, split.plan_value) == (1, 90_000_000.0)  # plan sales are counted, and kept apart

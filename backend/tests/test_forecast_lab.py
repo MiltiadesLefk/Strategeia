@@ -20,16 +20,8 @@ from app.main import app
 from app.ml import runtime, stats
 from app.ml.dataset import Row, load_rows, walk_forward_split
 from app.ml.features import FEATURE_NAMES, feature_vector
-from app.ml.models import MlModel, MlPrediction
-from app.ml.service import (
-    MIN_ROWS,
-    MlTrainingError,
-    ml_opinion_for_plan,
-    record_ml_opinion,
-    set_active,
-    train_model,
-)
-from app.portfolio.sleeves import create_sleeve, ensure_core_sleeve
+from app.ml.models import MlModel
+from app.ml.service import MIN_ROWS, MlTrainingError, set_active, train_model
 
 D0 = date(2025, 1, 1)
 
@@ -133,27 +125,6 @@ def test_extras_status_never_raises_and_names_what_is_missing(monkeypatch):
 # ------------------------------------------------------------ opinion gating
 
 
-def test_no_opinion_unless_enabled_and_an_ml_sleeve(session):
-    core = ensure_core_sleeve(session)
-    ml = create_sleeve(session, "ML Forecast", "ml", 1000)
-    kwargs = dict(scores={}, confidence_points=6, direction="long")
-    on = AppSettings(ml_style_enabled=True)
-    assert ml_opinion_for_plan(session, AppSettings(), ml, **kwargs) is None  # off by default
-    assert ml_opinion_for_plan(session, on, core, **kwargs) is None  # core is never asked
-    assert ml_opinion_for_plan(session, on, None, **kwargs) is None
-    other = create_sleeve(session, "Momentum", "momentum", 1000)
-    assert ml_opinion_for_plan(session, on, other, **kwargs) is None
-
-
-def test_without_a_model_the_opinion_is_unavailable_and_stops_nothing(session):
-    ml = create_sleeve(session, "ML Forecast", "ml", 1000)
-    op = ml_opinion_for_plan(session, AppSettings(ml_style_enabled=True), ml, scores={}, confidence_points=6, direction="long")
-    assert op is not None and not op.available and not op.stops_trade
-    record_ml_opinion(session, 11, op)
-    row = session.exec(select(MlPrediction)).one()
-    assert row.plan_id == 11 and row.available is False and row.stopped_trade is False
-
-
 def test_training_below_the_minimum_is_refused_with_a_message(session):
     pytest.importorskip("lightgbm")
     pytest.importorskip("shap")
@@ -199,25 +170,6 @@ def test_test_window_never_influences_the_fitted_model(session, db):
     second = train_model(session, [run_id])
     assert second.model_text == first.model_text
     assert json.loads(second.metrics_json)["ic"]["ic"] != json.loads(first.metrics_json)["ic"]["ic"]
-
-
-def test_active_model_can_only_stop_and_explains_with_shap(session):
-    _, model = fit(session)
-    set_active(session, model.id)
-    ml = create_sleeve(session, "ML Forecast", "ml", 1000)
-    settings = AppSettings(ml_style_enabled=True, ml_min_expected_r=0.0)
-    weak = ml_opinion_for_plan(
-        session, settings, ml, scores={"technical_score": 0}, confidence_points=5, direction="long"
-    )
-    strong = ml_opinion_for_plan(
-        session, settings, ml, scores={"technical_score": 4}, confidence_points=9, direction="long"
-    )
-    assert weak.available and weak.stops_trade and weak.expected_r < 0
-    assert strong.available and not strong.stops_trade and strong.expected_r > 0
-    assert strong.top_features[0]["feature"] == "technical_score"
-    assert {"feature", "value", "shap"} <= set(strong.top_features[0])
-    # the opinion carries no direction, entry, stop or size to apply
-    assert not any(hasattr(strong, a) for a in ("direction", "entry", "stop", "shares", "size"))
 
 
 def test_only_one_model_is_active(session):

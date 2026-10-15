@@ -12,8 +12,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.analysis import fund_signals
-from app.analysis.shadow_signals import ShadowContext, registered_shadow_signals
 from app.api.deps import get_app_settings, get_session
 from app.config import AppSettings
 from app.data_providers import sec_13dg, sec_form4
@@ -203,74 +201,10 @@ def test_filings_by_a_fund_resolve_the_company_ticker_from_the_issuer_cik(sessio
 # ------------------------------------------------------------------ the silent signals
 
 
-def test_both_signals_are_registered_as_shadow_signals():
-    assert {fund_signals.FUNDS_SIGNAL_NAME, fund_signals.OWNERSHIP_SIGNAL_NAME} <= set(registered_shadow_signals())
-
-
 def loaded_funds(session) -> None:
     sec = FakeFunds()
     serve_two_quarters(sec)
     backfill_13f(session, [FUND], 4, client=sec.client, matcher=matcher())
-
-
-def test_fund_accumulation_is_signed_by_direction(session):
-    loaded_funds(session)
-    with as_of(when("2025-09-01T00:00:00")):
-        long_aapl = fund_signals.build_fund_accumulation_signal("long", session, "AAPL")
-        short_aapl = fund_signals.build_fund_accumulation_signal("short", session, "AAPL")
-        long_msft = fund_signals.build_fund_accumulation_signal("long", session, "MSFT")
-        long_amzn = fund_signals.build_fund_accumulation_signal("long", session, "AMZN")
-        flat = fund_signals.build_fund_accumulation_signal("long", session, "KO")
-        no_direction = fund_signals.build_fund_accumulation_signal(None, session, "AAPL")
-        unheld = fund_signals.build_fund_accumulation_signal("long", session, "ZZZZ")
-    assert (long_aapl.would_score, short_aapl.would_score) == (1, -1)  # one fund: the first point (3 funds are the strong reading)
-    assert fund_signals.FUND_SCORE_CAP == 2
-    assert long_aapl.available and long_aapl.value == "1 buying, 0 selling" and "45 days" in long_aapl.reason
-    assert long_msft.would_score == -1  # trimmed: net selling argues against a long
-    assert long_amzn.would_score == -1  # sold out
-    assert flat.would_score == 0 and flat.value == "0 buying, 0 selling"
-    assert no_direction.would_score == 0 and no_direction.available
-    assert unheld.value == "none" and unheld.would_score == 0 and unheld.available
-
-
-def test_fund_accumulation_reports_unavailable_when_nothing_was_ever_loaded_and_ignores_stale_filings(session):
-    empty = fund_signals.build_fund_accumulation_signal("long", session, "AAPL")
-    assert empty.available is False and empty.would_score == 0
-    assert fund_signals.build_fund_accumulation_signal("long", None, "AAPL").available is False
-    loaded_funds(session)
-    with as_of(when("2026-01-15T00:00:00")):  # more than 120 days after the August filing
-        stale = fund_signals.build_fund_accumulation_signal("long", session, "AAPL")
-    assert stale.available and stale.value == "none" and stale.would_score == 0
-    with as_of(when("2025-05-20T00:00:00")):  # only Q1 was filed: nothing to compare, so no buying or selling
-        first_only = fund_signals.build_fund_accumulation_signal("long", session, "AAPL")
-    assert first_only.would_score == 0
-
-
-def test_a_new_13d_counts_and_neither_a_first_amendment_nor_13g_do(session):
-    ingest_ownership_filing(session, stored_filing("0000000009-26-000030", datetime(2026, 9, 10, 21, 0), "SCHEDULE 13G"), "AAPL", xml=G_XML)
-    ingest_ownership_filing(session, stored_filing("0000000009-26-000031", datetime(2026, 9, 12, 21, 0), "SCHEDULE 13D/A"), "AAPL", xml=D_AMENDMENT_XML)
-    with as_of(datetime(2026, 9, 25, 0, 0)):
-        quiet = fund_signals.build_ownership_signal("long", session, "AAPL")
-        assert quiet.available and quiet.value == "none" and quiet.would_score == 0
-        assert fund_signals.build_ownership_signal("long", session, "MSFT").available is False  # nothing stored for it
-    ingest_ownership_filing(session, stored_filing("0000000009-26-000032", datetime(2026, 9, 20, 21, 0), "SCHEDULE 13D"), "AAPL", xml=D_XML)
-    with as_of(datetime(2026, 9, 25, 0, 0)):
-        up = fund_signals.build_ownership_signal("long", session, "AAPL")
-        down = fund_signals.build_ownership_signal("short", session, "AAPL")
-        none = fund_signals.build_ownership_signal(None, session, "AAPL")
-    assert (up.would_score, down.would_score, none.would_score) == (2, -2, 0)  # a new 13D is a strong buy
-    assert "Pershing Square" in up.value and "46.7%" in up.value
-    with as_of(datetime(2026, 12, 31, 0, 0)):  # a stake change counts for 90 days
-        assert fund_signals.build_ownership_signal("long", session, "AAPL").value == "none"
-    with as_of(datetime(2026, 9, 15, 0, 0)):  # accepted later than this moment
-        assert fund_signals.build_ownership_signal("long", session, "AAPL").value == "none"
-
-
-def test_the_shadow_scorers_read_the_context(session):
-    loaded_funds(session)
-    with as_of(when("2025-09-01T00:00:00")):
-        signal = fund_signals._fund_accumulation_shadow_scorer(ShadowContext(symbol="AAPL", direction="long", session=session))
-    assert signal.name == "fund_accumulation" and signal.would_score == 1
 
 
 # ------------------------------------------------------------------ the watcher

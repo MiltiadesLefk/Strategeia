@@ -1,4 +1,4 @@
-"""Posts that name the company, as a silent signal (see analysis/shadow_signals.py).
+"""Posts that name the company, as a silent signal (a ShadowSignal reading).
 
 What it reads: how many posts by Donald Trump (read from an unofficial archive
 feed) named this company in the 24 hours before the moment of the plan, by the same
@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from sqlmodel import Session
 
 from app.analysis.post_topics import SymbolMatcher, build_matcher, match_symbols
-from app.analysis.shadow_signals import ShadowContext, ShadowSignal, shadow_signal
+from app.analysis.shadow_signals import ShadowSignal
 from app.knowledge import FactKind, current_as_of, facts_known_as_of
 
 SIGNAL_NAME = "post_mentions"
@@ -69,7 +69,3 @@ def build_post_mentions_signal(session: Session | None, symbol: str, moment: dat
         available=True,
     )
 
-
-@shadow_signal(SIGNAL_NAME)
-def _post_mentions_shadow_scorer(context: ShadowContext) -> ShadowSignal:
-    return build_post_mentions_signal(context.session, context.symbol)

@@ -283,21 +283,15 @@ def test_market_wide_flags_a_symbol_that_is_not_in_the_universe(session):
     assert session.exec(select(SmartMoneyCandidate)).one().scope == "market_wide"
 
 
-def test_the_runner_records_the_events_and_never_evaluates(session, monkeypatch):
+def test_the_runner_records_the_events_and_alerts(session):
     sec = FakeSec()
     serve_form4(sec, "unh_000140", "unh_000142", "unh_000146")
     watcher = make_watcher(sec, ["UNH"])
-    calls = []
-
-    def reevaluator(*args, **kwargs):  # pragma: no cover - must not be called
-        calls.append(args)
-
     notified = []
     result = run_watcher_once(
-        session, watcher, AppSettings(watchers_enabled=True), UNH_NOW,
-        notifier=lambda *a: notified.append(a), reevaluator=reevaluator,
+        session, watcher, AppSettings(watchers_enabled=True), UNH_NOW, notifier=lambda *a: notified.append(a),
     )
-    assert result.new_events == 1 and not calls and len(notified) == 1
+    assert result.new_events == 1 and len(notified) == 1
     assert session.get(WatcherState, "smart_money").last_success_at is not None
     event_fact = session.exec(select(KnownFact).where(KnownFact.kind == FactKind.WATCHER_EVENT)).one()
     assert event_fact.payload["kind"] == "smart_money_candidate"

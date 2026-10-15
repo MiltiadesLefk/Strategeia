@@ -61,12 +61,6 @@ def insider_sell_split(session: Session | None, symbol: str, window_days: int = 
     )
 
 
-def discretionary_sells(session: Session | None, symbol: str, window_days: int = 180) -> tuple[int, float] | None:
-    """(count, value) of the discretionary sales alone, or None when the archive has nothing for the symbol."""
-    split = insider_sell_split(session, symbol, window_days)
-    return None if split is None else (split.discretionary_count, split.discretionary_value)
-
-
 def _buy_points(activity: InsiderActivity | None) -> int:
     if activity is None or activity.buy_count == 0 or activity.net_value < MIN_NET_BUY_VALUE:
         return 0

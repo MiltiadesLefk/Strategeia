@@ -18,6 +18,7 @@ from app.data_providers.base import DataProvider
 from app.data_providers.cache import fresh_data_only
 from app.portfolio.engine import InsufficientCashError, PaperTradingEngine
 from app.portfolio.models import PaperPosition, TradePlanRecord
+from app.strategy.service import current_strategy_version
 
 MA_DAYS = 200
 
@@ -66,6 +67,7 @@ def hold_buy(
         symbol=symbol, direction="long", entry=price, stop=hold_stop_level(price, ma200, settings.hold_stop_pct),
         tp1=0.0, tp2=0.0, suggested_shares=shares, confidence_score=0, status="pending",
         reason=reason, time_horizon="hold", sleeve_id=sleeve_id,
+        strategy_version=current_strategy_version(session, settings).number,
     )
     session.add(plan)
     session.commit()

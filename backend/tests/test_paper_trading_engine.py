@@ -130,51 +130,12 @@ def test_open_position_raises_for_symbol_that_already_has_an_open_position(sessi
     assert account.current_cash == STARTING_CASH - 10 * 100.0  # unchanged by the rejected second open
 
 
-def test_mark_to_market_closes_on_stop_hit(session: Session):
-    plan = make_plan(session)
-    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
-    engine = PaperTradingEngine(session, provider, STARTING_CASH)
-    engine.open_position(plan)
-
-    provider.low = 94.0  # dips through the 95 stop
-    closed = engine.mark_to_market()
-
-    assert len(closed) == 1
-    position = closed[0]
-    assert position.status == "closed"
-    assert position.close_reason == "stop_hit"
-    assert position.close_price == 95.0
-    assert position.realized_pnl == -50.0  # (95-100)*10
-    assert position.realized_r == -1.0
-
-    account = engine.get_account_state()
-    assert account.current_cash == STARTING_CASH - 10 * 100.0 + 10 * 95.0
-
-
-def test_mark_to_market_closes_on_tp1_hit(session: Session):
-    plan = make_plan(session)
-    provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
-    engine = PaperTradingEngine(session, provider, STARTING_CASH)
-    engine.open_position(plan)
-
-    provider.high = 111.0  # pokes through the 110 tp1
-    closed = engine.mark_to_market()
-
-    assert len(closed) == 1
-    position = closed[0]
-    assert position.close_reason == "tp1_hit"
-    assert position.close_price == 110.0
-    assert position.realized_pnl == 100.0  # (110-100)*10
-    assert position.realized_r == 2.0
-
-
 def test_portfolio_stats_reflect_closed_trades(session: Session):
     plan = make_plan(session)
     provider = FakeDataProvider(price=100.0, high=100.0, low=100.0)
     engine = PaperTradingEngine(session, provider, STARTING_CASH)
-    engine.open_position(plan)
-    provider.high = 111.0
-    engine.mark_to_market()
+    position = engine.open_position(plan)
+    engine.close_position(position, 110.0, "manual")
 
     stats = compute_portfolio_stats(session, provider, STARTING_CASH)
 

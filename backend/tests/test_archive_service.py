@@ -364,52 +364,6 @@ def test_research_saves_to_the_archive_and_survives_an_archive_failure(session, 
     assert again.name == "Fake Corp"
 
 
-def test_trade_plan_generation_is_unaffected_by_an_archive_failure(session, monkeypatch):
-    from app.llm_providers.null_provider import NullLLMProvider
-    from app.services import trade_plan_service
-    from tests.test_trade_plan_service import FakeUptrendDataProvider
-
-    baseline = trade_plan_service.generate_trade_plan(
-        "AAPL", 100_000.0, 1.0, FakeUptrendDataProvider(), NullLLMProvider(), session, allow_auto_execute=False
-    )
-
-    def boom(*args, **kwargs):
-        raise RuntimeError("archive exploded")
-
-    monkeypatch.setattr(archive_service, "record_fact", boom)
-    after = trade_plan_service.generate_trade_plan(
-        "MSFT", 100_000.0, 1.0, FakeUptrendDataProvider(), NullLLMProvider(), session, allow_auto_execute=False
-    )
-
-    assert after.direction == baseline.direction
-    assert after.confidence_score == baseline.confidence_score
-
-
-def test_trade_plan_generation_archives_what_it_fetched(session):
-    from app.llm_providers.null_provider import NullLLMProvider
-    from app.services import trade_plan_service
-    from tests.test_trade_plan_service import FakeUptrendDataProvider
-
-    class WithFundamentals(FakeUptrendDataProvider):
-        def get_company_overview(self, symbol):
-            return _overview(symbol=symbol)
-
-        def get_financials(self, symbol):
-            from app.data_providers.base import FinancialsData
-
-            return FinancialsData(symbol=symbol, years=YEARS)
-
-        def get_news(self, symbol, limit=5):
-            return [_news()]
-
-    trade_plan_service.generate_trade_plan(
-        "AAPL", 100_000.0, 1.0, WithFundamentals(), NullLLMProvider(), session, allow_auto_execute=False
-    )
-
-    assert len(_facts(session, FactKind.NEWS)) == 1
-    assert len(_facts(session, FactKind.FUNDAMENTALS_SNAPSHOT)) == 1
-
-
 # --- the endpoint -----------------------------------------------------------------------------------
 
 
