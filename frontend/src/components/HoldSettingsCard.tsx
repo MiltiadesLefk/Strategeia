@@ -16,6 +16,9 @@ type Draft = Pick<
   | 'news_discovery_enabled'
   | 'hold_add_on_dips'
   | 'news_discovery_max_per_run'
+  | 'sell_ma200_days'
+  | 'sell_trail_pct'
+  | 'rebuy_cooldown_days'
 >;
 
 const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: number }[] = [
@@ -27,6 +30,9 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_max_new_per_scan', label: 'Max new buys per daily scan', hint: 'Keeps one scan from buying the whole list.' },
   { key: 'hold_failed_gate_size_pct', label: 'Size of a smart-money buy that fails the gate (% of a normal slice)', hint: 'Half a slice by default (50).' },
   { key: 'news_discovery_max_per_run', label: 'Max news-discovered tickers per run', hint: 'Only used when news discovery is on.' },
+  { key: 'sell_ma200_days', label: 'Sell plan: closes under the 200-day that count as a signal', hint: 'In a row.' },
+  { key: 'sell_trail_pct', label: 'Sell plan: stop trails this % below the high (profit, one signal)', hint: '0 = move the stop to breakeven instead.' },
+  { key: 'rebuy_cooldown_days', label: 'Rebuy watch: days to wait after a sale', hint: 'Then the check must pass and the stock must be in a dip.' },
 ];
 
 /** Portfolio builder controls. Saved on their own button. */
@@ -44,6 +50,7 @@ export function HoldSettingsCard() {
         hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
         hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
         hold_add_on_dips: data.hold_add_on_dips, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
+        sell_ma200_days: data.sell_ma200_days, sell_trail_pct: data.sell_trail_pct, rebuy_cooldown_days: data.rebuy_cooldown_days,
       });
     }
   }, [data]);
