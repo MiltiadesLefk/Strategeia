@@ -20,7 +20,7 @@ import { KillSwitchSettingsCard } from '../components/KillSwitchSettingsCard';
 import { CommitteeSettingsCard } from '../components/CommitteeSettingsCard';
 import { ThesisAlertsSettingsCard } from '../components/ThesisAlertsSettingsCard';
 import { WatchlistCard } from '../components/WatchlistCard';
-import type { AiOverlayObjectionAction, ResearchMode, TestConnectionOverrides } from '../api/types';
+import type { ResearchMode, TestConnectionOverrides } from '../api/types';
 
 const SETTINGS_TABS = [
   { value: 'general', label: 'General', help: 'How the app shows times.' },
@@ -99,28 +99,6 @@ function SaveButton({
  * there flatly contradicted the toggle beside it, which is still drawn in
  * its true (green, on) position — two controls describing the same state
  * two different ways. */
-/** Alternatives, not a ladder of independent switches: "cancel" and "hold"
- *  trigger on the identical condition and cancel strictly wins, so as two
- *  booleans one combination was always dead code and the UI could show a
- *  setting as ON that could never fire once. */
-const OVERLAY_ACTIONS: { value: AiOverlayObjectionAction; label: string; help: string }[] = [
-  {
-    value: 'cancel',
-    label: 'Cancel the trade',
-    help: 'Strongest. The evaluation becomes an explicit No Trade with the AI named as the reason, instead of a plan. Nothing is left to execute.',
-  },
-  {
-    value: 'hold',
-    label: 'Hold it for manual review',
-    help: 'The plan is written normally with the rule-based direction, but auto-execute leaves it Pending instead of opening the position. You decide.',
-  },
-  {
-    value: 'none',
-    label: 'Nothing — just record it',
-    help: 'The objection is shown on the plan (and still costs confidence, if that is on above) but stops nothing. Use this to find out whether the AI is actually right before letting it block trades.',
-  },
-];
-
 function OnOffBadge({ on, inactive }: { on: boolean; inactive?: boolean }) {
   if (inactive) {
     return (
@@ -185,11 +163,7 @@ export function SettingsPage() {
   const [markToMarketMinutes, setMarkToMarketMinutes] = useState(15);
   const [liquiditySlippage, setLiquiditySlippage] = useState(false);
   const [liquidityCoefficient, setLiquidityCoefficient] = useState(100);
-  const [aiOverlayEnabled, setAiOverlayEnabled] = useState(false);
-  const [aiPlanTake, setAiPlanTake] = useState(true);
   const [aiChartInsight, setAiChartInsight] = useState(true);
-  const [aiOverlayScores, setAiOverlayScores] = useState(true);
-  const [aiOverlayAction, setAiOverlayAction] = useState<AiOverlayObjectionAction>('cancel');
   const [researchMode, setResearchMode] = useState<ResearchMode>('our_data_only');
 
   const [justSavedKey, setJustSavedKey] = useState<string | null>(null);
@@ -259,11 +233,7 @@ export function SettingsPage() {
     setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
     setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
     setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
-    setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
-    setAiPlanTake(settings.ai_plan_take_enabled);
     setAiChartInsight(settings.ai_chart_insight_enabled);
-    setAiOverlayScores(settings.ai_overlay_scores_confidence);
-    setAiOverlayAction(settings.ai_overlay_objection_action);
     setResearchMode(settings.research_mode ?? 'our_data_only');
   }, [settings]);
 
@@ -400,14 +370,10 @@ export function SettingsPage() {
     );
   }
 
-  function saveAiOverlay(card = 'ai-overlay') {
+  function saveAiChart(card = 'ai-overlay') {
     update(
       {
-        ai_trading_overlay_enabled: aiOverlayEnabled,
-        ai_plan_take_enabled: aiPlanTake,
         ai_chart_insight_enabled: aiChartInsight,
-        ai_overlay_scores_confidence: aiOverlayScores,
-        ai_overlay_objection_action: aiOverlayAction,
       },
       { onSuccess: () => flashSaved(card) },
     );
@@ -469,13 +435,9 @@ export function SettingsPage() {
     setMaxConcurrentPositions(settings.max_concurrent_positions);
   }
 
-  function resetAiOverlay() {
+  function resetAiChart() {
     if (!settings) return;
-    setAiOverlayEnabled(settings.ai_trading_overlay_enabled);
-    setAiPlanTake(settings.ai_plan_take_enabled);
     setAiChartInsight(settings.ai_chart_insight_enabled);
-    setAiOverlayScores(settings.ai_overlay_scores_confidence);
-    setAiOverlayAction(settings.ai_overlay_objection_action);
   }
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
@@ -712,24 +674,6 @@ export function SettingsPage() {
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>AI take on trade plans</h3>
-        <div className="text-muted" style={{ fontSize: 13 }}>
-          The short paragraph on each trade plan. It only describes numbers the rules already computed and never changes
-          direction, entry, stop, size or the decision. Off: plans show the rule-based Analyst&apos;s take and no AI call is made
-          for it. Other AI features (news labelling, overlay, committee) have their own switches.
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <ToggleSwitch checked={aiPlanTake} onChange={setAiPlanTake} label="Write the AI take on each trade plan" />
-          <span>Write the AI take on each trade plan</span>
-          <OnOffBadge on={aiPlanTake} />
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-take'} onClick={() => saveAiOverlay('ai-take')} />
-          <ResetButton onClick={resetAiOverlay} />
-        </div>
-      </div>
-
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3>AI insight on charts</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
           The one- or two-sentence AI Insight note under each chart. It only describes
@@ -742,109 +686,8 @@ export function SettingsPage() {
           <OnOffBadge on={aiChartInsight} />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-chart'} onClick={() => saveAiOverlay('ai-chart')} />
-          <ResetButton onClick={resetAiOverlay} />
-        </div>
-      </div>
-
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>AI Trading Overlay</h3>
-        <div className="text-muted" style={{ fontSize: 13 }}>
-          The setup itself is still decided by deterministic, rule-based math — technicals, fundamentals and news
-          scored by named thresholds. The AI never picks the direction, entry, stop or position size, and it can
-          never talk the engine into a trade the rules rejected. What it can do is argue against one: it sees the
-          same raw data (price, volume, indicators, fundamentals, full news headlines, earnings date) and answers
-          two separate questions — where it thinks the stock goes, and whether it would actually take this trade.
-          The second answer is the one acted on, and when it is no, the plan loses confidence and can be stopped
-          outright.
-        </div>
-        <div className="text-muted" style={{ fontSize: 12 }}>
-          Costs one extra AI call per symbol where the rules propose a trade. Symbols the rules reject as "no trade"
-          get no call, since there is nothing to stop. Requires a real provider selected above (has no effect
-          while Provider is "None").
-        </div>
-        <div className="text-muted" style={{ fontSize: 12 }}>
-          This call uses the provider's <strong>Decision model</strong> (set in the provider card above; blank = the same model as
-          the everyday one), so you can spend a stronger model on the one answer that can stop a trade.
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <ToggleSwitch checked={aiOverlayEnabled} onChange={setAiOverlayEnabled} label="Enable AI second opinion on every evaluation" />
-          <span>Enable AI second opinion on every evaluation</span>
-          <OnOffBadge on={aiOverlayEnabled} />
-        </div>
-
-        <div
-          style={{
-            borderLeft: '2px solid var(--border)',
-            paddingLeft: 14,
-            marginLeft: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            opacity: aiOverlayEnabled ? 1 : 0.45,
-          }}
-        >
-          <div className="text-muted" style={{ fontSize: 12 }}>
-            How much its opinion counts. Both settings below do nothing while the overlay above is off.
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <ToggleSwitch
-                checked={aiOverlayScores}
-                onChange={setAiOverlayScores}
-                disabled={!aiOverlayEnabled}
-                label="Count disagreement in the confidence score"
-              />
-              <span>Count disagreement in the confidence score</span>
-              <OnOffBadge on={aiOverlayScores} inactive={!aiOverlayEnabled} />
-            </div>
-            <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-              An objection subtracts up to 3 points (scaled by how sure the AI says it is), shown as "AI Overlay"
-              in the plan's score breakdown. Agreement is deliberately worth 0 — the AI is shown the rule-based
-              verdict before it answers, so agreeing with it proves little.
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>When the AI says not to take the trade</div>
-            <div className="text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
-              Pick one. These are alternatives, not extras — cancelling and holding react to the same moment, and a
-              cancelled trade never reaches auto-execute, so only one of them can ever actually happen.
-            </div>
-            {OVERLAY_ACTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 8,
-                  marginBottom: 10,
-                  cursor: aiOverlayEnabled ? 'pointer' : 'default',
-                }}
-              >
-                <input
-                  type="radio"
-                  name="ai-overlay-objection-action"
-                  value={opt.value}
-                  checked={aiOverlayAction === opt.value}
-                  disabled={!aiOverlayEnabled}
-                  onChange={() => setAiOverlayAction(opt.value)}
-                  style={{ width: 'auto', marginTop: 3 }}
-                />
-                <span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</span>
-                  <span className="text-muted" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
-                    {opt.help}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-overlay'} onClick={() => saveAiOverlay('ai-overlay')} />
-          <ResetButton onClick={resetAiOverlay} />
+          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-chart'} onClick={() => saveAiChart('ai-chart')} />
+          <ResetButton onClick={resetAiChart} />
         </div>
       </div>
 

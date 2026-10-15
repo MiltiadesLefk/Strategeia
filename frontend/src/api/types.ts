@@ -456,9 +456,6 @@ export interface AppSettings {
   committee_max_llm_calls: number;
   committee_debate_rounds: number;
   committee_risk_rounds: number;
-  committee_gate_enabled: boolean;
-  committee_gate_action: 'cancel' | 'hold';
-  committee_gate_max_per_scan: number;
   /** Kill switches: pause a sleeve's new positions after a drawdown or when live results drift from the backtest. */
   kill_switch_enabled: boolean;
   kill_switch_drawdown_pct: number;
@@ -522,13 +519,8 @@ export interface AppSettings {
   price_alert_stop_atr: number;
   /** "Close to the first target" = within this percentage of the price. */
   price_alert_tp1_pct: number;
-  ai_trading_overlay_enabled: boolean;
-  /** The AI-written take paragraph on each trade plan; off = the rule-based Analyst's take. Narration only. */
-  ai_plan_take_enabled: boolean;
   /** The AI Insight note on the chart; off = the rule-based insight text. Narration only. */
   ai_chart_insight_enabled: boolean;
-  ai_overlay_scores_confidence: boolean;
-  ai_overlay_objection_action: AiOverlayObjectionAction;
   min_confidence_for_trade: number;
   research_mode: ResearchMode;
 }
@@ -557,9 +549,6 @@ export interface SettingsUpdateRequest {
   committee_max_llm_calls?: number;
   committee_debate_rounds?: number;
   committee_risk_rounds?: number;
-  committee_gate_enabled?: boolean;
-  committee_gate_action?: 'cancel' | 'hold';
-  committee_gate_max_per_scan?: number;
   kill_switch_enabled?: boolean;
   kill_switch_drawdown_pct?: number;
   kill_switch_drift_psi?: number;
@@ -612,11 +601,7 @@ export interface SettingsUpdateRequest {
   price_alert_positions_enabled?: boolean;
   price_alert_stop_atr?: number;
   price_alert_tp1_pct?: number;
-  ai_trading_overlay_enabled?: boolean;
-  ai_plan_take_enabled?: boolean;
   ai_chart_insight_enabled?: boolean;
-  ai_overlay_scores_confidence?: boolean;
-  ai_overlay_objection_action?: AiOverlayObjectionAction;
   min_confidence_for_trade?: number;
   research_mode?: ResearchMode;
 }
@@ -655,11 +640,6 @@ export type TestConnectionArg =
   | 'telegram'
   | { target: 'llm' | 'finnhub' | 'telegram'; tier?: 'routine' | 'decision'; overrides?: TestConnectionOverrides };
 
-/** What the AI Trading Overlay's objection actually does. One choice, not a
- *  set of flags: "cancel" and "hold" fire on the same trigger and cancel
- *  always wins, so they can never both be in effect. */
-export type AiOverlayObjectionAction = 'cancel' | 'hold' | 'none';
-
 /** Whether AI calls made for research (never the overlay or the narration) may search the web. */
 export type ResearchMode = 'our_data_only' | 'allow_web_search';
 
@@ -670,7 +650,6 @@ export interface SettingsStatus {
   ai_model: string;
   /** Model that answers the AI overlay's verdict, only when it differs from ai_model ("" otherwise). */
   ai_decision_model: string;
-  ai_overlay_online: boolean;
   finnhub_online: boolean;
   telegram_online: boolean;
 }
