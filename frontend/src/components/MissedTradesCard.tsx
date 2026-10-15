@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMissedTrades, useRefreshMissedTrades } from '../api/hooks';
+import { useMissedTrades } from '../api/hooks';
 import type { ApiError } from '../api/client';
 import type {
   MissedQuestion,
@@ -188,13 +188,11 @@ function TradeRow({ t }: { t: MissedTradeItem }) {
 
 /**
  * What the trades the app did not take would have earned. Everything is computed on the
- * server (a refresh builds each hypothetical trade from the bars known at the decision and
- * walks it with the paper engine's exit rules); this card only lays it out. It leads with
+ * server (old rows only: the app no longer takes swing trades, so no new ones are computed); this card only lays it out. It leads with
  * the caveat, because a hypothetical result is the easiest kind to over-read.
  */
 export function MissedTradesCard() {
   const { data, isLoading, error, refetch } = useMissedTrades();
-  const { mutate: refresh, isPending, data: refreshed, error: refreshError } = useRefreshMissedTrades();
   const [showAll, setShowAll] = useState(false);
 
   const trades = data?.trades ?? [];
@@ -215,22 +213,9 @@ export function MissedTradesCard() {
           {data?.last_computed_at && (
             <span className="text-muted" style={{ fontSize: 12 }}>computed {formatRelativeTime(data.last_computed_at)}</span>
           )}
-          <button type="button" className="btn btn-secondary" onClick={() => refresh()} disabled={isPending}>
-            {isPending ? 'Computing…' : 'Refresh'}
-          </button>
         </div>
       </div>
 
-      {refreshError && <ErrorBanner message={(refreshError as ApiError).message} />}
-      {refreshed && !refreshError && (
-        <div className="text-muted" style={{ fontSize: 12, marginBottom: 8 }} role="status">
-          {refreshed.busy
-            ? 'A refresh is already running.'
-            : `Computed ${refreshed.computed} (${refreshed.resolved} resolved, ${refreshed.still_open} still open` +
-              `${refreshed.no_data > 0 ? `, ${refreshed.no_data} without price data` : ''}).` +
-              `${refreshed.remaining > 0 ? ` ${refreshed.remaining} more are left: refresh again.` : ''}`}
-        </div>
-      )}
       {isLoading && <LoadingSpinner label="Loading missed trades…" />}
       {error && <ErrorBanner message={(error as ApiError).message} onRetry={() => refetch()} />}
 
@@ -256,12 +241,6 @@ export function MissedTradesCard() {
             </EmptyState>
           ) : (
             <>
-              {data.awaiting_refresh > 0 && (
-                <div className="text-muted" style={{ fontSize: 12 }}>
-                  {data.awaiting_refresh} plan{data.awaiting_refresh === 1 ? ' is' : 's are'} waiting to be computed.
-                  Press Refresh (it also runs on its own after the close each day).
-                </div>
-              )}
 
               <div className="split-row" style={{ alignItems: 'stretch' }}>
                 {data.questions.map((q) => (
