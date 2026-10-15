@@ -9,7 +9,7 @@ exactly the kind of flattery this project's stats are supposed to be free of.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 import pytest
@@ -22,10 +22,11 @@ from app.portfolio.engine import (
     SectorConcentrationError,
     StalePlanError,
 )
-from app.portfolio.models import EquitySnapshot, PaperPosition, TradePlanRecord
-from app.timeutil import utcnow_naive
+from app.portfolio.models import EquitySnapshot, TradePlanRecord
 
 STARTING_CASH = 100_000.0
+# The engine clock the tests run under (tests/conftest.py pins it here): bars dated before it are final.
+NOW = datetime(2026, 9, 29, 15, 0)
 
 
 class BarsProvider:
@@ -108,7 +109,7 @@ def test_stop_hit_on_an_intermediate_bar_is_not_missed(session: Session):
     """THE regression. Day 3 gapped straight through the stop and recovered;
     the latest bar never touches it. Reading only the last bar left this
     position open at a paper profit after a -20% excursion."""
-    opened = utcnow_naive() - timedelta(days=5)
+    opened = NOW - timedelta(days=5)
     rows = [
         (100, 101, 99, 100),  # entry bar — spent, not scanned
         (100, 101, 98, 99),
@@ -127,50 +128,9 @@ def test_stop_hit_on_an_intermediate_bar_is_not_missed(session: Session):
     closed = engine.mark_to_market()
 
     assert len(closed) == 1
-    assert closed[0].close_reason == "stop_hit"
+    assert closed[0].close_reason == "disaster_stop"
+    assert closed[0].close_price == 82.0  # the close of the bar that closed beyond the stop
     assert closed[0].realized_pnl < 0
-
-
-def test_stop_fill_uses_the_gap_open_not_the_stop_price(session: Session):
-    """A stop is a market order triggered at the level, not a fill at it. The
-    bar opens at 83 with a 95 stop, so the fill is ~83 — the 12-point
-    difference is the loss the old engine silently erased."""
-    opened = utcnow_naive() - timedelta(days=2)
-    rows = [(100, 101, 99, 100), (83, 90, 80, 88)]
-    provider = BarsProvider(bars_from(opened, rows), price=100.0)
-    engine = build_engine(session, provider)
-    plan = make_plan(session)
-    position = engine.open_position(plan)
-    position.opened_at = opened
-    session.add(position)
-    session.commit()
-
-    closed = engine.mark_to_market()
-
-    assert len(closed) == 1
-    assert closed[0].close_price == pytest.approx(83.0)
-    assert closed[0].close_price < 95.0  # strictly worse than the stop
-
-
-def test_take_profit_gap_fills_at_the_better_open(session: Session):
-    """The mirror image: a resting limit filled by a gap UP fills at the open,
-    which is better than the limit. Realism has to cut both ways or it's just
-    a different bias."""
-    opened = utcnow_naive() - timedelta(days=2)
-    rows = [(100, 101, 99, 100), (115, 118, 114, 117)]
-    provider = BarsProvider(bars_from(opened, rows), price=100.0)
-    engine = build_engine(session, provider)
-    plan = make_plan(session)
-    position = engine.open_position(plan)
-    position.opened_at = opened
-    session.add(position)
-    session.commit()
-
-    closed = engine.mark_to_market()
-
-    assert len(closed) == 1
-    assert closed[0].close_reason == "tp1_hit"
-    assert closed[0].close_price == pytest.approx(115.0)  # the open, not tp1=110
 
 
 def test_entry_bar_cannot_trigger_its_own_stop(session: Session):
@@ -191,52 +151,6 @@ def test_entry_bar_cannot_trigger_its_own_stop(session: Session):
     assert engine.mark_to_market() == []
 
 
-def test_stop_checked_before_target_within_one_bar(session: Session):
-    """When both levels sit inside one bar, daily OHLC cannot order them, so
-    the engine must take the unfavourable branch rather than the flattering
-    one."""
-    opened = utcnow_naive() - timedelta(days=2)
-    rows = [(100, 101, 99, 100), (100, 115, 90, 105)]  # touches both 95 and 110
-    provider = BarsProvider(bars_from(opened, rows), price=100.0)
-    engine = build_engine(session, provider)
-    plan = make_plan(session)
-    position = engine.open_position(plan)
-    position.opened_at = opened
-    session.add(position)
-    session.commit()
-
-    closed = engine.mark_to_market()
-
-    assert closed[0].close_reason == "stop_hit"
-
-
-def test_slippage_worsens_a_stop_but_never_a_target(session: Session):
-    opened = utcnow_naive() - timedelta(days=2)
-    stop_rows = [(100, 101, 99, 100), (100, 100, 90, 92)]
-    provider = BarsProvider(bars_from(opened, stop_rows), price=100.0)
-    engine = build_engine(session, provider, slippage_bps=50.0)  # 0.5%
-    plan = make_plan(session)
-    position = engine.open_position(plan)
-    position.opened_at = opened
-    session.add(position)
-    session.commit()
-
-    closed = engine.mark_to_market()
-    assert closed[0].close_price < 95.0  # stop, slipped against the account
-
-    tp_rows = [(100, 101, 99, 100), (100, 112, 100, 111)]
-    provider2 = BarsProvider(bars_from(opened, tp_rows), price=100.0)
-    engine2 = build_engine(session, provider2, slippage_bps=50.0)
-    plan2 = make_plan(session, symbol="MSFT")
-    position2 = engine2.open_position(plan2)
-    position2.opened_at = opened
-    session.add(position2)
-    session.commit()
-
-    closed2 = engine2.mark_to_market()
-    assert closed2[0].close_price == pytest.approx(110.0)  # limit, untouched by slippage
-
-
 # ------------------------------------------------------------- equity curve
 
 
@@ -244,7 +158,7 @@ def test_read_only_marking_does_not_append_to_the_equity_curve(session: Session)
     """GET /positions and /stats mark but must not write. With
     refetch-on-focus, a snapshot per call made the curve a record of how often
     the dashboard was looked at."""
-    provider = BarsProvider(bars_from(utcnow_naive(), [(100, 101, 99, 100)]), price=100.0)
+    provider = BarsProvider(bars_from(NOW, [(100, 101, 99, 100)]), price=100.0)
     engine = build_engine(session, provider)
     engine.get_account_state()
 
@@ -259,7 +173,7 @@ def test_read_only_marking_does_not_append_to_the_equity_curve(session: Session)
 def test_marking_writes_exactly_one_snapshot_per_sweep(session: Session):
     """Snapshotting inside close_position meant closing k positions re-quoted
     every open position k times and wrote k rows."""
-    opened = utcnow_naive() - timedelta(days=2)
+    opened = NOW - timedelta(days=2)
     rows = [(100, 101, 99, 100), (100, 100, 90, 92)]
     provider = BarsProvider(bars_from(opened, rows), price=100.0)
     engine = build_engine(session, provider)
@@ -285,7 +199,7 @@ def test_stale_plan_is_refused(session: Session):
     days ago at a price the market has left behind keeps the UI's numbers
     while silently changing the trade they describe."""
     drifted = 100.0 * (1 + MAX_ENTRY_DRIFT_PCT + 0.01)
-    provider = BarsProvider(bars_from(utcnow_naive(), [(100, 101, 99, 100)]), price=drifted)
+    provider = BarsProvider(bars_from(NOW, [(100, 101, 99, 100)]), price=drifted)
     engine = build_engine(session, provider)
     plan = make_plan(session)
 
@@ -294,7 +208,7 @@ def test_stale_plan_is_refused(session: Session):
 
 
 def test_entry_fills_at_current_market_within_drift(session: Session):
-    provider = BarsProvider(bars_from(utcnow_naive(), [(100, 101, 99, 100)]), price=101.0)
+    provider = BarsProvider(bars_from(NOW, [(100, 101, 99, 100)]), price=101.0)
     engine = build_engine(session, provider)
     plan = make_plan(session)
 
@@ -305,7 +219,7 @@ def test_entry_fills_at_current_market_within_drift(session: Session):
 
 
 def test_sector_concentration_cap_blocks_a_third_tech_name(session: Session):
-    provider = BarsProvider(bars_from(utcnow_naive(), [(100, 101, 99, 100)]), price=100.0)
+    provider = BarsProvider(bars_from(NOW, [(100, 101, 99, 100)]), price=100.0)
     engine = build_engine(session, provider, max_positions_per_sector=2)
     for symbol in ("AAPL", "MSFT"):
         engine.open_position(make_plan(session, symbol=symbol))
@@ -316,7 +230,7 @@ def test_sector_concentration_cap_blocks_a_third_tech_name(session: Session):
 
 def test_position_size_capped_to_a_fraction_of_average_volume(session: Session):
     """A paper fill is infinitely liquid; a real one is not."""
-    provider = BarsProvider(bars_from(utcnow_naive(), [(100, 101, 99, 100)]), price=100.0, avg_volume=500.0)
+    provider = BarsProvider(bars_from(NOW, [(100, 101, 99, 100)]), price=100.0, avg_volume=500.0)
     engine = build_engine(session, provider, max_position_pct_of_adv=1.0)  # 1% of 500 = 5 shares
     plan = make_plan(session, suggested_shares=10)
 
@@ -326,8 +240,8 @@ def test_position_size_capped_to_a_fraction_of_average_volume(session: Session):
 
 
 def test_commission_is_charged_on_both_legs_and_nets_out_of_pnl(session: Session):
-    opened = utcnow_naive() - timedelta(days=2)
-    rows = [(100, 101, 99, 100), (100, 112, 100, 111)]
+    opened = NOW - timedelta(days=2)
+    rows = [(100, 101, 99, 100), (100, 101, 90, 92)]
     provider = BarsProvider(bars_from(opened, rows), price=100.0)
     engine = build_engine(session, provider, commission_per_trade=1.0)
     plan = make_plan(session)

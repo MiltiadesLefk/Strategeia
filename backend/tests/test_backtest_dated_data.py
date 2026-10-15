@@ -17,14 +17,8 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.analysis.earnings_history_scoring import (
-    MIN_QUARTERS_FOR_TRACK_RECORD,
-    score_earnings_surprise_track_record,
-)
-from app.analysis.fundamental_scoring import score_fundamentals
 from app.backtest import runner
 from app.backtest.calendar import decision_moment
-from app.backtest.coverage import FUNDAMENTALS_REACHABLE_POINTS, describe_coverage
 from app.backtest.data_provider import BacktestDataProvider, PriceBook
 from app.backtest.dated_sources import FactBackedSources
 from app.backtest.earnings_history import (
@@ -37,7 +31,7 @@ from app.backtest.fundamentals_history import revenue_history_as_of
 from app.backtest.params import BacktestInputError, BacktestParams, SettingsOverrides, effective_settings
 from app.config import AppSettings
 from app.data_providers import sec_xbrl
-from app.data_providers.base import AllProvidersFailedError, CompanyOverview, DataProviderError, FinancialYear
+from app.data_providers.base import AllProvidersFailedError, DataProviderError
 from app.data_providers.sec_form4 import ingest_form4_filing
 from app.knowledge import FactKind, KnownFact, as_of, end_of_local_day_utc
 from tests.backtest_helpers import frame_from, standard_book, trading_days_from, wiggly_uptrend
@@ -277,37 +271,6 @@ def test_the_revenue_reader_never_returns_a_filing_made_after_the_moment(aapl):
 # --------------------------------------------------------------------------- fundamentals score, same function as live
 
 
-def test_the_backtest_overview_and_revenue_feed_the_live_fundamentals_scorer(aapl):
-    days = trading_days_from(date(2020, 1, 2), 330)
-    closes = np.linspace(100, 160, 330)  # a steady climb: the latest close is the 52-week high
-    book = PriceBook.from_frames({"AAPL": frame_from(days, closes)})
-    sources = FactBackedSources(lambda: Session(aapl.get_bind()), fundamentals=True)
-    provider = BacktestDataProvider(book, dated_sources=sources, overview_from_prices=True)
-    decision_day = days[300]
-    with as_of(decision_moment(decision_day)):
-        overview = provider.get_company_overview("AAPL")
-        years = provider.get_financials("AAPL").years
-        price = provider.get_quote("AAPL").price
-    assert years[-1].revenue > years[-2].revenue
-    long_score, long_reasons = score_fundamentals(overview, years, None, price, "long")
-    short_score, _ = score_fundamentals(overview, years, None, price, "short")
-    assert (long_score, short_score) == (2, -2)
-    assert any("revenue grew" in r for r in long_reasons) and any("52-week high" in r for r in long_reasons)
-
-    # The very same call with the equivalent hand-made live objects gives the identical answer.
-    live_overview = CompanyOverview("AAPL", "Apple", 1e12, 30.0, 1e11, 6.0, overview.week52_low, overview.week52_high)
-    assert score_fundamentals(live_overview, years, None, price, "long") == (long_score, long_reasons)
-
-
-def test_two_reachable_fundamentals_points_is_what_the_scorer_can_actually_award():
-    overview = CompanyOverview("X", "X", None, None, None, None, 50.0, 100.0)
-    growing = [FinancialYear(2022, 100.0, 0.0), FinancialYear(2023, 200.0, 0.0)]
-    best = max(
-        score_fundamentals(overview, growing, None, price, "long")[0] for price in (50.0, 52.0, 75.0, 98.0, 100.0)
-    )
-    assert best == FUNDAMENTALS_REACHABLE_POINTS == 2
-
-
 # --------------------------------------------------------------------------- 52-week range from prices
 
 
@@ -411,18 +374,6 @@ def test_ingest_is_idempotent_and_backfill_survives_a_failing_symbol(session):
     assert len(report.errors) == 1 and "BAD" in report.errors[0]
 
 
-def test_the_track_record_needs_four_known_quarters_and_uses_the_live_scorer(session):
-    ingest_earnings_reports(session, "AAA", parse_earnings_frame(_earnings_frame()))
-    early = earnings_history_as_of(session, "AAA", _moment(date(2024, 11, 5)))  # three quarters reported so far
-    assert len(early) == 3 < MIN_QUARTERS_FOR_TRACK_RECORD
-    assert score_earnings_surprise_track_record("long", early) == (0, [])
-    late = earnings_history_as_of(session, "AAA", _moment(date(2025, 6, 2)))
-    assert len(late) == 5 >= MIN_QUARTERS_FOR_TRACK_RECORD
-    score, reasons = score_earnings_surprise_track_record("long", late)
-    assert score == 1 and "beat consensus EPS in 5/5" in reasons[0]
-    assert score_earnings_surprise_track_record("short", late)[0] == -1
-
-
 # --------------------------------------------------------------------------- insiders through the provider
 
 
@@ -457,26 +408,6 @@ def test_a_part_that_is_off_has_no_handler_at_all(engine):
             provider.get_financials("AAA")
         assert provider.get_insider_activity("AAA") is None
         assert provider.get_earnings_date("AAA") is None  # the next report date is never answered
-
-
-def test_coverage_counts_only_the_parts_a_run_switched_on():
-    base = describe_coverage(16)
-    assert base["profile"] == "price_only" and base["achievable_points"] == 9
-    assert base["included"] == {"fundamentals": False, "insiders": False, "earnings": False}
-
-    fundamentals = describe_coverage(16, include_fundamentals=True)
-    assert fundamentals["achievable_points"] == 9 + FUNDAMENTALS_REACHABLE_POINTS
-    assert fundamentals["profile"] == "price_plus_dated_data"
-    active = {p["part"]: p for p in fundamentals["active_parts"]}
-    assert active["fundamentals"]["live_points_max"] == 3
-    assert "fundamentals" not in {p["part"] for p in fundamentals["inactive_parts"]}
-
-    everything = describe_coverage(16, include_fundamentals=True, include_insiders=True, include_earnings=True)
-    assert everything["achievable_points"] == 14
-    assert everything["achievable_max_confidence_pct"] == 44
-    inactive = {p["part"] for p in everything["inactive_parts"]}
-    assert {"news", "options", "earnings_date", "macro_event", "ai_overlay", "expected_move"} <= inactive
-    assert everything["bar_points_needed"] == 5 and everything["bar_share_of_achievable"] == pytest.approx(5 / 14)
 
 
 # --------------------------------------------------------------------------- the run

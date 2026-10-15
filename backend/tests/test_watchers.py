@@ -8,7 +8,6 @@ database is in memory.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,10 +17,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.api.deps import get_app_settings, get_session
 from app.config import AppSettings
 from app.knowledge import FactKind, as_of, facts_known_as_of
-from app.llm_providers.null_provider import NullLLMProvider
 from app.main import app
-from app.portfolio.models import DeferredEvaluation, PaperPosition
-from app.services import automation_service
 from app.watchers import registry
 from app.watchers.base import Watcher, WatcherContext, WatcherEvent
 from app.watchers.models import WatcherState
@@ -94,24 +90,8 @@ def settings(**kw) -> AppSettings:
     return AppSettings(**base)
 
 
-class Reevals:
-    def __init__(self, status="evaluated"):
-        self.calls: list[WatcherEvent] = []
-        self.status = status
-
-    def __call__(self, session, settings, ev, now, dp, lp, *, clock=None):
-        from app.watchers.reevaluate import ReevaluationOutcome
-
-        self.calls.append(ev)
-        return ReevaluationOutcome(self.status, f"{ev.symbol} was evaluated.")
-
-
-def run(session, watcher, st=None, now=OPEN_NOW, notifier=None, reevaluator=None, **kw):
-    return run_watcher_once(
-        session, watcher, st or settings(), now,
-        data_provider=object(), llm_provider=object(),
-        notifier=notifier or Spy(), reevaluator=reevaluator or Reevals(), **kw,
-    )
+def run(session, watcher, st=None, now=OPEN_NOW, notifier=None, **kw):
+    return run_watcher_once(session, watcher, st or settings(), now, notifier=notifier or Spy(), **kw)
 
 
 def stored(session):
@@ -161,47 +141,28 @@ def test_a_failed_alert_does_not_lose_the_event(session):
 
 
 def test_record_mode_does_nothing_beyond_recording(session):
-    spy, reevals = Spy(), Reevals()
-    result = run(session, FakeWatcher([event()]), settings(watchers_action="record"), notifier=spy, reevaluator=reevals)
+    spy = Spy()
+    result = run(session, FakeWatcher([event()]), settings(watchers_action="record"), notifier=spy)
 
-    assert result.fired == 1 and spy.alerts == [] and reevals.calls == []
+    assert result.fired == 1 and spy.alerts == []
     assert len(stored(session)) == 1
 
 
-def test_alert_mode_sends_a_plain_text_alert_with_the_link_and_no_evaluation(session):
-    spy, reevals = Spy(), Reevals()
-    run(session, FakeWatcher([event()]), settings(watchers_action="alert"), notifier=spy, reevaluator=reevals)
+def test_alert_mode_sends_a_plain_text_alert_with_the_link(session):
+    spy = Spy()
+    run(session, FakeWatcher([event()]), settings(watchers_action="alert"), notifier=spy)
 
-    assert reevals.calls == []
     [text] = spy.alerts
     assert "fake" in text and "NVDA" in text and "Big news" in text and "https://example.test/a" in text
     assert "tok" not in text and "chat" not in text  # nothing from the settings can leak in
 
 
-def test_default_mode_alerts_and_re_evaluates(session):
-    spy, reevals = Spy(), Reevals()
-    result = run(session, FakeWatcher([event()]), notifier=spy, reevaluator=reevals)
-
-    assert [e.symbol for e in reevals.calls] == ["NVDA"]
-    assert "reevaluate:evaluated" in result.actions and "alerted" in result.actions
-    assert "NVDA was evaluated." in spy.alerts[0]
-
-
-def test_a_market_wide_event_is_alerted_but_not_evaluated(session):
-    spy, reevals = Spy(), Reevals()
-    run(session, FakeWatcher([event(symbol=None, ref="r1")]), notifier=spy, reevaluator=reevals)
-
-    assert len(spy.alerts) == 1 and reevals.calls == []
-
-
-def test_a_reevaluation_that_raises_still_alerts(session):
-    def boom(*a, **k):
-        raise RuntimeError("nope")
-
+def test_the_retired_alert_and_reevaluate_mode_just_alerts(session):
+    """Swing re-evaluation is gone; a settings file that still says so only gets the alert."""
     spy = Spy()
-    result = run(session, FakeWatcher([event()]), notifier=spy, reevaluator=boom)
+    result = run(session, FakeWatcher([event()]), settings(watchers_action="alert_and_reevaluate"), notifier=spy)
 
-    assert result.error is None and "reevaluate:failed" in result.actions and len(spy.alerts) == 1
+    assert result.actions == ["alerted"] and len(spy.alerts) == 1
 
 
 # ------------------------------------------------- cooldown, cap, suppression
@@ -345,105 +306,6 @@ def test_format_alert_has_no_link_line_for_a_non_url_ref():
     assert "0001-23" not in text
 
 
-# ----------------------------------------------- the real re-evaluation helper
-
-
-@pytest.fixture
-def plan_spy(monkeypatch):
-    calls: list[dict] = []
-
-    def fake_generate(symbol, account, risk, dp, lp, session, **kw):
-        calls.append({"symbol": symbol, **kw})
-        return SimpleNamespace(id=None, status="pending", direction="long", reason=None, auto_execute_note="")
-
-    monkeypatch.setattr("app.watchers.reevaluate.generate_trade_plan", fake_generate)
-    return calls
-
-
-def real_run(session, watcher, now, **kw):
-    return run_watcher_once(
-        session, watcher, settings(), now, data_provider=object(), llm_provider=object(), notifier=Spy(), **kw
-    )
-
-
-def test_market_open_calls_generate_trade_plan_once(session, plan_spy):
-    result = real_run(session, FakeWatcher([event()]), OPEN_NOW)
-
-    assert [c["symbol"] for c in plan_spy] == ["NVDA"]
-    assert plan_spy[0]["source"] == "watcher:fake" and plan_spy[0]["allow_auto_execute"] is True
-    assert "reevaluate:evaluated" in result.actions
-    assert session.exec(select(DeferredEvaluation)).all() == []
-
-
-def test_a_held_symbol_is_not_re_evaluated(session, plan_spy):
-    session.add(
-        PaperPosition(symbol="NVDA", direction="long", entry_price=100, stop_loss=90, tp1=120, tp2=130, shares=1,
-                      opened_at=datetime(2026, 9, 1))
-    )
-    session.commit()
-    result = real_run(session, FakeWatcher([event()]), OPEN_NOW)
-
-    assert plan_spy == [] and "reevaluate:skipped_held" in result.actions
-
-
-def test_full_slots_still_evaluate_but_without_auto_execute(session, plan_spy):
-    st = settings(max_concurrent_positions=1)
-    session.add(
-        PaperPosition(symbol="AAPL", direction="long", entry_price=100, stop_loss=90, tp1=120, tp2=130, shares=1,
-                      opened_at=datetime(2026, 9, 1))
-    )
-    session.commit()
-    run_watcher_once(session, FakeWatcher([event()]), st, OPEN_NOW, data_provider=object(), llm_provider=object(),
-                     notifier=Spy())
-
-    assert plan_spy[0]["allow_auto_execute"] is False
-
-
-def test_market_closed_queues_a_redo_instead_of_evaluating(session, plan_spy):
-    result = real_run(session, FakeWatcher([event(headline="Weekend filing")]), SUNDAY)
-
-    assert plan_spy == [] and "reevaluate:queued_for_open" in result.actions
-    [deferral] = session.exec(select(DeferredEvaluation)).all()
-    assert deferral.symbol == "NVDA" and deferral.source == "watcher:fake"
-    assert deferral.reason == "Weekend filing" and deferral.status == "pending"
-    assert deferral.trade_plan_id is None
-    assert deferral.due_at == datetime(2026, 9, 28, 13, 45)  # Monday 09:45 ET
-
-
-def test_the_redo_job_later_runs_the_queued_watcher_evaluation_once(session, monkeypatch):
-    real_run(session, FakeWatcher([event()]), SUNDAY)
-    seen: list[str] = []
-
-    def fake_generate(symbol, *a, **kw):
-        seen.append(symbol)
-        return SimpleNamespace(id=None, status="pending", direction=None, reason="no setup", auto_execute_note="")
-
-    monkeypatch.setattr(automation_service, "generate_trade_plan", fake_generate)
-    clock = lambda: MONDAY_0950  # noqa: E731
-
-    def redo():
-        return automation_service.run_market_open_redos(
-            AppSettings(telegram_bot_token="", telegram_chat_id=""), object(), NullLLMProvider(), session, clock=clock
-        )
-
-    first = redo()
-    second = redo()
-
-    assert seen == ["NVDA"] and first.no_trade == ["NVDA"] and second.handled == 0
-    [deferral] = session.exec(select(DeferredEvaluation)).all()
-    assert deferral.status == "done"
-
-
-def test_crypto_re_evaluates_even_when_equities_are_closed(session, plan_spy):
-    real_run(session, FakeWatcher([event(symbol="BTC-USD", ref="b")]), SUNDAY)
-
-    assert [c["symbol"] for c in plan_spy] == ["BTC-USD"]
-    assert session.exec(select(DeferredEvaluation)).all() == []
-
-
-# ------------------------------------------------------------------------ API
-
-
 @pytest.fixture
 def client(engine):
     def override_session():
@@ -537,4 +399,4 @@ def test_settings_fields_are_validated():
     with pytest.raises(ValidationError):
         SettingsUpdateRequest(watchers_action="trade")
     defaults = AppSettings()
-    assert defaults.watchers_enabled is False and defaults.watchers_action == "alert_and_reevaluate"
+    assert defaults.watchers_enabled is False and defaults.watchers_action == "alert"

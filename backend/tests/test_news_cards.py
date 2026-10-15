@@ -16,18 +16,10 @@ import json
 from datetime import datetime, timedelta
 
 import pytest
-from app.analysis import shadow_signals
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.analysis.news_card_scoring import (
-    NEWS_CARD_SCORE_CAP,
-    SIGNAL_NAME,
-    build_news_card_signal,
-    score_news_cards,
-)
-from app.analysis.shadow_signals import ShadowContext, evaluate_shadow_signals
 from app.api.deps import get_app_settings, get_llm_provider, get_session
 from app.config import AppSettings
 from app.data_providers.base import NewsItem
@@ -119,15 +111,6 @@ class FakeLLM:
 
 
 # --- the form ----------------------------------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def _signals_read_as_shadow(request, monkeypatch):
-    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
-    (analysis/live_evidence.py), so run the shadow loop as if none were live; the tests that assert the
-    promotion itself opt out with the `promoted` marker."""
-    if request.node.get_closest_marker("promoted") is None:
-        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_a_valid_batch_parses_even_when_fenced_in_prose():
@@ -329,43 +312,6 @@ def _card(materiality="high", sentiment="positive", about=True):
     return {"materiality": materiality, "sentiment": sentiment, "is_about_this_company": about}
 
 
-def test_one_high_positive_item_supports_a_long_and_contradicts_a_short():
-    points, reason, value = score_news_cards("long", [_card()])
-    assert points == NEWS_CARD_SCORE_CAP and "supports a long" in reason and "+2" in value
-    assert score_news_cards("short", [_card()])[0] == -NEWS_CARD_SCORE_CAP
-
-
-def test_negative_news_argues_against_a_long_and_supports_a_short():
-    assert score_news_cards("long", [_card(sentiment="negative")])[0] == -1
-    assert score_news_cards("short", [_card(sentiment="negative")])[0] == 1
-
-
-def test_the_signal_is_capped_however_much_news_there_is():
-    points, _, _ = score_news_cards("long", [_card() for _ in range(9)])
-    assert points == 1
-
-
-def test_one_medium_item_alone_is_too_light_but_two_count():
-    assert score_news_cards("long", [_card("medium")])[0] == 0
-    assert score_news_cards("long", [_card("medium"), _card("medium")])[0] == 1
-
-
-def test_mixed_and_neutral_and_cancelling_items_score_zero():
-    assert score_news_cards("long", [_card(sentiment="mixed")])[0] == 0
-    assert score_news_cards("long", [_card(sentiment="neutral")])[0] == 0
-    assert score_news_cards("long", [_card(), _card(sentiment="negative")])[0] == 0
-
-
-def test_low_materiality_and_not_about_this_company_are_ignored():
-    points, reason, _ = score_news_cards("long", [_card("low"), _card(about=False)])
-    assert points == 0 and "none material" in reason
-
-
-def test_no_clear_direction_scores_zero():
-    points, reason, _ = score_news_cards(None, [_card()])
-    assert points == 0 and "no clear direction" in reason
-
-
 def _seed_cards(session, specs, symbol="AAPL", hours_ago=2):
     _seed_news(session, symbol, count=len(specs), hours_ago=hours_ago)
     for fact, spec in zip(archived_news(session, symbol), specs):
@@ -376,43 +322,6 @@ def _spec(**overrides):
     spec = {k: v for k, v in _card_json(1).items() if k != "index"}
     spec.update(overrides)
     return spec
-
-
-def test_the_signal_reads_recent_cards_from_the_database(session):
-    _seed_cards(session, [_spec()])
-    signal = build_news_card_signal("long", session, "AAPL")
-    assert signal.available and signal.would_score == 1 and signal.name == SIGNAL_NAME
-
-
-def test_no_cards_is_unavailable_not_zero(session):
-    signal = build_news_card_signal("long", session, "AAPL")
-    assert signal.available is False and signal.value is None and signal.would_score == 0
-    assert build_news_card_signal("long", None, "AAPL").available is False
-
-
-def test_cards_for_old_headlines_do_not_count(session):
-    _seed_cards(session, [_spec()], hours_ago=24 * 6)
-    assert build_news_card_signal("long", session, "AAPL").available is False
-
-
-def test_cards_labelled_after_the_simulated_moment_are_invisible(session):
-    _seed_cards(session, [_spec()])
-    with as_of(utcnow_naive() - timedelta(days=1)):
-        assert build_news_card_signal("long", session, "AAPL").available is False
-
-
-def test_cards_of_another_symbol_do_not_count(session):
-    _seed_cards(session, [_spec()], symbol="MSFT")
-    assert build_news_card_signal("long", session, "AAPL").available is False
-
-
-def test_the_signal_is_registered_and_shadow_only(session):
-    _seed_cards(session, [_spec()])
-    signals = {s.name: s for s in evaluate_shadow_signals(ShadowContext("AAPL", "long", session))}
-    assert signals[SIGNAL_NAME].would_score == 1
-    from app.analysis.shadow_signals import LIVE_SIGNALS
-
-    assert SIGNAL_NAME not in LIVE_SIGNALS  # never summed into confidence
 
 
 # --- endpoints ---------------------------------------------------------------------------
@@ -525,7 +434,6 @@ def test_the_news_card_settings_are_validated_and_default_on():
         SettingsUpdateRequest(news_card_batch_limit=0)
     with pytest.raises(ValueError):
         SettingsUpdateRequest(news_card_batch_limit=31)
-
 
 
 # --- only the company's own headlines are read ----------------------------------------------

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gzip
-import json
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -11,24 +10,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.analysis import shadow_signals
 from app.analysis.short_volume_scoring import (
     HIGH_RATIO_DELTA,
     SIGNAL_NAME,
     build_short_volume_signal,
     score_short_volume,
 )
-from app.analysis.shadow_signals import ShadowContext, ShadowSignal, evaluate_shadow_signals
 from app.api.deps import get_session
 from app.api.routers.signals import get_finra_provider
-from app.config import AppSettings
 from app.data_providers.base import DataProviderError
 from app.data_providers.finra_provider import FinraProvider, parse_short_volume_file
 from app.knowledge import FactKind, KnownFact, as_of, end_of_local_day_utc, facts_known_as_of
-from app.llm_providers.null_provider import NullLLMProvider
 from app.main import app
-from app.portfolio.models import TradePlanRecord
-from app.services import trade_plan_service
 from app.signals.finra import (
     MIN_BASELINE_DAYS,
     ShortVolumeReading,
@@ -37,8 +30,6 @@ from app.signals.finra import (
     refresh_finra_short_volume,
     short_volume_ratio_as_of,
 )
-from app.strategy.snapshot import build_snapshot, fingerprint
-from tests.test_trade_plan_service import FakeFlatDataProvider, FakeUptrendDataProvider
 
 # A real excerpt of CNMSshvol20260930.txt (volumes are fractional in the live file),
 # plus the oddities the parser must survive: blank line, a short row, a non-numeric
@@ -100,15 +91,6 @@ def _weekdays(end: date, count: int) -> list[date]:
 
 
 # ---- parser and provider -------------------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def _signals_read_as_shadow(request, monkeypatch):
-    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
-    (analysis/live_evidence.py), so run the shadow loop as if none were live; the tests that assert the
-    promotion itself opt out with the `promoted` marker."""
-    if request.node.get_closest_marker("promoted") is None:
-        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_parser_reads_a_real_excerpt_and_skips_oddities():
@@ -334,66 +316,7 @@ def test_no_data_is_unavailable_never_a_guess():
 # ---- the mechanism -------------------------------------------------------------------
 
 
-def test_registry_runs_the_finra_signal_without_a_session():
-    signals = evaluate_shadow_signals(ShadowContext("AAPL", "long", None))
-    finra = next(s for s in signals if s.name == SIGNAL_NAME)
-    assert finra.available is False
-
-
-def test_a_failing_scorer_is_logged_and_marked_unavailable(monkeypatch):
-    def boom(context):
-        raise RuntimeError("nope")
-
-    monkeypatch.setitem(shadow_signals._REGISTRY, "broken", boom)
-    monkeypatch.setitem(shadow_signals._REGISTRY, "wrong_type", lambda context: 5)
-    signals = {s.name: s for s in evaluate_shadow_signals(ShadowContext("AAPL", "long"))}
-    assert signals["broken"].available is False and signals["broken"].would_score == 0
-    assert signals["wrong_type"].available is False
-    assert SIGNAL_NAME in signals  # the others still ran
-
-
-def test_points_are_capped_by_the_mechanism(monkeypatch):
-    monkeypatch.setitem(shadow_signals._REGISTRY, "greedy", lambda c: ShadowSignal("greedy", "x", 7, "too big"))
-    signals = {s.name: s for s in evaluate_shadow_signals(ShadowContext("AAPL", "long"))}
-    assert signals["greedy"].would_score == shadow_signals.SHADOW_POINTS_CAP
-
-
-def test_a_promoted_signal_is_no_longer_shadowed(monkeypatch):
-    monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", {SIGNAL_NAME})
-    assert SIGNAL_NAME not in {s.name for s in evaluate_shadow_signals(ShadowContext("AAPL", "long"))}
-
-
-@pytest.mark.promoted
-def test_live_signals_are_the_promoted_ones_and_in_the_strategy_fingerprint(monkeypatch):
-    promoted = {
-        "congress_buying", "fund_accumulation", "ownership_5pct_filing", "finra_short_volume", "sec_8k_negative_items",
-        "news_cards", "fed_event_window", "post_mentions",
-    }
-    assert shadow_signals.LIVE_SIGNALS == promoted
-    assert build_snapshot(AppSettings())["rules"]["shadow_signals.LIVE_SIGNALS"] == sorted(promoted)
-    before = fingerprint(build_snapshot(AppSettings()))
-    monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", {SIGNAL_NAME})
-    assert fingerprint(build_snapshot(AppSettings())) != before
-
-
-def test_json_round_trip_tolerates_junk():
-    signal = ShadowSignal("a", "v", -1, "r")
-    raw = shadow_signals.shadow_signals_to_json([signal])
-    assert shadow_signals.shadow_signals_from_json(raw) == [signal.to_dict()]
-    assert shadow_signals.shadow_signals_from_json(None) is None
-    assert shadow_signals.shadow_signals_from_json("not json") is None
-    assert shadow_signals.shadow_signals_from_json('{"a": 1}') is None
-
-
 # ---- plans: recorded, never decisive -------------------------------------------------
-
-
-def _generate(session, monkeypatch, provider, symbol="AAPL"):
-    monkeypatch.setattr(
-        "app.services.trade_plan_service.load_app_settings",
-        lambda: AppSettings(telegram_bot_token="", telegram_chat_id=""),
-    )
-    return trade_plan_service.generate_trade_plan(symbol, 100_000.0, 1.0, provider, NullLLMProvider(), session)
 
 
 def _seed_high_short_volume(session, symbol="AAPL"):
@@ -401,48 +324,6 @@ def _seed_high_short_volume(session, symbol="AAPL"):
     days = _weekdays(datetime.now().date(), 5 + 30)
     files = {d: {symbol: ((0.40 if i < 30 else 0.60) * 1000.0, 1000.0)} for i, d in enumerate(days)}
     ingest_finra_short_volume(session, [symbol], days[0], days[-1], FakeFinra(files))
-
-
-def test_a_tradeable_plan_records_shadow_signals(session, monkeypatch):
-    response = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    # Looked up by name: other silent signals register alongside these (news_cards: no labelled news stored here).
-    by_name = {s.name: s for s in response.shadow_signals}
-    assert {SIGNAL_NAME, "news_cards", "sec_8k_negative_items"} <= set(by_name)
-    assert by_name[SIGNAL_NAME].available is False  # nothing ingested: not a guess
-    record = session.get(TradePlanRecord, response.id)
-    assert SIGNAL_NAME in {s["name"] for s in json.loads(record.shadow_signals)}
-
-
-def test_a_no_trade_record_records_them_too(session, monkeypatch):
-    response = _generate(session, monkeypatch, FakeFlatDataProvider())
-    assert response.direction is None
-    assert SIGNAL_NAME in {s.name for s in response.shadow_signals}
-
-
-@pytest.mark.promoted
-def test_a_high_short_volume_costs_a_long_one_point_and_changes_no_level(session, monkeypatch):
-    baseline = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    # Ingest data read as an unusually high short-volume ratio, which argues against a long.
-    _seed_high_short_volume(session)
-    with_signal = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    assert baseline.extra_scores["short_volume"] == 0 and with_signal.extra_scores["short_volume"] == -1
-    assert with_signal.confidence_points == baseline.confidence_points - 1
-    assert "short volume" in with_signal.signal_reasons.lower()
-    # It costs a point; it still cannot change a direction, a level or a size by itself.
-    for field in ("direction", "entry", "stop", "tp1", "tp2", "rr1", "rr2", "suggested_shares"):
-        assert getattr(with_signal, field) == getattr(baseline, field), field
-    # A live signal is scored, not also recorded as a silent one.
-    assert SIGNAL_NAME not in {s.name for s in with_signal.shadow_signals or []}
-
-
-def test_a_scorer_that_raises_cannot_break_a_plan(session, monkeypatch):
-    def boom(context):
-        raise RuntimeError("nope")
-
-    monkeypatch.setitem(shadow_signals._REGISTRY, "broken", boom)
-    response = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    assert response.status in ("pending", "executed")
-    assert {s.name: s.available for s in response.shadow_signals}["broken"] is False
 
 
 # ---- endpoints -----------------------------------------------------------------------
@@ -501,12 +382,3 @@ def test_read_endpoint_rejects_a_bad_direction(client):
     assert test_client.get("/api/signals/finra/AAPL", params={"direction": "sideways"}).status_code == 422
 
 
-def test_trade_plans_list_exposes_shadow_signals(client):
-    test_client, session = client
-    stored = shadow_signals.shadow_signals_to_json([ShadowSignal(SIGNAL_NAME, "55.0% short volume", -1, "why")])
-    session.add(TradePlanRecord(symbol="AAPL", status="no_trade", reason="x", confidence_score=20, shadow_signals=stored))
-    session.add(TradePlanRecord(symbol="MSFT", status="no_trade", reason="y", confidence_score=20))
-    session.commit()
-    plans = {p["symbol"]: p for p in test_client.get("/api/trade-plans").json()}
-    assert plans["AAPL"]["shadow_signals"][0]["would_score"] == -1
-    assert plans["MSFT"]["shadow_signals"] is None

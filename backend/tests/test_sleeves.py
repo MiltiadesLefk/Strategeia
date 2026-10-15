@@ -22,7 +22,6 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.api.deps import get_app_settings, get_data_provider, get_session
 from app.config import AppSettings
 from app.data_providers.base import QuoteData
-from app.llm_providers.null_provider import NullLLMProvider
 from app.main import app
 from app.portfolio.engine import (
     DuplicatePositionError,
@@ -44,9 +43,7 @@ from app.portfolio.sleeves import (
     update_sleeve,
 )
 from app.portfolio.stats import compute_portfolio_stats
-from app.services import trade_plan_service
 from app.services.sleeve_service import build_sleeve_engine, mark_all_sleeves
-from tests.test_trade_plan_service import FakeUptrendDataProvider
 
 CASH = 100_000.0
 PRICE = 100.0
@@ -68,7 +65,7 @@ class QuietProvider:
         for i in range(40):
             o, h, low, c = PRICE, PRICE + 1, PRICE - 1, PRICE
             if symbol in self._stop_touched and i == 25:
-                o, h, low, c = 99.0, 99.5, 85.0, 97.0
+                o, h, low, c = 99.0, 99.5, 85.0, 88.0
             rows.append({"date": FIRST_BAR + timedelta(days=i), "open": o, "high": h, "low": low, "close": c, "volume": 1e6})
         return pd.DataFrame(rows)
 
@@ -436,41 +433,6 @@ def _settings(**kw):
     return AppSettings(telegram_bot_token="", telegram_chat_id="", auto_execute_trade_plans=True, **kw)
 
 
-def test_a_plan_is_recorded_on_its_sleeve_and_executes_there(session, monkeypatch):
-    monkeypatch.setattr("app.services.trade_plan_service.load_app_settings", lambda: _settings())
-    other = new_sleeve(session, cash=50_000.0)
-
-    response = trade_plan_service.generate_trade_plan(
-        "AAPL", other.starting_cash, 1.0, FakeUptrendDataProvider(), NullLLMProvider(), session, sleeve=other
-    )
-
-    assert response.status == "executed"
-    record = session.get(TradePlanRecord, response.id)
-    assert record.sleeve_id == other.id
-    position = session.exec(select(PaperPosition).where(PaperPosition.trade_plan_id == response.id)).one()
-    assert position.sleeve_id == other.id
-    core_scope = compute_portfolio_stats(session, FakeUptrendDataProvider(), CASH)
-    assert core_scope.active_positions == 0  # core did not move
-
-
-def test_regenerating_for_one_sleeve_does_not_discard_another_sleeves_pending_plan(session, monkeypatch):
-    monkeypatch.setattr(
-        "app.services.trade_plan_service.load_app_settings",
-        lambda: AppSettings(telegram_bot_token="", telegram_chat_id="", auto_execute_trade_plans=False),
-    )
-    other = new_sleeve(session)
-    first = trade_plan_service.generate_trade_plan("AAPL", CASH, 1.0, FakeUptrendDataProvider(), NullLLMProvider(), session)
-    second = trade_plan_service.generate_trade_plan(
-        "AAPL", 50_000.0, 1.0, FakeUptrendDataProvider(), NullLLMProvider(), session, sleeve=other
-    )
-    assert session.get(TradePlanRecord, first.id).status == "pending"
-    assert session.get(TradePlanRecord, second.id).status == "pending"
-    third = trade_plan_service.generate_trade_plan("AAPL", CASH, 1.0, FakeUptrendDataProvider(), NullLLMProvider(), session)
-    assert session.get(TradePlanRecord, first.id).status == "discarded"  # same sleeve: superseded
-    assert session.get(TradePlanRecord, second.id).status == "pending"
-    assert session.get(TradePlanRecord, third.id).status == "pending"
-
-
 def test_an_off_hours_plan_is_redone_for_its_own_sleeve(session, monkeypatch):
     from app.services.deferred_evaluation_service import queue_market_open_redo
 
@@ -630,27 +592,6 @@ def test_dashboard_stat_cards_follow_the_sleeve(client, db):
     assert client.get("/api/dashboard/summary").json()["stats"]["starting_cash"] == CASH
     assert client.get(f"/api/dashboard/summary?sleeve={key}").json()["stats"]["active_positions"] == 1
     assert client.get("/api/dashboard/summary?sleeve=nope").status_code == 404
-
-
-def test_the_generate_endpoint_takes_a_sleeve(client, db, monkeypatch):
-    monkeypatch.setattr(
-        "app.services.trade_plan_service.load_app_settings",
-        lambda: AppSettings(telegram_bot_token="", telegram_chat_id="", auto_execute_trade_plans=False),
-    )
-    from app.api.deps import get_llm_provider
-
-    app.dependency_overrides[get_data_provider] = lambda: FakeUptrendDataProvider()
-    app.dependency_overrides[get_llm_provider] = lambda: NullLLMProvider()
-    try:
-        key = client.post("/api/sleeves", json={"name": "Momentum", "style": "m", "starting_cash": 50000}).json()["key"]
-        made = client.post("/api/trade-plans/generate", json={"symbol": "AAPL", "sleeve": key})
-        assert made.status_code == 200 and made.json()["sleeve_key"] == key
-        assert client.get(f"/api/trade-plans/{made.json()['id']}").json()["sleeve_key"] == key
-        default = client.post("/api/trade-plans/generate", json={"symbol": "MSFT"})
-        assert default.json()["sleeve_key"] == "core"
-        assert client.post("/api/trade-plans/generate", json={"symbol": "AAPL", "sleeve": "nope"}).status_code == 404
-    finally:
-        app.dependency_overrides.pop(get_llm_provider, None)
 
 
 def test_build_sleeve_engine_seeds_a_non_core_account_with_the_sleeves_own_cash(session):

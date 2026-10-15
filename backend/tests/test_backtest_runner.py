@@ -7,7 +7,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 import pytest
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.backtest import runner
 from app.backtest.calendar import close_moment, decision_moment, trading_days
@@ -15,9 +15,7 @@ from app.backtest.data_provider import BacktestDataProvider, PriceBook
 from app.backtest.params import BacktestInputError, BacktestParams, SettingsOverrides, effective_settings
 from app.config import AppSettings
 from app.knowledge.point_in_time import as_of
-from app.llm_providers.null_provider import NullLLMProvider
 from app.markets import is_daily_bar_final, to_market_time
-from app.portfolio.models import PaperPosition
 from tests.backtest_helpers import flat_series, frame_from, standard_book, trading_days_from, wiggly_uptrend
 
 SLIPPAGE_BPS = 10.0
@@ -287,23 +285,22 @@ def test_holidays_are_skipped_and_an_early_close_moves_the_exit_scan(monkeypatch
 
 def test_a_run_never_reads_the_saved_settings_never_messages_and_never_calls_an_llm(book, monkeypatch):
     from app import config
-    from app.services import telegram_service, trade_plan_service
+    from app.services import telegram_service
 
     def boom(*args, **kwargs):
         raise AssertionError("a backtest must not do this")
 
     monkeypatch.setattr(config, "load_app_settings", boom)
-    monkeypatch.setattr(trade_plan_service, "load_app_settings", boom)
     monkeypatch.setattr(telegram_service, "send_message", boom)
     monkeypatch.setattr("app.llm_providers.factory.get_llm_provider", boom)
     loud = AppSettings(
         telegram_bot_token="123:secret", telegram_chat_id="42", llm_provider="claude_code_cli",
-        ai_trading_overlay_enabled=True, finnhub_enabled=True, finnhub_api_key="k", auto_execute_trade_plans=False,
+        finnhub_enabled=True, finnhub_api_key="k", auto_execute_trade_plans=False,
         auto_scan_enabled=True,
     )
     effective = effective_settings(loud, SettingsOverrides(slippage_bps=SLIPPAGE_BPS))
     assert (effective.telegram_bot_token, effective.telegram_chat_id) == ("", "")
-    assert effective.llm_provider == "none" and not effective.ai_trading_overlay_enabled
+    assert effective.llm_provider == "none"
     assert effective.auto_execute_trade_plans and not effective.finnhub_enabled and not effective.auto_scan_enabled
     assert loud.telegram_bot_token == "123:secret"  # the caller's settings are not modified
 

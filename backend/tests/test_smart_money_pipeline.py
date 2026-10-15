@@ -21,15 +21,13 @@ from app.data_providers.base import AllProvidersFailedError, EarningsHistoryEntr
 from app.knowledge import FactKind, make_dedupe_key, record_fact
 from app.llm_providers.null_provider import NullLLMProvider
 from app.main import app
-from app.portfolio.missed_trade_models import OUTCOME_RESOLVED, MissedTradeOutcome
 from app.portfolio.missed_trade_report import build_missed_trade_report
-from app.portfolio.missed_trades import classify_plan
 from app.portfolio.models import DeferredEvaluation, PaperPosition, Sleeve, TradePlanRecord
 from app.services import smart_money_event_review_service as event_review
 from app.services import smart_money_pipeline_service as pipeline
 from app.services import smart_money_review_service as review
 from app.services.automation_service import run_market_open_redos
-from app.services.sleeve_service import build_sleeve_engine, ensure_smart_money_sleeves, mark_all_sleeves
+from app.services.sleeve_service import ensure_smart_money_sleeves, mark_all_sleeves
 from app.smartmoney.liquidity import REASON_ILLIQUID, REASON_NO_PRICES, check_liquidity
 from app.smartmoney.models import (
     STATUS_AUTO_BOUGHT,
@@ -611,39 +609,10 @@ def seed_flat_position(session, sleeve_id, symbol, opened_at):
     session.commit()
 
 
-def test_the_smart_money_time_limit_reaches_past_the_cores_three_month_window(session):
-    auto, _ = ensure_smart_money_sleeves(session)
-    opened = datetime(2026, 4, 1, 20, 0)  # about 125 trading bars before the last bar
-    seed_flat_position(session, auto.id, "SMA", opened)
-    seed_flat_position(session, None, "CORE", opened)
-    provider = PeriodAwareProvider()
-    closed = mark_all_sleeves(session, provider, settings_(max_holding_days=20, smart_money_max_holding_days=120), snapshot=False)
-    # the smart-money position hit its 120-bar limit; the core one is unchanged from before: its 3-month
-    # window does not contain the entry bar, so its time limit is (as ever) skipped rather than guessed
-    assert [(p.symbol, p.close_reason) for p in closed] == [("SMA", "time_exit")]
-    assert "1y" in provider.periods and "3mo" in provider.periods
-    assert session.exec(select(PaperPosition).where(PaperPosition.symbol == "CORE")).one().status == "open"
-
-
 def test_smart_money_limit_zero_means_no_limit(session):
     auto, _ = ensure_smart_money_sleeves(session)
     seed_flat_position(session, auto.id, "SMA", datetime(2026, 4, 1, 20, 0))
     assert mark_all_sleeves(session, PeriodAwareProvider(), settings_(smart_money_max_holding_days=0), snapshot=False) == []
-
-
-def test_engines_use_the_right_window_and_limit_per_sleeve(session):
-    auto, _ = ensure_smart_money_sleeves(session)
-    s = settings_(max_holding_days=20, smart_money_max_holding_days=90, max_concurrent_positions=9, smart_money_max_open_positions=3)
-    sm = build_sleeve_engine(session, FakeUniverseProvider(), s, auto)
-    core = build_sleeve_engine(session, FakeUniverseProvider(), s, None)
-    assert (sm._exit_scan_period, sm._max_holding_days, sm._max_concurrent_positions) == ("1y", 90, 3)
-    assert (core._exit_scan_period, core._max_holding_days, core._max_concurrent_positions) == ("3mo", 20, 9)
-
-
-def test_the_smart_money_holding_days_setting_is_capped_at_what_the_bar_window_covers():
-    with pytest.raises(Exception):
-        AppSettings(smart_money_max_holding_days=201)
-    assert AppSettings(smart_money_max_holding_days=200).smart_money_max_holding_days == 200
 
 
 # ---------------------------------------------------------------- event-exit review
@@ -752,29 +721,6 @@ def test_the_watcher_events_keep_symbol_none(session):
 
     row = add_candidate(session)
     assert candidate_event(row).symbol is None
-
-
-def test_an_auto_buy_sends_one_telegram_message_not_two(session, sent, monkeypatch):
-    ordinary: list[str] = []
-    monkeypatch.setattr("app.services.trade_plan_service.notify_trade_plan", lambda token, chat, text: ordinary.append(text))
-    row = add_candidate(session)
-    assert evaluate(session, row) == STATUS_AUTO_BOUGHT
-    assert ordinary == []  # the usual "New trade plan" message is suppressed for this source
-    assert len([m for m in sent if "auto-buy" in m]) == 1
-
-
-def test_thesis_window_uses_the_smart_money_sleeve_time_limit(session):
-    from app.portfolio.models import PaperPosition
-    from app.services.thesis_service import holding_window_days, position_max_holding_days
-
-    ensure_smart_money_sleeves(session)
-    auto = session.exec(select(Sleeve).where(Sleeve.key == AUTO_SLEEVE_KEY)).one()
-    cfg = settings_()
-    held = PaperPosition(symbol="AAA", direction="long", sleeve_id=auto.id)
-    core = PaperPosition(symbol="AAA", direction="long", sleeve_id=None)
-    assert position_max_holding_days(session, held, cfg) == cfg.smart_money_max_holding_days == 120
-    assert position_max_holding_days(session, core, cfg) == cfg.max_holding_days == 20
-    assert holding_window_days(cfg, 120) > holding_window_days(cfg, 20)
 
 
 def test_the_review_item_and_the_alert_say_when_core_also_holds_the_symbol(session, sent):

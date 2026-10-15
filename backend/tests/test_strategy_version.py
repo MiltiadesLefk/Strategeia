@@ -15,16 +15,13 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api.deps import get_app_settings, get_session
 from app.config import AppSettings
-from app.llm_providers.null_provider import NullLLMProvider
 from app.main import app
 from app.portfolio.models import PaperPosition, TradePlanRecord
-from app.services import trade_plan_service
+from app.portfolio.engine import EXIT_SCAN_PERIOD
 from app.strategy.models import StrategyVersion
 from app.strategy.service import current_strategy_version, strategy_history, strategy_version_for_settings
 from app.strategy.snapshot import (
     DECISION_SETTINGS,
-    OVERLAY_RULE_CONSTANTS,
-    OVERLAY_SETTINGS,
     RULE_CONSTANTS,
     build_snapshot,
     describe_changes,
@@ -32,7 +29,6 @@ from app.strategy.snapshot import (
     snapshot_json,
     normalize,
 )
-from test_trade_plan_service import FakeFlatDataProvider, FakeUptrendDataProvider
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -113,7 +109,6 @@ def test_normalize_refuses_what_it_cannot_represent():
         ("max_position_pct_of_adv", 0.5),
         ("hold_stop_pct", 30.0),
         ("auto_execute_trade_plans", False),
-        ("ai_trading_overlay_enabled", True),
     ],
 )
 def test_each_decision_relevant_setting_changes_the_fingerprint(name, value):
@@ -122,41 +117,13 @@ def test_each_decision_relevant_setting_changes_the_fingerprint(name, value):
 
 
 @pytest.mark.parametrize(
-    "name, value",
-    [
-        ("ai_overlay_scores_confidence", False),
-        ("ai_overlay_objection_action", "hold"),
-        ("llm_provider", "gemini"),
-        ("openai_model", "gpt-5"),
-    ],
-)
-def test_overlay_settings_change_the_fingerprint_while_the_overlay_is_on(name, value):
-    base_settings = dict(ai_trading_overlay_enabled=True, llm_provider="openai")
-    changed = {**base_settings, name: value}
-    assert fp(**changed) != fp(**base_settings)
-
-
-def test_the_overlays_model_is_the_one_for_the_active_provider():
-    on = dict(ai_trading_overlay_enabled=True)
-    # Only the model of the provider in use counts.
-    assert fp(**on, llm_provider="openai", gemini_model="other") == fp(**on, llm_provider="openai")
-    assert fp(**on, llm_provider="claude_code_cli", claude_cli_model="opus") != fp(**on, llm_provider="claude_code_cli")
-    assert fp(**on, llm_provider="openrouter", openrouter_model="x/y") != fp(**on, llm_provider="openrouter")
-    assert fp(**on, llm_provider="gemini", gemini_model="g2") != fp(**on, llm_provider="gemini")
-    assert fp(**on, llm_provider="orcarouter", orcarouter_model="o2") != fp(**on, llm_provider="orcarouter")
-
-
-@pytest.mark.parametrize(
     "overrides",
     [
-        # narrative only: the overlay is off, so the model cannot change a decision
+        # narrative only: no model decides anything
         dict(llm_provider="openai"),
         dict(llm_provider="claude_code_cli", claude_cli_model="opus"),
         dict(openai_model="gpt-5"),
         dict(openrouter_model="x/y"),
-        # the overlay's sub-settings do nothing while it is off
-        dict(ai_overlay_scores_confidence=False),
-        dict(ai_overlay_objection_action="none"),
         # secrets and keys
         dict(openai_api_key="sk-secret", openrouter_api_key="k", gemini_api_key="k", orcarouter_api_key="k"),
         dict(finnhub_api_key="k"),
@@ -174,18 +141,11 @@ def test_narrative_secret_and_non_rule_settings_never_change_the_fingerprint(ove
     assert fp(**overrides) == fp()
 
 
-def test_narrative_model_change_does_not_bump_even_with_the_overlay_on_for_another_provider():
-    on = dict(ai_trading_overlay_enabled=True, llm_provider="openai")
-    assert fp(**on, claude_cli_model="opus", gemini_model="g2") == fp(**on)
-
-
-def test_the_snapshot_holds_no_secret_and_overlay_group_only_while_on():
+def test_the_snapshot_holds_no_secret():
     settings = AppSettings(openai_api_key="sk-very-secret", telegram_bot_token="tok-secret", finnhub_api_key="fh-secret")
     text = json.dumps(build_snapshot(settings))
     for secret in ("sk-very-secret", "tok-secret", "fh-secret"):
         assert secret not in text
-    assert "overlay" not in build_snapshot(AppSettings())
-    assert "overlay" in build_snapshot(AppSettings(ai_trading_overlay_enabled=True))
 
 
 def _changed(value):
@@ -205,43 +165,30 @@ def _changed(value):
 
 
 def _all_rule_constants():
-    for table in (RULE_CONSTANTS, OVERLAY_RULE_CONSTANTS):
-        for module_path, names in table.items():
-            for name in names:
-                yield module_path, name
+    for module_path, names in RULE_CONSTANTS.items():
+        for name in names:
+            yield module_path, name
 
 
 @pytest.mark.parametrize("module_path, name", list(_all_rule_constants()))
 def test_a_code_side_constant_change_bumps_the_fingerprint(monkeypatch, module_path, name):
     module = importlib.import_module(module_path)
-    settings = AppSettings(ai_trading_overlay_enabled=True)  # on, so the overlay's constants count too
+    settings = AppSettings()
     before = fingerprint(build_snapshot(settings))
     monkeypatch.setattr(module, name, _changed(getattr(module, name)))
     assert fingerprint(build_snapshot(settings)) != before
 
 
-def test_the_overlays_constants_only_count_while_the_overlay_is_on(monkeypatch):
-    from app.analysis import ai_overlay_scoring
-
-    before = fp()
-    monkeypatch.setattr(ai_overlay_scoring, "AI_OVERLAY_STRONG_CONFIDENCE", 99)
-    assert fp() == before
-
-
 def test_the_key_stop_and_exit_constants_named_in_the_brief_are_covered():
     covered = {name for _, name in _all_rule_constants()}
-    for name in (
-        "ATR_STOP_MULTIPLE", "STOP_BUFFER_PCT", "FALLBACK_STOP_PCT", "MIN_NET_BUY_VALUE",
-        "VIX_ELEVATED_THRESHOLD", "CONFIDENCE_CEILING", "MAX_ENTRY_DRIFT_PCT", "EXIT_SCAN_PERIOD",
-        "MAX_SCORE_FOR_CONFIDENCE", "AI_OVERLAY_SCORE_CAP",
-    ):
+    for name in ("DIP_PCT", "MA_DAYS", "MIN_REVENUE_GROWTH_PCT", "MAX_ENTRY_DRIFT_PCT", "EXIT_SCAN_PERIOD", "SMART_MONEY_MIN_SCORE"):
         assert name in covered
 
 
 def test_a_constant_that_disappears_fails_loudly(monkeypatch):
-    from app.analysis import confidence
+    from app.analysis import quality_gate
 
-    monkeypatch.delattr(confidence, "ATR_STOP_MULTIPLE")
+    monkeypatch.delattr(quality_gate, "DIP_PCT")
     with pytest.raises(AttributeError):
         build_snapshot(AppSettings())
 
@@ -276,17 +223,17 @@ def test_the_snapshot_is_stored_in_full_and_the_fingerprint_matches_it(session):
     row = current_strategy_version(session, AppSettings(min_confidence_for_trade=38))
     stored = json.loads(row.settings_snapshot)
     assert stored["settings"]["min_confidence_for_trade"] == 38
-    assert stored["rules"]["confidence.ATR_STOP_MULTIPLE"] == trade_plan_service.ATR_STOP_MULTIPLE
+    assert stored["rules"]["engine.EXIT_SCAN_PERIOD"] == EXIT_SCAN_PERIOD
     assert fingerprint(stored) == row.fingerprint
     assert row.label is None
 
 
 def test_a_code_change_makes_the_next_plan_a_new_version(session, monkeypatch):
     first = current_strategy_version(session, AppSettings())
-    monkeypatch.setattr("app.analysis.confidence.ATR_STOP_MULTIPLE", 2.5)
+    monkeypatch.setattr("app.analysis.quality_gate.DIP_PCT", 99.0)
     second = current_strategy_version(session, AppSettings())
     assert (first.number, second.number) == (1, 2)
-    assert "rule: atr stop multiple 1.5 -> 2.5" in describe_changes(
+    assert "rule: dip pct 10 -> 99" in describe_changes(
         json.loads(first.settings_snapshot), json.loads(second.settings_snapshot)
     )
 
@@ -371,57 +318,43 @@ def test_diff_for_the_first_version_is_empty_and_for_equal_snapshots_too():
     assert describe_changes(snap, snap) == []
 
 
-def test_diff_when_the_overlay_is_switched_on_and_off():
-    off = build_snapshot(AppSettings())
-    on = build_snapshot(AppSettings(ai_trading_overlay_enabled=True, llm_provider="openai"))
-    switched_on = describe_changes(off, on)
-    assert "AI overlay off -> on" in switched_on
-    assert "overlay LLM provider set to openai" in switched_on
-    assert "overlay LLM model set to gpt-4o-mini" in switched_on
-    assert not any("score cap" in line for line in switched_on)  # constants arriving with the overlay are not listed
-    assert describe_changes(on, off) == ["AI overlay on -> off"]
-
-
 # ---------------------------------------------------- plans carry the number
 
 
-def _generate(session, monkeypatch, provider, **settings_overrides):
-    monkeypatch.setattr(
-        "app.services.trade_plan_service.load_app_settings",
-        lambda: AppSettings(telegram_bot_token="", telegram_chat_id="", **settings_overrides),
-    )
-    return trade_plan_service.generate_trade_plan("AAPL", 100_000.0, 1.0, provider, NullLLMProvider(), session)
+class _Provider:
+    name = "fake"
+
+    def get_quote(self, symbol):
+        from app.data_providers.base import QuoteData
+
+        return QuoteData(symbol=symbol, price=100.0, change_pct_24h=0.0, volume=1.0, avg_volume_20d=10_000_000.0)
+
+    def get_ohlcv(self, symbol, period="1y", interval="1d"):
+        import pandas as pd
+
+        return pd.DataFrame({"close": [80.0] * 250})
 
 
-def test_a_tradeable_plan_carries_the_version_number(session, monkeypatch):
-    response = _generate(session, monkeypatch, FakeUptrendDataProvider())
-    assert response.status in ("pending", "executed")
-    assert response.strategy_version == 1
-    assert session.get(TradePlanRecord, response.id).strategy_version == 1
+def _hold_buy(session, symbol, settings):
+    from app.portfolio.engine import PaperTradingEngine
+    from app.services.hold_buy_service import hold_buy
+
+    provider = _Provider()
+    engine = PaperTradingEngine(session, provider, 100_000.0)
+    return hold_buy(session, engine, provider, settings, symbol)
 
 
-def test_a_no_trade_record_carries_the_version_number_too(session, monkeypatch):
-    response = _generate(session, monkeypatch, FakeFlatDataProvider())
-    assert response.status == "no_trade"
-    assert response.strategy_version == 1
-    assert session.get(TradePlanRecord, response.id).strategy_version == 1
+def test_a_hold_buy_carries_the_version_number(session):
+    position = _hold_buy(session, "AAA", AppSettings())
+    assert session.get(TradePlanRecord, position.trade_plan_id).strategy_version == 1
 
 
-def test_a_settings_change_between_plans_splits_them_into_two_versions(session, monkeypatch):
-    first = _generate(session, monkeypatch, FakeUptrendDataProvider(), auto_execute_trade_plans=False)
-    again = _generate(session, monkeypatch, FakeUptrendDataProvider(), auto_execute_trade_plans=False)
-    changed = _generate(session, monkeypatch, FakeUptrendDataProvider(), auto_execute_trade_plans=False, min_confidence_for_trade=20)
-    assert (first.strategy_version, again.strategy_version, changed.strategy_version) == (1, 1, 2)
-
-
-def test_a_failed_evaluation_leaves_no_version_behind(session, monkeypatch):
-    class Failing(FakeUptrendDataProvider):
-        def get_quote(self, symbol):
-            raise RuntimeError("boom")
-
-    with pytest.raises(RuntimeError):
-        _generate(session, monkeypatch, Failing())
-    assert session.exec(select(StrategyVersion)).all() == []
+def test_a_settings_change_between_hold_buys_splits_them_into_two_versions(session):
+    versions = []
+    for symbol, settings in (("AAA", AppSettings()), ("BBB", AppSettings()), ("CCC", AppSettings(hold_stop_pct=30.0))):
+        position = _hold_buy(session, symbol, settings)
+        versions.append(session.get(TradePlanRecord, position.trade_plan_id).strategy_version)
+    assert versions == [1, 1, 2]
 
 
 # ------------------------------------------------------------------ endpoint
@@ -495,7 +428,7 @@ def test_current_number_is_none_after_a_settings_change_with_no_plan_yet(client)
     assert [v["number"] for v in body["versions"]] == [1]
 
 
-def test_trade_plan_and_position_endpoints_expose_the_version(client):
+def test_a_position_exposes_its_plans_version(client):
     test_client, session, _ = client
     v = current_strategy_version(session, AppSettings())
     plan = TradePlanRecord(
@@ -518,7 +451,6 @@ def test_trade_plan_and_position_endpoints_expose_the_version(client):
     )
     session.commit()
 
-    assert test_client.get(f"/api/trade-plans/{plan.id}").json()["strategy_version"] == 1
     from app.api.routers.portfolio import position_to_schema
     from app.strategy.service import plan_strategy_versions
 
@@ -535,7 +467,6 @@ def test_history_helper_counts_match_the_endpoint_shape(session):
     history = strategy_history(session, AppSettings())
     assert history.current_number == 1
     assert history.versions[0].plans == 1 and history.versions[0].no_trades == 1
-    assert OVERLAY_SETTINGS  # the overlay group's settings are exported for the UI/docs
 
 
 def test_an_existing_database_gains_the_table_and_the_column_and_keeps_old_plans_unversioned(monkeypatch, tmp_path):

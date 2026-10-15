@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool

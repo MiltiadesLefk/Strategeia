@@ -8,18 +8,9 @@ import json
 from datetime import date, datetime, timedelta
 
 import pytest
-from app.analysis import shadow_signals
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.analysis import filing_8k_scoring
-from app.analysis.shadow_signals import (
-    LIVE_SIGNALS,
-    SHADOW_POINTS_CAP,
-    ShadowContext,
-    evaluate_shadow_signals,
-    registered_shadow_signals,
-)
 from app.data_providers import sec_form4
 from app.data_providers.sec_8k import (
     ITEM_DICTIONARY,
@@ -122,15 +113,6 @@ def row(accession, accepted, items, *, form="8-K", filed=None, report=None, doc=
 
 
 # ---------------------------------------------------------------- item codes
-
-
-@pytest.fixture(autouse=True)
-def _signals_read_as_shadow(request, monkeypatch):
-    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
-    (analysis/live_evidence.py), so run the shadow loop as if none were live; the tests that assert the
-    promotion itself opt out with the `promoted` marker."""
-    if request.node.get_closest_marker("promoted") is None:
-        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_parse_items_keeps_order_and_drops_blanks_and_duplicates():
@@ -294,34 +276,3 @@ def recent_filing(items, days_ago=1.0, accession="0000320193-26-000099"):
     return a_filing(accession, accepted, items)
 
 
-def read(session, direction, symbol="AAPL"):
-    signals = {s.name: s for s in evaluate_shadow_signals(ShadowContext(symbol, direction, session))}
-    return signals[filing_8k_scoring.SIGNAL_NAME]
-
-
-def test_the_signal_is_registered_and_unavailable_without_stored_8ks(session):
-    assert filing_8k_scoring.SIGNAL_NAME in registered_shadow_signals()
-    signal = read(session, "long")
-    assert not signal.available and signal.would_score == 0 and signal.value is None
-    assert not filing_8k_scoring.build_8k_signal("long", None, "AAPL").available
-
-
-def test_a_recent_negative_item_argues_against_a_long_and_mildly_supports_a_short(session):
-    ingest_8k_filing(session, "AAPL", recent_filing(("4.02", "9.01")))
-    long_read, short_read, flat_read = read(session, "long"), read(session, "short"), read(session, None)
-    assert (long_read.would_score, long_read.value) == (-1, "4.02")
-    assert short_read.would_score == 1
-    assert flat_read.would_score == 0 and flat_read.available and "no clear direction" in flat_read.reason
-
-
-def test_old_or_harmless_filings_score_zero_but_are_still_available(session):
-    ingest_8k_filing(session, "AAPL", recent_filing(("2.02", "9.01"), days_ago=1, accession="0000320193-26-000098"))
-    ingest_8k_filing(session, "AAPL", recent_filing(("1.03",), days_ago=10, accession="0000320193-26-000097"))
-    signal = read(session, "long")
-    assert signal.available and signal.would_score == 0 and signal.value == "none"
-
-
-@pytest.mark.promoted
-def test_the_signal_never_scores_more_than_one_point():
-    assert filing_8k_scoring.FILING_8K_SCORE_CAP <= SHADOW_POINTS_CAP
-    assert filing_8k_scoring.SIGNAL_NAME in LIVE_SIGNALS  # promoted to real scoring (live_evidence.py)

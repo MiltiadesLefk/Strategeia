@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 from app.api.routers import scanner as scanner_router
 from app.config import AppSettings
 from app.main import app
-from app.services.automation_service import AutoScanOutcome
 
 client = TestClient(app)
 

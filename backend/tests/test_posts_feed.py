@@ -11,15 +11,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from app.analysis import shadow_signals
-import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.analysis import post_mentions
 from app.analysis.post_topics import build_matcher, build_matchers, core_name, match_symbols, match_topics
-from app.analysis.shadow_signals import ShadowContext, evaluate_shadow_signals, registered_shadow_signals
-from app.config import AppSettings
 from app.data_providers.base import DataProviderError
 from app.data_providers.posts_feed import (
     Post,
@@ -30,12 +26,12 @@ from app.data_providers.posts_feed import (
     parse_posts_feed,
 )
 from app.knowledge import FactKind, KnownFact, as_of, facts_known_as_of
+from app.config import AppSettings
 from app.watchers import registry
+from app.watchers.runner import run_watcher_once
 from app.watchers.base import Watcher
 from app.watchers.models import WatcherState
 from app.watchers.posts_watcher import PostsWatcher, events_for_post, register_posts_watcher
-from app.watchers.reevaluate import ReevaluationOutcome
-from app.watchers.runner import run_watcher_once
 
 FIXTURE = Path(__file__).parent / "fixtures" / "posts_feed" / "trump_feed.xml"
 NOW = datetime(2026, 10, 1, 20, 0)
@@ -87,25 +83,13 @@ class Spy:
         self.alerts.append(text)
 
 
-class Reevals:
-    def __init__(self):
-        self.symbols: list[str] = []
-
-    def __call__(self, session, settings, event, now, data_provider, llm_provider, *, clock=None):
-        self.symbols.append(event.symbol)
-        return ReevaluationOutcome("evaluated", f"{event.symbol} was evaluated.")
-
-
-def run(session, watcher, now=NOW, notifier=None, reevaluator=None):
+def run(session, watcher, now=NOW, notifier=None):
     return run_watcher_once(
         session,
         watcher,
-        AppSettings(watchers_enabled=True, watchers_action="alert_and_reevaluate", telegram_bot_token="t", telegram_chat_id="c"),
+        AppSettings(watchers_enabled=True, watchers_action="alert", telegram_bot_token="t", telegram_chat_id="c"),
         now,
-        data_provider=object(),
-        llm_provider=object(),
         notifier=notifier or Spy(),
-        reevaluator=reevaluator or Reevals(),
     )
 
 
@@ -128,14 +112,6 @@ def stored_posts(session):
 
 
 # ------------------------------------------------------------------ parsing
-
-
-@pytest.fixture(autouse=True)
-def _signals_read_as_shadow(request, monkeypatch):
-    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
-    (analysis/live_evidence.py), so run the shadow loop as if none were live."""
-    if request.node.get_closest_marker("promoted") is None:
-        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_the_feed_parses_with_utc_times_ids_and_urls():
@@ -367,23 +343,15 @@ def watcher(*posts: Post | bytes, matchers=MATCHERS):
 
 
 def test_a_poll_stores_every_post_and_alerts_on_fresh_matches(session):
-    spy, reevals = Spy(), Reevals()
+    spy = Spy()
     result = run(
         session,
         watcher(post("Boeing is great!", 20, "10"), post("Nothing about markets here", 15, "11"), post("The Fed is wrong", 10, "12")),
         notifier=spy,
-        reevaluator=reevals,
     )
     assert result.error is None and result.new_events == 2 and result.fired == 2
     assert len(stored_posts(session)) == 3  # all stored
-    assert reevals.symbols == ["BA"]  # the named company is evaluated; the Fed topic is not
     assert len(spy.alerts) == 2
-
-
-def test_a_topic_event_never_starts_an_evaluation(session):
-    reevals = Reevals()
-    result = run(session, watcher(post("Tariffs on China chips", 5)), reevaluator=reevals)
-    assert result.fired == 1 and reevals.symbols == []
 
 
 def test_an_old_post_is_stored_but_never_alerts(session):
@@ -401,15 +369,14 @@ def test_a_repeat_poll_does_not_fire_again(session):
 
 
 def test_a_flurry_about_one_company_is_throttled_by_the_cooldown(session):
-    spy, reevals = Spy(), Reevals()
+    spy = Spy()
     result = run(
         session,
         watcher(post("Boeing is great", 25, "20"), post("Boeing again, so great", 20, "21"), post("Boeing! Boeing!", 15, "22")),
         notifier=spy,
-        reevaluator=reevals,
     )
     assert result.new_events == 3 and result.fired == 1 and result.suppressed == 2
-    assert reevals.symbols == ["BA"] and len(spy.alerts) == 1
+    assert len(spy.alerts) == 1
 
 
 def test_the_daily_cap_applies_through_the_framework(session):
@@ -477,19 +444,6 @@ def universe(monkeypatch):
 def store(session, *posts: Post):
     for p in posts:
         ingest_post(session, p)
-
-
-def test_a_mention_in_the_last_day_is_a_penalty_only_caution_flag(session, universe):
-    assert "post_mentions" in registered_shadow_signals()
-    store(session, post("Boeing is great", 120, "1"), post("Boeing again", 60, "2"), post("Apple too", 30, "3"))
-    signal = post_mentions.build_post_mentions_signal(session, "BA", NOW)
-    assert signal.available and signal.value == "2" and signal.would_score == -1
-    assert "unofficial" in signal.reason
-    # it does not depend on the trade's direction
-    with as_of(NOW):
-        for direction in ("long", "short", None):
-            [found] = [s for s in evaluate_shadow_signals(ShadowContext("BA", direction, session)) if s.name == "post_mentions"]
-            assert found.would_score == -1 and found.value == "2"
 
 
 def test_no_mention_reads_zero_and_old_mentions_do_not_count(session, universe):

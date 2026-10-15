@@ -11,31 +11,26 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from app.analysis import shadow_signals
-import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.analysis import fed_event_window
-from app.analysis.shadow_signals import ShadowContext, evaluate_shadow_signals, registered_shadow_signals
-from app.config import AppSettings
 from app.data_providers import fed_feed
 from app.data_providers.base import DataProviderError
 from app.data_providers.fed_feed import (
-    FEED_BASE,
     backfill_fed,
     classify_item,
-    fetch_fed_items,
     ingest_fed_item,
     parse_fed_feed,
     parse_pub_date,
     speaker_from_title,
 )
 from app.knowledge import FactKind, KnownFact, as_of, facts_known_as_of
-from app.watchers import fed_watcher, registry
+from app.config import AppSettings
+from app.watchers import registry
+from app.watchers.runner import run_watcher_once
 from app.watchers.fed_watcher import FedWatcher, event_for_item, register_fed_watcher
 from app.watchers.models import WatcherState
-from app.watchers.runner import run_watcher_once
 
 FIXTURES = Path(__file__).parent / "fixtures" / "fed_feed"
 NOW = datetime(2026, 10, 1, 20, 0)
@@ -76,25 +71,13 @@ class Spy:
         self.alerts.append(text)
 
 
-class Reevals:
-    def __init__(self):
-        self.calls = []
-
-    def __call__(self, *args, **kwargs):
-        self.calls.append(args)
-        raise AssertionError("a Fed event must never start an evaluation")
-
-
-def run(session, watcher, now=NOW, notifier=None, reevaluator=None, action="alert_and_reevaluate"):
+def run(session, watcher, now=NOW, notifier=None, action="alert"):
     return run_watcher_once(
         session,
         watcher,
         AppSettings(watchers_enabled=True, watchers_action=action, telegram_bot_token="t", telegram_chat_id="c"),
         now,
-        data_provider=object(),
-        llm_provider=object(),
         notifier=notifier or Spy(),
-        reevaluator=reevaluator or Reevals(),
     )
 
 
@@ -103,14 +86,6 @@ def stored_items(session):
 
 
 # ------------------------------------------------------------------ parsing
-
-
-@pytest.fixture(autouse=True)
-def _signals_read_as_shadow(request, monkeypatch):
-    """These tests are about how a signal is read and recorded. The signals were promoted to real scoring
-    (analysis/live_evidence.py), so run the shadow loop as if none were live."""
-    if request.node.get_closest_marker("promoted") is None:
-        monkeypatch.setattr(shadow_signals, "LIVE_SIGNALS", set())
 
 
 def test_the_monetary_feed_parses_with_utc_times_and_types():
@@ -305,12 +280,11 @@ def test_a_poll_stores_everything_and_alerts_only_on_fresh_important_items(sessi
     assert len(spy.alerts) == 1
 
 
-def test_a_policy_statement_alerts_but_never_evaluates_anything(session):
-    reevals, spy = Reevals(), Spy()
+def test_a_policy_statement_alerts(session):
+    spy = Spy()
     # The evening of the statement: only the statement-day items are fresh.
-    result = run(session, FedWatcher(fetch=serving()), now=datetime(2026, 9, 16, 22, 0), notifier=spy, reevaluator=reevals)
-    assert result.fired == 1 and reevals.calls == []
-    assert "reevaluate" not in " ".join(result.actions)
+    result = run(session, FedWatcher(fetch=serving()), now=datetime(2026, 9, 16, 22, 0), notifier=spy)
+    assert result.fired == 1
     [alert] = spy.alerts
     assert "Federal Reserve issues FOMC statement" in alert
     assert "federalreserve.gov" in alert
@@ -383,20 +357,6 @@ def seeded(session):
 def test_window_maths_is_symmetric_around_the_moment(gap, inside):
     moment = datetime(2026, 9, 17, 18, 0)
     assert fed_event_window.within_window(moment - gap, moment) is inside
-
-
-def test_the_signal_is_registered_and_penalty_only(session):
-    assert "fed_event_window" in registered_shadow_signals()
-    seeded(session)
-    # 6 hours after the statement: flagged, -1, whichever way the trade goes.
-    for direction in ("long", "short", None):
-        signal = fed_event_window.build_fed_window_signal(session, STATEMENT_TIME + timedelta(hours=6))
-        assert signal.available and signal.value == "1" and signal.would_score == -1
-        assert "risk flag" in signal.reason
-    # And through the registry's own entry point, inside a simulated moment.
-    with as_of(STATEMENT_TIME + timedelta(hours=6)):
-        [signal] = [s for s in evaluate_shadow_signals(ShadowContext("AAPL", "long", session)) if s.name == "fed_event_window"]
-    assert signal.would_score == -1
 
 
 def test_a_chair_speech_flags_but_a_governor_speech_does_not(session):
