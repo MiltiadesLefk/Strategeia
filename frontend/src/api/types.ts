@@ -513,6 +513,8 @@ export interface AppSettings {
   news_discovery_enabled: boolean;
   news_discovery_max_per_run: number;
 
+  hold_add_on_dips: boolean;
+
   /** Share of the position sold at TP1 (0.1 to 0.9). */
   scale_out_fraction: number;
   /** Where the remainder's stop goes after TP1: its entry price, or trailing behind the best price. */
@@ -610,6 +612,8 @@ export interface SettingsUpdateRequest {
 
   news_discovery_enabled?: boolean;
   news_discovery_max_per_run?: number;
+
+  hold_add_on_dips?: boolean;
 
   scale_out_fraction?: number;
   scale_out_stop_mode?: ScaleOutStopMode;

@@ -757,6 +757,9 @@ class AppSettings(BaseModel):
     news_discovery_enabled: bool = False
     news_discovery_max_per_run: int = Field(default=5, ge=0, le=20)
 
+    # F5: the daily hold scan also tops up held stocks that pass the gate while in a dip, toward the target weight.
+    hold_add_on_dips: bool = False
+
     # Liquidity-aware slippage (opt-in, off = the flat slippage_bps only, results
     # unchanged): market fills pay extra bps that grow with the order's size
     # relative to the symbol's 20-day average daily volume. The coefficient is the

@@ -78,6 +78,8 @@ DECISION_SETTINGS: dict[str, str] = {
     "news_discovery_enabled": "news discovery",
     "news_discovery_max_per_run": "news discovery max per run",
 
+    "hold_add_on_dips": "hold adds on dips",
+
     "auto_execute_trade_plans": "auto-execute",
     "ai_trading_overlay_enabled": "AI overlay",
     "smart_money_followed_member_multiplier": "smart-money followed-member multiplier",

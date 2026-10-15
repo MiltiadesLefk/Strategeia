@@ -135,6 +135,26 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
             logger.info("Hold scan: %s not bought: %s", symbol, exc)
         except Exception:
             logger.exception("Hold scan: failed to evaluate %s", symbol)
+    if settings.hold_add_on_dips:
+        from app.services.hold_buy_service import hold_add
+
+        # A half-size (failed-gate) position is topped up to a full slice here only because the gate passes now.
+        for position in session.exec(select(PaperPosition).where(
+                PaperPosition.status == "open", PaperPosition.direction == "long", PaperPosition.mode == "hold")).all():
+            if not engine._owns(position):
+                continue
+            try:
+                gate = check_quality(data_provider, position.symbol)
+                if gate.passed and gate.dip:
+                    hold_add(session, engine, data_provider, settings, position)
+                    notify(settings.telegram_bot_token, settings.telegram_chat_id, f"Hold scan added to {position.symbol} (dip, passed the quality gate).")
+            except MarketClosedError:
+                logger.info("Hold scan dip adds stopped: the market is closed")
+                break
+            except (InsufficientCashError, SectorConcentrationError, SleeveDisabledError, StalePlanError, ValueError) as exc:
+                logger.info("Hold scan: %s not added to: %s", position.symbol, exc)
+            except Exception:
+                logger.exception("Hold scan: failed to add to %s", position.symbol)
     if bought:
         notify(settings.telegram_bot_token, settings.telegram_chat_id, f"Hold scan bought {', '.join(bought)} (passed the quality gate).")
     return bought

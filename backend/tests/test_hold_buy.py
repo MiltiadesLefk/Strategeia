@@ -8,6 +8,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.config import AppSettings
 from app.data_providers.base import QuoteData
 from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, PaperTradingEngine
+from app.portfolio.models import PaperPosition
 from app.services.hold_buy_service import hold_buy, hold_shares, hold_stop_level
 
 
@@ -104,6 +105,22 @@ def test_add_averages_the_cost_and_stops_at_target(session):
     assert p.stop_loss == pytest.approx(75.0)
     with pytest.raises(InsufficientCashError):  # now at target
         hold_add(session, engine, provider, settings, p)
+
+
+def test_hold_scan_adds_to_a_held_dip_only_when_enabled(session, monkeypatch):
+    from app.analysis.quality_gate import GateResult
+    from app.services import automation_service, hold_buy_service
+
+    provider = Provider()
+    engine = PaperTradingEngine(session, provider, 100_000.0)
+    hold_buy(session, engine, provider, AppSettings(hold_target_weight_pct=2.5), "NOVA")  # 25 shares
+    monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: [])
+    monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(True, [], dip=True))
+    automation_service.run_hold_scan(AppSettings(), provider, session)
+    assert session.exec(select(PaperPosition)).one().shares == 25  # off by default
+    automation_service.run_hold_scan(AppSettings(hold_add_on_dips=True), provider, session)
+    assert session.exec(select(PaperPosition)).one().shares == 45
 
 
 def test_hold_scan_buys_a_news_discovered_ticker_outside_the_universe(session, monkeypatch):

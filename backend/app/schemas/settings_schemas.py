@@ -91,6 +91,9 @@ class SettingsUpdateRequest(BaseModel):
 
     news_discovery_enabled: bool | None = None
     news_discovery_max_per_run: int | None = Field(default=None, ge=0, le=20)
+
+    hold_add_on_dips: bool | None = None
+
     liquidity_slippage_enabled: bool | None = None
     liquidity_slippage_coefficient: float | None = Field(default=None, ge=0, le=1000)
     scale_out_enabled: bool | None = None
