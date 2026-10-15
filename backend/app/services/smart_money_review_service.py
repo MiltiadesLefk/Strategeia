@@ -146,8 +146,6 @@ def _plan_out(plan: TradePlanRecord | None) -> ReviewPlanOut | None:
         direction=plan.direction,
         entry=plan.entry,
         stop=plan.stop,
-        tp1=plan.tp1,
-        rr1=plan.rr1,
         suggested_shares=plan.suggested_shares,
         auto_execute_note=plan.auto_execute_note,
         created_at=plan.created_at,

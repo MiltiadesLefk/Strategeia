@@ -65,7 +65,6 @@ class BacktestTradeSchema(BaseModel):
     entry_price: float
     planned_entry_price: float | None = None
     stop_loss: float
-    tp1: float
     shares: int
     exit_at: UtcDatetime | None = None
     exit_date: date | None = None

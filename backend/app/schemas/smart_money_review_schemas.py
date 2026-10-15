@@ -26,8 +26,6 @@ class ReviewPlanOut(BaseModel):
     direction: str | None
     entry: float | None
     stop: float | None
-    tp1: float | None
-    rr1: float | None
     suggested_shares: int | None
     auto_execute_note: str | None
     created_at: UtcDatetime

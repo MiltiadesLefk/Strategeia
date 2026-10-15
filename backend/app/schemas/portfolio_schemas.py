@@ -15,8 +15,6 @@ class PositionSchema(BaseModel):
     entry_price: float
     planned_entry_price: float | None = None
     stop_loss: float
-    tp1: float
-    tp2: float
     shares: int
     opened_at: UtcDatetime
     status: str
@@ -63,7 +61,7 @@ class PositionSchema(BaseModel):
     # The key of the sleeve (paper account) that holds the position; "core" for
     # the original account and for positions from before sleeves existed.
     sleeve_key: str | None = None
-    # "swing" or "hold" (hold: no target, no time exit; tp1/tp2 are 0 = none).
+    # "swing" or "hold" (hold: no target, no time exit).
     mode: str = "swing"
 
 

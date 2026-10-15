@@ -90,7 +90,7 @@ def test_a_run_goes_from_queued_to_done_with_trades_equity_and_summary(env):
     first = trades[0]
     assert first["symbol"] == "AAA" and first["direction"] == "long" and first["confidence_points"] is None
     assert first["close_reason"] == "disaster_stop" and first["return_pct"] < -25 and first["realized_r"] is None
-    assert first["tp1"] == 0.0 and first["scores"] == {}
+    assert first["scores"] == {}
 
     equity = client.get(f"/api/backtests/{run_id}/equity").json()
     assert len(equity) == summary["days_simulated"]
