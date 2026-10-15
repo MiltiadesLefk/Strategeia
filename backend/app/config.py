@@ -654,6 +654,9 @@ class AppSettings(BaseModel):
     hold_max_new_per_scan: int = Field(default=3, ge=0, le=50)
     # A smart-money buy that fails the quality gate still buys, at this % of the normal slice.
     hold_failed_gate_size_pct: float = Field(default=50.0, gt=0, le=100)
+    # Evidence bonus (analysis/evidence_bonus.py): insider/Congress buys and big news for the stock rank the scan's
+    # candidates and skip one with negative news. Never overrides a failed fundamentals check.
+    evidence_bonus_enabled: bool = True
     # Big-news lane (analysis/big_news.py): a recent big headline buys without the quality gate, at this % of a slice.
     big_news_buy_enabled: bool = False
     big_news_size_pct: float = Field(default=50.0, gt=0, le=100)

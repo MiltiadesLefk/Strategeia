@@ -407,6 +407,7 @@ export interface AppSettings {
   rebuy_cooldown_days: number;
   hold_review_days: number;
   hold_add_on_dips: boolean;
+  evidence_bonus_enabled: boolean;
 
   /** Notifications (Telegram): morning note, weekly digest, alerts on open positions. */
   morning_note_enabled: boolean;
@@ -496,6 +497,7 @@ export interface SettingsUpdateRequest {
   rebuy_cooldown_days?: number;
   hold_review_days?: number;
   hold_add_on_dips?: boolean;
+  evidence_bonus_enabled?: boolean;
 
   morning_note_enabled?: boolean;
   morning_note_time_et?: string;

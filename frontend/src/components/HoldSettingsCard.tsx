@@ -20,6 +20,7 @@ type Draft = Pick<
   | 'hold_stop_mode'
   | 'news_discovery_enabled'
   | 'hold_add_on_dips'
+  | 'evidence_bonus_enabled'
   | 'news_discovery_max_per_run'
   | 'sell_ma200_days'
   | 'sell_trail_pct'
@@ -53,7 +54,7 @@ function fromSettings(data: AppSettings): Draft {
     hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
     big_news_buy_enabled: data.big_news_buy_enabled, big_news_size_pct: data.big_news_size_pct,
     big_news_lookback_hours: data.big_news_lookback_hours, hold_stop_mode: data.hold_stop_mode,
-    hold_add_on_dips: data.hold_add_on_dips, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
+    hold_add_on_dips: data.hold_add_on_dips, evidence_bonus_enabled: data.evidence_bonus_enabled, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
     sell_ma200_days: data.sell_ma200_days, sell_trail_pct: data.sell_trail_pct, rebuy_cooldown_days: data.rebuy_cooldown_days,
     hold_review_days: data.hold_review_days,
   };
@@ -91,6 +92,10 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.hold_add_on_dips} onChange={(v) => set('hold_add_on_dips', v)} label="Add on dips" />
         <span>Top up a held stock toward its target weight when it passes the check and is in a dip (off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.evidence_bonus_enabled} onChange={(v) => set('evidence_bonus_enabled', v)} label="Evidence bonus" />
+        <span>Insider buys, Congress buys and big news for a stock rank it first and skip it on negative news; the quality check is still required</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.news_discovery_enabled} onChange={(v) => set('news_discovery_enabled', v)} label="News discovery" />

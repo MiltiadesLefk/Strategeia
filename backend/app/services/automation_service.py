@@ -21,11 +21,12 @@ logger = logging.getLogger(__name__)
 
 def hold_scan_symbol(
     settings: AppSettings, data_provider: DataProvider, session: Session, engine, symbol: str, reason: str,
-    *, price_only: bool = False, skip_gate: bool = False,
+    *, price_only: bool = False, skip_gate: bool = False, evidence=None,
 ) -> bool:
     """One symbol of the hold scan: gate, dip rule, hold buy. True = bought. Shared by the live scan and the
     backtest (`price_only` = the trend check alone, the only part of the gate knowable at a past date;
-    `skip_gate` = no gate and no dip rule, only the random-entry baseline passes it).
+    `skip_gate` = no gate and no dip rule, only the random-entry baseline passes it; `evidence` = a live-only
+    EvidenceBonus: negative means not bought, otherwise it is named in the buy reason).
     The engine's refusals are logged and mean "not bought"; MarketClosedError and anything unexpected propagate."""
     from app.portfolio.engine import (
         DuplicatePositionError, InsufficientCashError, MaxPositionsExceededError, SectorConcentrationError,
@@ -40,6 +41,12 @@ def hold_scan_symbol(
             if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
                 return False
             dip = gate.dip
+        if evidence is not None:
+            if evidence.points < 0:
+                logger.info("Hold scan: %s not bought: negative evidence (%s)", symbol, evidence.describe())
+                return False
+            if evidence.points:
+                reason += f" ({evidence.describe()})"
         hold_buy(session, engine, data_provider, settings, symbol, reason=reason + (" and is in a dip" if dip else ""))
         return True
     except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError, SectorConcentrationError,
@@ -70,12 +77,18 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         for symbol, headline in discover_from_news(settings, data_provider).items():
             if symbol not in held and symbol not in candidates:
                 candidates[symbol] = f'hold scan [quality lane] (news discovery, headline: "{headline}"): passed the quality gate'
+    evidence: dict = {}
+    if settings.evidence_bonus_enabled:
+        from app.services.evidence_service import evidence_for
+
+        evidence = {s: evidence_for(settings, data_provider, session, s) for s in candidates}
+        candidates = dict(sorted(candidates.items(), key=lambda kv: -evidence[kv[0]].points))  # stable: ties keep list order
     market_closed = False
     for symbol, reason in candidates.items():
         if len(bought) >= settings.hold_max_new_per_scan:
             break
         try:
-            if hold_scan_symbol(settings, data_provider, session, engine, symbol, reason):
+            if hold_scan_symbol(settings, data_provider, session, engine, symbol, reason, evidence=evidence.get(symbol)):
                 bought.append(symbol)
         except MarketClosedError:
             logger.info("Hold scan stopped: the market is closed")
