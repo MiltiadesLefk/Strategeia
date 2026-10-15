@@ -24,7 +24,7 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_max_positions', label: 'Max positions', hint: 'Open hold positions in the sleeve.' },
   { key: 'hold_max_per_sector', label: 'Max per sector', hint: 'Same-sector hold positions.' },
   { key: 'hold_max_new_per_scan', label: 'Max new buys per daily scan', hint: 'Keeps one scan from buying the whole list.' },
-  { key: 'hold_failed_gate_size_pct', label: 'Size of a smart-money buy that fails the gate (% of a normal slice)', hint: '0 = send it to the review queue instead.' },
+  { key: 'hold_failed_gate_size_pct', label: 'Size of a smart-money buy that fails the gate (% of a normal slice)', hint: 'Half a slice by default (50).' },
   { key: 'news_discovery_max_per_run', label: 'Max news-discovered tickers per run', hint: 'Only used when news discovery is on.' },
 ];
 
@@ -55,7 +55,7 @@ export function HoldSettingsCard() {
       <div className="text-muted" style={{ fontSize: 13 }}>
         Buys good stocks and holds them: no target, no time limit. The daily 10:00 New York scan runs a quality check
         (above the 200-day average, growing revenue, profitable, not expensive) and buys what passes at the target weight.
-        Smart-money candidates go through the same check; one that fails waits in the review queue. Paper money only.
+        Smart-money candidates go through the same check; one that fails still buys, at a smaller size. Paper money only.
         Buying on its own needs Auto-Execute (above) and the Auto-Scan switch below.
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
