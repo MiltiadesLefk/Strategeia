@@ -208,7 +208,9 @@ position was made under, calibration, the missed-trades report).
   setting. Plan history is kept.
 
 ### Settings
-Grouped into cards. Every setting is listed in §12:
+Grouped into cards. Every setting is listed in §12. Cards made only of switches or radio buttons, and every card on the
+Trading tab, save themselves a moment after a change (no Save button; a failed save leaves the value unsaved and shows the error).
+Cards with keys or tokens (AI provider, Finnhub, Telegram) keep their Save and Test buttons:
 - **AI Narrative Provider**,
 - **Finnhub (optional, free tier)**,
 - **Paper Account**,
@@ -1772,6 +1774,13 @@ nothing here changes direction, size or levels. With up to 40 watchlist companie
 with more, SEC's market-wide latest-filings feeds are read first and only the companies found there are asked about. A
 request SEC refuses or rate-limits ends that part of the poll: if nothing else was found the watcher records the error and
 backs off, otherwise what was found is returned.
+
+### Insider history (always a year back)
+
+A background job (`insider_coverage_service`, every 10 minutes, first run 30 seconds after the app starts) keeps one year of Form 4
+filings stored for every symbol in the universe, so a newly added ticker has its insider history without pressing
+"Load / refresh from SEC". It runs whether or not the Watchers switch is on, and saving the watchlist starts it at once. The first fill of a
+new symbol takes minutes (one request per filing, paced for the SEC); a table records how far each symbol is covered.
 
 ### The SEC filings watcher (`sec_filings`)
 

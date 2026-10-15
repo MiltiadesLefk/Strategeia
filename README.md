@@ -107,6 +107,9 @@ This app has no built-in TLS termination or reverse proxy — put it behind what
 already run for that (nginx/Caddy/Traefik, or your platform's own ingress), or bind
 `HOST` to a VPN/Tailscale-only interface instead of a public one.
 
+**Insider history**: the app keeps a year of insider filings stored for every symbol in your watchlist on its own (a new ticker fills in a
+few minutes after you save it), and Settings cards made of switches save themselves.
+
 **SEC contact (insider trades)**: the backend downloads insider-trade filings (Form 4)
 from SEC EDGAR, and the SEC asks every program that does that to say who runs it, with a
 contact address in the request's User-Agent. `backend/.env` never reaches the container
