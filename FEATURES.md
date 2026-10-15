@@ -30,25 +30,25 @@
 24. [Sleeves: one paper account per trading style](#24-sleeves-one-paper-account-per-trading-style)
 25. [AI Committee](#25-ai-committee)
 26. [Forecast Lab: the ML style](#26-forecast-lab-the-ml-style)
+27. [Portfolio builder: the app picks stocks to hold](#27-portfolio-builder-the-app-picks-stocks-to-hold-paper-money-only)
 
 ---
 
 ## 1. What the app is
 
-A personal, single-user app for **swing trading US stocks** (plus BTC, ETH and SOL) on **daily charts**,
-with trades held for **days to weeks**. It:
+A personal, single-user app that **picks US stocks to hold** (paper money only), on **daily data**. Since
+2026-10-15 it is **hold-only**: the swing-trading engine (trade plans, confidence score, targets, time limit,
+AI overlay) was deleted. It:
 
-1. **scans** a list of stocks,
-2. **evaluates** each one: the chart, fundamentals, news, insider buying, options, the weekly chart,
-   the broad market and the market's mood,
-3. writes a **trade plan** (entry, stop, two targets, share count), or an explicit **"no trade"** with
-   the reason,
-4. **paper-trades** the plan: simulated money at real market prices,
+1. **scans** your watchlist once a day,
+2. runs each stock through a **quality gate** (above the 200-day average, revenue not shrinking, profitable, not
+   expensive; §27),
+3. **buys** a pass at a target weight of the account with a wide disaster stop (a simulated position),
+4. **watches** every holding for sell signals and may rebuy after a cooldown,
 5. shows **honest statistics** computed from the simulated trades.
 
-**Fixed rules make every decision.** The AI only explains the numbers, and optionally gives a second
-opinion that can *stop* a trade but never start one or change it. The data is free and the money is
-fake: no real broker is connected.
+**Fixed rules make every decision.** The AI only explains numbers and writes notes; it never picks, sizes, sells or
+stops anything. The data is free and the money is fake: no real broker is connected.
 
 ---
 
@@ -58,24 +58,18 @@ fake: no real broker is connected.
  STOCK LIST  your saved watchlist, else backend/data/sp500.csv (~500 symbols); scans use the first 50; the test filter overrides both (NVDA, AAPL in Docker)
      │
      ▼
- MARKET SCAN ─ chart-only score 0–6 per stock → "potential setup" / "watching" / "no signal"
+ MARKET SCAN ─ chart-only score 0–6 per stock → "potential setup" / "watching" / "no signal" (a screen, not a buy signal)
      │
      ▼
- TRADE PLAN (per stock: you click Generate, or the auto-scan / auto-trade loop runs it)
-     │  chart + 9 more checks → confidence 0–100 %
-     ├─ no trend, AI veto, or confidence under 16 % ──▶ saved as "no trade", with the reason
-     └─ otherwise: entry, stop, TP1, TP2, share count ──▶ saved as "pending"
-                                                          │ + Telegram message
+ HOLD SCAN (10:00 New York time on trading days; or the Auto-trade button)  needs auto-scan on for the schedule, auto-execute on to buy
+     │  quality gate per unheld stock; a pass is bought (caps: positions, sector, new per scan)
+     │  (+ news-discovered tickers, + dip adds, if switched on)
      ▼
- IS THE MARKET OPEN? (US stocks: 09:30–16:00 New York time on trading days; crypto: always)
-     ├─ no: night, weekend or US holiday ──▶ stays "pending", never filled; REDONE from fresh
-     │                                        data at 09:45 New York time on the next trading
-     │                                        day, and only that new plan can trade
-     ▼ yes
- AUTO-EXECUTE (on by default) ─ safety checks ─▶ PAPER POSITION opened ("executed")
-     │
+ PAPER POSITION opened ("hold": target weight, disaster stop; US stocks only while the market is open)
+     │            smart money (09:27 fetch, 09:50 pipeline) buys through the same path, at half size if the gate fails
      ▼
- EXIT CHECKS every 15 min during US market hours ─ stop or TP1 touched, or 20 trading days up ─▶ position CLOSED
+ EXIT CHECKS every 15 min during US market hours ─ a FINAL daily close beyond the stop ─▶ position CLOSED (disaster_stop)
+ SELL PLAN 10:30 New York time ─ 1 signal: alert (+ raise the stop if in profit); 2+ signals: sell
      │
      ▼
  STATISTICS AND EQUITY CURVE ─ computed from the real simulated trades
@@ -88,8 +82,8 @@ still answer, and messages you on Telegram if one goes down or comes back.
 
 ## 3. The pages
 
-The sidebar holds Dashboard, Market Scan, Analysis, Calendar (§22), Trade Plans, Portfolio, Market Terminal (§21), Smart Money (§20), Backtest Lab (§18), AI Committee (§25) and Settings, plus status
-pills (AI, AI overlay, Finnhub, Telegram) that expand when something is down, and a log-out button.
+The sidebar holds Dashboard, Market Scan, Analysis, Calendar (§22), Portfolio, Market Terminal (§21), Smart Money (§20), Backtest Lab (§18), AI Committee (§25) and Settings, plus status
+pills (AI, Finnhub, Telegram) that expand when something is down, and a log-out button.
 
 ### Backtest Lab
 The **Backtest Lab** (`/backtests`) is where past-data replays are started and read; §18 explains the
@@ -109,9 +103,8 @@ and couldn't test.
   at the top of the sidebar (a magnifier in the top bar on a phone). Type a ticker, a company name or a
   sector and the matching stocks from the stock list appear; the closest match comes first, and a ticker
   typed exactly or as a start beats a company name. Page names (Dashboard, Portfolio, ...) match too.
-  **Up/Down** move, **Enter** opens the stock's Analysis page, **Shift+Enter** opens Trade Plans with that
-  stock chosen (you still press Generate yourself), and **Esc** closes it. A "Generate trade plan for ..."
-  row does the same thing as Shift+Enter. The last five stocks you opened are listed when the box is
+  **Up/Down** move, **Enter** opens the stock's Analysis page, and **Esc** closes it. (Shift+Enter and the "Generate trade plan for ..." row
+  belonged to the retired Trade Plans page, see §3 "Trade Plans".) The last five stocks you opened are listed when the box is
   empty; they are remembered in this browser only. At most 12 rows are shown, however long the list is.
   The whole thing works from the keyboard and is readable by screen readers.
 - **Price flash:** when a price you are looking at changes after a refresh, it briefly flashes green
@@ -139,10 +132,9 @@ and couldn't test.
   sits the "as of" label for the data. It comes from the backend's market calendar (§8), the same one that decides
   whether a position may open.
 - **Top Setups Today:** the 5 highest-scoring stocks from a fresh scan of the whole list.
-- **Top Pick:** the latest plan for the #1 setup, with its technical read, AI take and risk.
-- **Latest Trade Plan:** the most recent plan for any stock.
+- **Top Pick:** the #1 setup with its technical read. (The Latest Trade Plan card is gone; the backend still returns `top_pick_trade_plan`/`latest_trade_plan` from old plan rows.)
 - Opening the dashboard scans the list (answered from the cache when fresh) and runs the exit check,
-  so a position whose stop or TP1 was hit since the last check closes straight away. Opening it
+  so a position whose disaster stop was hit since the last check closes straight away. Opening it
   **never adds a point to the equity curve** (§7).
 
 ### Market Scan (Market Scanner)
@@ -151,7 +143,7 @@ and couldn't test.
   a small price trend line.
 - **Signals:** score ≥ 4 is a **potential setup**, 2–3 is **watching**, and below 2 is **no signal**.
 - A filter to show a single symbol.
-- **Auto-trade button:** runs the full evaluation loop now (see §8), at most once every 60 seconds.
+- **Auto-trade button:** runs the hold scan now (§27), at most once every 60 seconds. It buys only with auto-execute on.
 
 ### Analysis
 - **Valuation tab:** see "Valuation tab (Analysis)" below.
@@ -184,50 +176,21 @@ and couldn't test.
   - **Saved history** (News tab): how many news items and fundamentals snapshots the app has saved for
     this stock, and since when, with a note that a backtest can only use news from the day the archive
     began (§11).
-- **Generate Trade Plan →** button.
 
 ### Trade Plans
-- **Generate Trade Plan** for any symbol.
-- **Each plan card shows:**
-  - direction, entry, stop, TP1, TP2, **R:R ratio**, share count, money at risk and potential gain,
-  - confidence as a % *and* in points (for example "7/32 pts"), with a chip per scoring part (§5),
-  - the list of reasons behind the score,
-  - a muted **Silent signals (not scored)** line: what each new, not-yet-scored signal read and what it would have added (§5),
-  - the ATR and how many ATRs away the stop is (amber if it's under 1×, which means it's inside normal
-    daily noise),
-  - the options-implied move next to the stock's typical move after past earnings,
-  - the AI take (with the provider named, or marked as rule-based),
-  - the AI overlay's opinion, if that's switched on, with the model that gave it ("AI overlay · claude-opus-4-1-20250805"),
-    a note when its reply was recovered from a damaged answer or couldn't be read at all, and a
-    "Check these figures" line when it quoted numbers that weren't in its data (§9),
-  - the "why it didn't auto-execute" note,
-  - a **v3**-style chip: the strategy version the plan was made under (§4),
-  - a chart with the entry, stop and target lines.
-- **Pending plans** can be executed by hand, but only while the US market is open (crypto: any
-  time). While it's closed, the **Execute** button is greyed out and says why.
-- **A plan made while the market was closed** reads **"Waiting for the next open"**. It can't be
-  executed, even in the first minutes after the bell: it is redone from fresh data at 09:45 New
-  York time (the card also shows that time on your own clock), and only the new plan can be
-  executed.
-- **History:** every plan, including **"no trade"** decisions with their reason, and the strategy
-  version each was made under. Plans waiting for their redo are marked "redo at the open".
-- **Strategy history:** a card under the history table listing each strategy version, what changed
-  from the one before and how many plans and closed trades it produced (§4).
-- **Missed trades:** a card above Strategy history showing what the plans the app did **not** take
-  would have earned (§5, "Missed trades"): two headline questions, a summary per kind of missed trade
-  with sample sizes and 95% intervals, the trades taken for comparison, and the list of every declined
-  plan. A **Refresh** button computes the results; opening the page computes nothing.
+*Retired on 2026-10-15.* The Trade Plans page (plan cards, history, Execute button, Strategy history, Missed trades and
+What if? cards) was deleted with the swing engine; positions are opened by the hold scan (§27) and the smart-money
+review queue (§20). Old plan rows stay in the database and still feed read-only history (the strategy version a
+position was made under, calibration, the missed-trades report).
 
 ### Portfolio
 - **Thesis panel (open positions):** every open position gets a collapsible **Thesis** panel (see "Thesis tracker" below). A red **thesis broken** badge shows on the card header when the main pillar has failed.
-- **Stat cards**, **Active Positions** (entry, planned entry, stop, TP1, TP2, shares, current P&L) with
-  a **close** button that closes at the market.
-- **Closed Positions:** exit price, reason (Stop, Target (TP1), Time limit or Manual), P&L and result
+- **Stat cards**, **Active Positions** (entry, stop, shares, current P&L, sell signals) with
+  a **close** button that closes at the market, and the **Holdings** card and rebuy watch (§27).
+- **Closed Positions:** exit price, reason (Disaster stop, Sell plan or Manual; older rows may also show Stop, Target (TP1) or Time limit), P&L and result
   in R. A line above the table counts how the closed trades ended, with the share of each, straight
-  from the closed rows. A high share of time-limit exits means setups mostly stall instead of resolving.
-  Two compact columns, **MFE** and **MAE**, show the best and worst price each trade reached, in R (§7).
-  Hovering a trade's reason shows how the exit was placed in time (on a daily or an hourly bar, or by the
-  cautious stop-first rule), and notes when the rest of its entry day could not be checked (§7).
+  from the closed rows.   Two compact columns, **MFE** and **MAE**, show the best and worst price each trade reached, in R (§7).
+  Hovering a trade's reason shows how the exit was placed in time (older swing rows only; §7).
   A last column, **Lesson**, opens a short AI-written note on the trade (§9) with who wrote it (provider
   and model) and when, labelled as a note and not a fact. A trade with no lesson shows **Write lesson**
   when an AI provider is set up (a dash when none is); one that has a lesson offers **Rewrite lesson**.
@@ -236,11 +199,8 @@ and couldn't test.
   winners and of losers, the winners' exit efficiency, and how many losers were at least +1R ahead
   first, with a plain-English reading and the sample size. Trades closed before this was tracked show
   a dash and are left out of the averages (§7).
-- Each open position shows **"day 7 of 20"** under its opened date: the number of trading days since
-  entry, counted from the real bars on its chart (shown only when the entry day is in that chart's
-  history; otherwise it says "closes after 20 trading days").
 - **Equity Curve.**
-- **Does confidence predict results?** A report card on the closed trades: a table by confidence band
+- **Does confidence predict results?** (read-only history of the old swing trades; hold positions have no score) A report card on the closed trades: a table by confidence band
   (trades, win rate and average R with their 95% intervals, total P&L), the information coefficient,
   a per-part table, how many closed trades were left out, and a short "how to read this". With under
   20 trades it says loudly that the numbers are noise (§5).
@@ -250,11 +210,11 @@ and couldn't test.
 ### Settings
 Grouped into cards. Every setting is listed in §12:
 - **AI Narrative Provider**,
-- **AI Trading Overlay**,
 - **Finnhub (optional, free tier)**,
 - **Paper Account**,
 - **Telegram Notifications**,
-- **Unattended Auto-Scan**,
+- **Unattended Auto-Scan** (the 10:00 hold scan),
+- **Portfolio builder** (the hold settings, §27),
 - **Notifications** (morning note and its time, weekly digest, alerts on open positions and their distances, with preview and send-now buttons; §23),
 - **Watchers** (the master switch, what a found event does, how often to check, the installed watchers and the latest events; §19),
 - **Watchlist** (the symbols every scan and screen use: add, remove and reorder them, saved on the server; §11),
@@ -267,8 +227,8 @@ and press Test before you Save. Nothing is stored by a test, a box you have not 
 value, and a key never appears in the result (even if the provider echoes it in an error). A test is
 still limited to one per 10 seconds per target. The AI card also has the **Research mode** choice and a line saying whether the chosen provider supports web search. When **Claude Code CLI** is the chosen provider, the AI card also shows a **Model** dropdown
 (`sonnet`, `opus`, `haiku`, or an exact version such as Claude Sonnet 5.5; **Other...** lets you type any id). Blank means "whatever the CLI is set to".
-Under each provider's model there is also a **Decision model (AI overlay)** field (for the Claude CLI a dropdown, blank = use the same
-model) and a **Test decision model** button (§9).
+Under each provider's model there is also a **Decision model** field (for the Claude CLI a dropdown, blank = use the same
+model) and a **Test decision model** button (§9). Nothing uses the decision tier any more, so setting it changes nothing.
 
 ### Login
 Username and password. Three wrong tries lock that device out for 15 minutes, and a login lasts 7
@@ -323,7 +283,7 @@ When a symbol lacks the data a required rule needs, it is shown as **not judged*
 
 ### Valuation tab (Analysis)
 - **What it shows:** a rough **discounted earnings estimate** and a **peer multiples** table. It is
-  informational only: it never changes a trade plan's score, direction or size.
+  informational only: it never changes what the hold scan buys or how much.
 - **The estimate:** it takes revenue (last twelve months, else the latest reported year), grows it by a
   yearly rate, multiplies by a net margin, discounts each year at your discount rate and adds a **terminal
   value** (the years after the last one, from the terminal growth rate). Defaults: growth is the compound
@@ -393,314 +353,62 @@ When a symbol lacks the data a required rule needs, it is shown as **not judged*
 
 ## 4. How one stock is evaluated
 
-`generate_trade_plan` in `backend/app/services/trade_plan_service.py` runs these steps in order:
+*Rewritten on 2026-10-15.* `generate_trade_plan` and the ten-part evaluation were deleted. One stock is now evaluated
+by the **quality gate** (`backend/app/analysis/quality_gate.py`), plain rules with no AI:
 
-1. **Prices:** 1 year of daily bars, plus the current quote.
-2. **Chart analysis:** EMA20, EMA50, RSI14, trend, momentum, and support/resistance levels (§5).
-3. **Direction:** Bullish trend means **long**, Bearish means **short**, and Neutral means no
-   direction.
-4. **Every other check,** scored *for the trade's direction*, so evidence that supports a short counts
-   *for* a short:
-   - fundamentals and news (the app also saves what it fetched here into the dated archive, §11; this
-     never changes the score),
-   - the weekly chart and SPY,
-   - VIX,
-   - options positioning,
-   - insider buying,
-   - the options-implied move,
-   - the earnings surprise record,
-   - macro events.
-5. **The AI overlay** (only if it's switched on): its own read, and a possible penalty or veto (§9).
-6. **The decision.** It's a **"no trade"** if:
-   - the trend is Neutral, *or*
-   - the AI overlay vetoes it (with the action set to "cancel"), *or*
-   - confidence is under the bar (16% by default, which is 5 of 32 points).
+1. **Trend:** the last close is above the 200-day average (needs 200 daily bars).
+2. **Growth:** the latest year's revenue is not below the prior year's.
+3. **Profit:** the company is profitable.
+4. **Valuation:** `score_valuation` (P/E, market size) does not call it expensive.
+5. **Dip flag** (price only, not a pass/fail check): the close is 10% or more under the highest close of the last 63
+   trading days (`DIP_PCT`, `DIP_LOOKBACK`).
 
-   A "no trade" is saved with its reason, and the AI narrative is skipped for it, which saves tokens.
-7. **Otherwise it becomes a plan:** entry, stop, targets and size (§6), an AI narrative (or rule-based
-   text), saved as **pending**. An older pending plan for the same stock becomes **discarded**.
-8. **Market check, then auto-execute.** If the stock's market is closed (a night, a weekend or a US
-   holiday; crypto never closes), the plan is **not executed**, whatever the auto-execute setting. It
-   stays pending with a note ("Market closed (weekend), so this plan was not executed…"), and a
-   **redo** is queued: at 09:45 New York time on the next trading day the stock is evaluated again
-   from fresh data, and only that new plan can execute (§8). Otherwise, if auto-execute is on and
-   allowed, it tries to open the paper position (§7), and records why if it can't.
-9. **Telegram:** the new plan is sent to you, if Telegram is set up, with that note.
+A check whose data is missing **fails** and says so; nothing is guessed. A pass is bought by `hold_buy` (§27): size is
+`hold_target_weight_pct` of cash plus open longs at cost, stop is the lower of entry minus `hold_stop_pct` and the 200-day
+average. Telegram gets one line per scan with the symbols bought.
 
-A plan's **status** is one of: `pending` (waiting for you, or for its redo at the next open),
-`executed` (a position was opened), `no_trade` (it was rejected, with a reason) or `discarded`
-(replaced by a newer plan, such as the fresh one a redo makes).
+### Strategy versions: which rules made a position
 
-### Strategy versions: which rules made a plan
+Every position's plan row is stamped with a **strategy version** such as **v3**: one exact combination of the settings
+and rules that decide what is bought. A version is made when `hold_buy` first needs one, never when you edit a setting
+or open a page; going back to old settings reuses the old number.
 
-Every plan, including every "no trade" decision, is stamped with a **strategy version** such as
-**v3**. A version is one exact combination of the settings and rules that decide what comes out of a
-stock's data. If you change the confidence bar, the same stock can become a plan instead of a "no
-trade", so results can only be compared fairly if each plan says which rules it was made under.
+**What counts** (changing it makes a new version): the hold settings (target weight, stop %, caps, buy-only-dips,
+failed-gate size, news discovery, dip adds, sell-plan and rebuy numbers), slippage, commission, position and sector caps,
+auto-execute, the smart-money scoring settings, and the named constants in the code (the gate's `MA_DAYS`, `DIP_PCT`,
+`DIP_LOOKBACK`, `MIN_REVENUE_GROWTH_PCT`, the engine constants and the smart-money scoring). `RULES_REVISION` (now 2) is
+bumped by hand when rule logic changes without moving a constant. `min_confidence_for_trade` is still listed but nothing
+reads it any more except the backtest service.
 
-**What counts as part of the strategy** (changing any of these makes a new version):
+**What does not count:** API keys and Telegram settings, the narrative model, scan universe size, auto-scan on/off,
+Finnhub, starting cash and the exit-check interval, and the hand-typed calendar tables.
 
-| Group | What |
-|---|---|
-| Settings | Minimum confidence, default risk per trade, slippage, commission, max open positions, max positions per sector, max position as a % of daily volume, maximum holding days, auto-execute, and whether the AI overlay is on |
-| Only while the AI overlay is on | Count disagreement in the confidence score, the objection action, the AI provider and the model that answers the overlay (its decision model, or the normal model when no decision model is set), and the overlay's own scoring numbers. Switch the overlay off and changing these does nothing, so they don't matter then |
-| Rules in the code | The named numbers behind the scoring and sizing: score caps, trend and RSI thresholds, the stop rules (ATR multiple, stop buffer, fallback stop), the target rules, the VIX and put/call thresholds, the insider-buying minimum, the confidence scale, the exit-check window and the entry price-drift limit. If a developer changes one, the next plan gets a new version without anyone remembering to record it |
-
-**What does not count** (changing it never makes a version): API keys and the Telegram settings; which
-AI writes the plan's text, meaning the normal model (it changes wording, not the decision; once a decision model is set it also stops mattering to the overlay); the scan universe size, auto-scan
-on/off and Finnhub on/off (they change *which* stocks are looked at or where data comes from, not
-what the rules decide for a given stock); starting cash and the exit-check interval; and the
-hand-typed macro calendar dates and market-hours tables.
-
-**How versions are created.** A version is made **when a plan is generated**, never when you edit a
-setting and never when you open a page. Edit settings and look at nothing: no version exists yet.
-Generate the next plan and the app finds (or creates) the version for the settings and rules in force
-at that moment. Going back to settings you used before reuses their old version number instead of
-making a new one. Versions are numbered 1, 2, 3 in the order they were first used.
-
-**Old plans** from before this existed have no version and show a dash. Nothing is back-filled,
-because what the rules were then can't be known.
-
-**Where you see it.** A small **v3** chip on the plan card, a **Strategy** column in the Trade Plans
-history, and a **Strategy history** card at the bottom of Trade Plans. It lists each version with its
-date, what changed from the one before it in plain words ("min confidence 30 -> 38"), and how many
-plans and closed trades were made under it. A position's version is its plan's version.
+Old stored versions still load; the settings and constants they had that no longer exist show as "removed" in the
+change list. Old plans from before versioning have no version and show a dash.
 
 ---
 
 ## 5. The confidence score, part by part
 
-The **confidence** is the points a setup earned out of the **32 achievable points**, as a %.
-Examples: 5/32 = 16%, 16/32 = 50%. Only 33 values are possible, which is
-why the card shows the points too. It measures *how much evidence lined up*, **not** the chance of
-winning.
+*Retired on 2026-10-15.* The confidence score (the 32-point scorecard, its penalties and the 16% trade/no-trade bar), the
+silent-signals machinery and the scoring parts are gone with `generate_trade_plan`. Nothing is scored on a plan now;
+the quality gate (§4) is pass/fail. What remains of this section is **read-only history of old swing trades**:
 
-### Parts that can add or subtract (they make up the 32 points)
-
-| Part | Points | How it's scored |
-|---|---|---|
-| **Chart (technical)** | 0 to 6 | Only when there's a trend. **Trend** = EMA20 above EMA50, price above EMA20, and EMA20 rising over 5 days (mirrored for a downtrend): **+2**. **Strong momentum** = over 5% move in 10 days *and* RSI above 55 (below 45 for shorts): **+2**. **Volume** over 1.5× its 20-day average: **+1**. **Near a key level** (within 2% of resistance for a long, support for a short): **+1**. **Overextended** (RSI above 75 for a long, below 25 for a short): **−1**. |
-| **Fundamentals** | −3 to +3 | Revenue up vs the previous year **±1**. Within 5% of the 52-week high **±1** (or the low, the other way). **Earnings within 3 days: −1** for both directions, because it's event risk. |
-| **News** | −2 to +2 | The latest 5 headlines, matched against keyword lists (for example "beats", "upgrade" or "record" vs "miss", "downgrade" or "lawsuit"). Each positive headline counts for a long and against a short. |
-| **Weekly chart and SPY** | −2 to +2 | The weekly trend agrees **+1** or disagrees **−1**. The broad market (SPY) agrees **+1** or disagrees **−1**. A Neutral chart counts 0. |
-| **Options** | −1 to +1 | The put/call volume ratio on the nearest expiry at least 7 days out: under 0.7 is bullish, over 1.0 is bearish. It agrees with the trade **+1**, or goes against it **−1**. |
-| **Insiders** | −2 to +2 | Buying **and selling** both count. Net open-market buying: $100,000 is 1 point, $1 million is 2 (supports a long, argues against a short). Selling does the reverse: sales by the insider's own choice count in full, sales under a 10b5-1 plan at a quarter of their value, less what insiders bought; $5 million is 1 point, $50 million is 2. |
-| **Earnings surprise record** | −1 to +1 | Needs at least 4 past quarters. If 75% or more beat estimates by at least 1%, that supports a long; if 75% or more missed, that supports a short. |
-
-### Penalty-only parts (never a bonus, so they aren't counted in the 16)
-
-| Part | Points | When |
-|---|---|---|
-| **VIX** | 0 or −1 | VIX at **25 or higher**, a fearful market |
-| **Options-implied move** | 0 or −1 | The options market prices a move of at least **1.5×** the stock's normal (ATR-based) move over the same period |
-| **Macro events** | 0 or −1 | A **Fed decision, CPI or jobs report today or tomorrow**. The dates are hand-kept: Fed decisions for **2026 and 2027**, CPI and jobs reports for **2026 only so far** (§14). |
-| **AI overlay** | 0 to −3 | Only if the overlay is on and would not take the trade: **−1** under 45% conviction, **−2** from 45–64%, **−3** at 65% or more |
-
-**The bar:** a plan needs a trend **and** at least **16%** confidence (the `min_confidence_for_trade`
-setting), which is 5 of 32 points: the same evidence bar the old 30% of 16 meant. A value you saved earlier
-in Settings stays as it is (30% is now 10 points, a much stricter bar).
-
-**Added later (all rule-based, signed for the trade's direction, 15 more points in the maximum; maximum 32).**
-Smart Money, buying and selling, up to 2 points each: *Congress* (net members buying or selling, last 45 days,
-4 is the strong reading), *Funds* (followed funds' 13F net buying or selling, 3 funds is strong), *5% owners*
-(a new Schedule 13D or a raised stake is buying, +2 and +1; a cut stake or one that fell under 5% is selling,
--1 and -2; last 90 days) and *Short volume* (unusually high FINRA short volume argues against a long and supports
-a short, 1 point). Company: *8-K* (negative-leaning items in the last 3 days, 1), *Financials* (profitable and
-improving supports a long; a loss or sliding profit a short, 1), *Valuation* (up to 2: P/E of 15 or less is cheap,
-over 60 or no earnings is expensive unless revenue grows 30%+, plus one point from the DCF and the peer
-comparison: 25% DCF upside or a P/E 25% under the peer median is cheap), *Consensus* (consensus EPS against the
-last reported EPS: +10% supports a long, -5% a short, 1). Market: *Vs market* (63-day return against SPY, 5
-points ahead or behind, 1), *Volume trend* (volume on up days against down days over 20 days, 1) and *Options
-OI* (put/call ratio of open interest, 1). Two *caution flags* can only subtract and are not in the maximum: a Fed
-statement or Chair speech within a day, and a post naming the company in the last 24 hours. A part with no stored
-data scores 0. They were first recorded silently and promoted on the user's request without a backtest, so treat
-them as unproven until the calibration report has 20+ trades. A backtest scores only the two price-only parts
-(Vs market, Volume trend); the rest are listed as "not in this run". **News is scored by AI labels** when a symbol
-has recent labelled headlines (News cards, on by default; the AI only labels, fixed rules score, cap 2); keyword
-matching is the fallback. The AI Committee is given all of this data too (§25).
-
-### Does the confidence score predict results? (the calibration report)
-
-A score that sounds precise is only useful if higher scores really do come with better trades. The
-**Portfolio** page ends with a card that checks this, using **only your closed paper trades** and the
-plan each one came from. Nothing in it is typed in or smoothed, and opening the page changes nothing.
-
-- **By confidence band.** Closed trades are grouped by evidence points (not by percentage, since the
-  score only has 17 possible values): 6 or fewer, 7-8, 9-10 and 11 or more points out of 16. For each
-  group the card shows the number of trades, the **win rate**, the **average R**, and the total
-  profit or loss. The win rate comes with a **95% interval** (the Wilson interval, which stays honest
-  at small sizes) and the average R with a 95% interval from resampling the trades. The win-rate bar
-  has the interval drawn on it, so a small group visibly covers most of the bar. A group with fewer
-  than **20 trades** is flagged "few" and drawn in amber. A win means a profit after fees, the same
-  rule as the Win Rate card.
-- **Information coefficient (IC).** One number from -1 to +1: do plans with more points tend to end
-  with a better R? It is the **Spearman rank correlation** between the plan's points and the trade's
-  R. 0 means no link; for trading signals, even 0.05 to 0.15 is interesting. It is shown with its
-  number of trades, a 95% interval and a **p-value** (from shuffling the results at random 5,000
-  times: how often would luck alone look this strong?). The same is shown for long trades only and
-  short trades only.
-- **Which parts of the score matter.** The same IC for each stored part of the score (chart,
-  fundamentals, news, weekly chart and SPY, options, insider buying, earnings surprise, and the AI
-  overlay, VIX, expected-move and macro penalties), each with its own trade count. A part that was not
-  recorded on older plans is counted only on the plans that have it. A part that never changes
-  (for example a penalty that is always 0) says "No variation". Because several parts are tested
-  together, their p-values are adjusted upwards (Bonferroni): test enough things and one looks good by luck.
-- **A reading, never a finding too early.** Below **20 closed trades** every row says "Not enough data"
-  and a warning at the top tells you to treat the numbers as noise. At 20 or more, a part is reported as
-  "rises with results" or "falls with results" only if its adjusted p-value is below 0.05; otherwise it
-  says "No clear link".
-- **Nothing is dropped silently.** The card says how many closed trades were left out and why: no
-  linked plan (for example a manually opened position), no recorded R, or a score outside every band.
-- The random steps use fixed seeds, so the same trades always give the same report.
-
-It reads the table of stored trades; it does not call the market data providers and uses no AI. It
-describes what happened, it does not predict. The code is `backend/app/portfolio/calibration.py` (the
-report) and `signal_stats.py` (the statistics).
-
-### Missed trades (what the declined plans would have earned)
-
-The calibration report only sees trades that were taken. The app also **declines** plenty (under the
-confidence bar, no trend, the AI overlay objecting) and leaves some written plans unfilled, and without
-looking at those nobody can tell whether the confidence bar, or the AI veto, helps or hurts. The
-**Missed trades** card on the **Trade Plans** page builds that comparison.
-
-**What counts as a missed trade.** Every plan that was not executed, sorted into one kind:
-
-| Kind | What it is | Simulated? |
-|---|---|---|
-| **AI veto** | A "no trade" because the AI overlay objected (Settings: "cancel") | Yes |
-| **Under the confidence bar** | A "no trade" because confidence was below the bar | Yes |
-| **Held by the AI** | A plan was written but left pending because the overlay objected (Settings: "hold") | Yes, with its own entry, stop and target |
-| **Written, never filled** | A pending plan the engine refused (not enough cash, position cap, sector cap, price moved too far) or that nobody has executed yet (auto-execute off) | Yes, with its own levels |
-| **No trend** | A "no trade" with no clear trend, so there is no direction to simulate | Counted only |
-| **Other** | A plan whose text matches none of the above | Counted only |
-
-Two kinds of pending plan are counted but **not** simulated, so one idea is never counted twice: a plan
-for a stock that is already held (a duplicate), and a plan made while the market was closed, which is
-waiting for its redo (the fresh plan from the redo is the decision that counts). Plans that were
-executed, or discarded because a newer plan replaced them, are not missed trades.
-
-**How a hypothetical trade is built and walked.**
-1. A "no trade" record has no entry, stop or target, so they are rebuilt with the **same functions the
-   live plan uses** (the chart analysis, the stop rule with its ATR floor, the target rules), on the
-   daily bars that were final when the plan was made and **nothing later**. The direction is the one the
-   decision's own text names ("against a rule-based long", "despite a bullish trend"); failing that, the
-   chart's trend. A plan that was written keeps its own stored entry, stop and target.
-2. The **entry** is the close of the last daily bar that was final at that moment (the quote the plan used
-   is not stored). A plan made during a session therefore enters at the previous close, and the day it
-   was made on is skipped, as the paper engine skips its own entry bar.
-3. The trade is walked bar by bar with the **paper engine's own exit scan** (§7): the first stop or TP1
-   touch, the stop first when one bar holds both, gaps filled at the open, and the holding limit. Slippage
-   and commission come from Settings, and R is computed the way a real close does.
-4. The result is **resolved** (stop, target or time limit reached: final, never recomputed), **open**
-   (marked at the latest close and recomputed on later refreshes, never counted in the statistics) or
-   **no data** (the price history could not be loaded: retried, never guessed).
-
-**What the card shows.** Two headline questions: *"Did the AI veto save or cost money?"* and *"Are the
-plans under the confidence bar worse than the ones taken?"* Each says **too early to tell** until at
-least **20** resolved trades (and, for the second, 20 closed trades to compare with); after that it
-answers only if the 95% range of the average R sits clear of zero (first question) or clear of the
-range of the taken trades (second), and otherwise says there is no clear answer. Under them, one box per
-kind with the number of plans, resolved trades, **win rate with its 95% (Wilson) interval**, **average R
-with its 95% range**, the total R, how many are still open, waiting or not simulated, and a "too few to
-read much into" note below 20. A box shows the closed paper trades for comparison, and a list shows
-every declined plan with a link to its chart, its kind, its outcome and its hypothetical R.
-
-**When it is computed.** Never by opening the page. The **Refresh** button (30-second cooldown) and a
-daily job at 16:45 New York time on weekdays compute the results that are new or still open, at most 200
-per run (the rest on the next run), one price-history load per stock. Prices come from the local price
-history store (§11), and may be a little stale: this is analysis, not a trading decision.
-
-**What it cannot tell you (the card says so too).**
-- Results are **hypothetical**: filled at the last known daily close with the paper account's slippage,
-  ignoring cash, the position cap and the sector cap, so trades can overlap in ways the account could not.
-- They are walked on **daily bars only**. The paper engine also reads hourly bars to order a stop and a
-  target inside one day; here such a day counts as the stop. This can understate a hypothetical result,
-  never flatter it. The taken trades it is compared with do use hourly bars, so the comparison is not
-  strictly like for like.
-- Levels are rebuilt with **today's rules** from the bars known then, not the exact numbers the decision
-  saw. Prices are adjusted for splits and dividends as of when they were downloaded.
-- Hindsight and survivorship: the prices come from stocks that still trade, and several declined plans
-  on one stock are one idea counted more than once.
-
-### Silent signals (recorded, not scored)
-
-A new signal does not get to move confidence just because it sounds sensible. It starts **silent**: on every
-plan, traded or declined, the app records what the signal read and the points it **would** have added, but
-those points are never added to the confidence score, never change the direction, the entry, stop or targets,
-and never change the position size. Once enough plans have piled up, a backtest can show whether plans where
-the signal agreed did better than luck. Only then is it promoted: its points move into real scoring under a
-cap and the strategy version changes (the list of promoted signals, `LIVE_SIGNALS`, is part of the rules in
-the strategy fingerprint, §4). Today it holds `congress_buying`, `fund_accumulation`, `ownership_5pct_filing`, `finra_short_volume`, `sec_8k_negative_items`, `news_cards`, `fed_event_window` and `post_mentions`: they were promoted early, at the owner's request, and now score for real (§5, "Added later"). The paragraphs below still describe how each one reads. The Silent signals line on a plan card lists only signals still waiting for promotion.
-
-The Trade Plans page shows a muted **Silent signals (not scored)** line on each plan card, with the reading
-and "would have added +1" (or "-1", or "no data yet"). A signal with no stored data, or whose newest data is
-more than 7 days old, says "no data yet": it never guesses. A signal that fails to read is marked the same
-way and never breaks the plan.
-
-**FINRA short volume** is the first one. It compares the share of volume sold short over the last 5 trading
-days (volume-weighted) with the stock's own median share over up to 60 earlier days (needs at least 20). A
-share at least **5 percentage points above its own baseline** reads as mildly bearish context: it would
-subtract 1 from a long and add 1 to a short. Anything else adds 0.
-
-**Negative 8-K items** is the second one (§11, "Company announcements"). It looks for an 8-K filed in the
-**last 3 days** that lists a bad-news item: bankruptcy (1.03), a material impairment (2.06), a delisting
-notice (3.01), a statement that earlier financials can no longer be relied on (4.02) or a director or officer
-change (5.02, the weakest: that item also covers appointments and pay changes, and the filing's text is not
-read). It would subtract 1 from a long and add 1 to a short. A company with no stored 8-Ks reads "no data
-yet"; one with stored 8-Ks but nothing in the window reads 0.
-
-**Fed event window** (`fed_event_window`) is a market-wide **risk flag**, like the macro-calendar penalty but read
-from the Fed's own published items (§11, "The Fed"). It reads **1** and would subtract **1** when a Fed **policy
-statement** or a speech or testimony by a **Chair** was published within **one day** of the plan's moment, and
-reads 0 otherwise. It ignores the trade's direction (a Fed day says the chart is less reliable, not which way to
-trade) and can never add. It reads nothing of what was said. Because the app only sees what was already
-published, a statement due tomorrow cannot be seen here; the macro calendar covers the dates ahead. Reads "no
-data yet" until some Fed item is stored.
-
-**News cards** (`news_cards`) reads the AI labels on this stock's saved headlines (§11, "News cards"). Only
-headlines published in the **last 3 days** count, and only labels that say the headline is mainly about this
-company and rate it **high** or **medium** materiality. Each counts with a weight (high 2, medium 1) and a
-sign (positive +1, negative -1, neutral or mixed 0), and the weights are added up. A total of at least +2 or
-at most -2 is evidence (one high-materiality story, or two medium ones); anything between reads 0. Positive
-news would add 1 to a long and subtract 1 from a short, negative news the reverse, and with no clear direction
-it reads 0. The AI only fills in the labels: these rules decide what they mean, and the existing keyword news
-check still decides the real score. It reads "no data yet" when there is no label for the last 3 days. A label
-is saved when it is made, so a backtest of an earlier moment sees none.
-
-**Fund accumulation** (`fund_accumulation`) and **5% owner filing** (`ownership_5pct_filing`) read the 13F holdings of followed funds and new Schedule 13D filings (§20). Net fund buying or a new 13D would add 1 to a long and subtract 1 from a short; each is capped at 1 and both read "no data yet" until filings are stored.
-
-**Post mentions** (`post_mentions`) counts the posts in the **last 24 hours** that name this company (§11, "Posts").
-It reads the count and would subtract **1** when the count is above 0, whatever the trade's direction, because a
-post can be good or bad for a company and nothing here reads which. A repost or a post with no words is not
-counted. It reads 0 when none named the company and "no data yet" until some post is stored. The source is an
-unofficial archive.
-
-The code is `backend/app/portfolio/missed_trades.py` (sorting, rebuilding, walking, refreshing),
-`missed_trade_report.py` (the report) and `missed_trade_models.py` (the stored results, table
-`missedtradeoutcome`).
+- **Calibration report** (`GET /api/portfolio/calibration`, the Portfolio card): bands closed old trades by evidence
+  points and shows win rate, average R and IC with n and intervals; under 20 trades every verdict is "not enough data".
+  Hold positions have no linked plan and are left out.
+- **Missed trades** (`GET /api/missed-trades`): the stored report of what old declined plans would have earned. Hold
+  mode creates no declined plans, so the refresh button, `POST /api/missed-trades/refresh` and the 16:45 daily job are
+  gone; resolved rows are never recomputed. Results are hypothetical (daily bars, entry at the last known close).
+- **Silent signals:** the machinery is deleted. The FINRA short-volume data and its endpoints (§11) remain as data.
 
 ---
 
 ## 6. Entry, stop, targets and position size
 
-`backend/app/risk/position_sizing.py` and `_derive_entry_and_stop`:
-
-- **Entry:** the latest price when the plan is made. When it executes, the price is fetched again
-  (§7).
-- **Stop, for a long** (a short is mirrored):
-  - **1% below the nearest support**, or **3% below entry** if no support level exists,
-  - then pushed further if needed, so it's **at least 1.5× ATR14** below entry. The volatility floor
-    stops the stop sitting inside the stock's normal daily noise.
-  - The stop is never pulled closer than the chart level.
-- **Targets:** **TP1** and **TP2** are the next resistance levels (support for a short), if each gives
-  at least 1:1 reward to risk. Otherwise they're set at **1.5R** and **3R**.
-- **Share count:** (account × risk %) ÷ (entry − stop). With 1% risk on $100,000, a trade risks
-  $1,000. Then it's capped by the cash the account can really use, and at the open by 1% of the
-  stock's average daily volume.
-- **Time horizon** is labelled "1–4 weeks". It is also enforced: a position still open after the
-  **maximum holding time** (default **20 trading days**, the top of that range; §7) is closed at that
-  day's close.
+*Retired on 2026-10-15.* Swing entries, risk-based share counts (1% risk), TP1/TP2 and the ATR-floored stop belonged to the
+deleted trade plan. A hold position has no target: it is bought at the current quote at a target weight of the
+account, with a disaster stop (§27). The Risk Manager calculator on the Analysis page still uses its own stop logic.
 
 ---
 
@@ -711,111 +419,38 @@ The code is `backend/app/portfolio/missed_trades.py` (sorting, rebuilding, walki
 ### Opening a position: the checks
 - **Refused** if:
   - **the stock's market is closed.** US stocks only fill during the session (09:30–16:00 New York
-    time on trading days, 13:00 on early-close days; §8). Off-hours the only price is the last
-    close, which nobody could actually trade at. Crypto never closes. This check sits inside the
-    engine, so every way a position opens obeys it: auto-execute, the Execute button, auto-scan,
-    and later the watchers, and the backtest (§18). (The engine's clock can be swapped for a simulated
-    one, which the backtest does.)
-  - the stock is already held (no adding to a position),
-  - the maximum number of open positions is reached (**5**),
-  - the sector already has 2 open positions (using the `sector` column of the stock list),
-  - there isn't enough cash (a short's sale money is held back as collateral).
-- **Re-quoted:** it fills at the *current* price plus **slippage (5 bps)**. It's **refused** if the
-  price has moved **more than 2%** from the plan ("stale plan": the stop, size and R:R would no longer
-  match).
+    time on trading days, 13:00 on early-close days; §8). Crypto never closes. This check sits inside the
+    engine, so every way a position opens obeys it: the hold scan, the smart-money pipeline, the review
+    queue's Buy and the backtest (§18). (The engine's clock can be swapped for a simulated one, which the
+    backtest does.)
+  - the stock is already held (adding to a hold position is a separate, capped top-up, §27),
+  - the hold position cap, the sector cap or the sleeve's caps are reached,
+  - there isn't enough cash.
+- **Re-quoted:** it fills at the *current* price plus **slippage (5 bps)**; refused as stale if the price moved
+  more than 2% from the one used for sizing.
 - **Trimmed** to at most **1% of average daily volume**.
 
-### Closing: the exit check
-- It runs every 15 minutes during US market hours, plus 30 minutes after the close (after the 1:00
-  pm close on an early-close day; not at all on a holiday), and around the clock if a crypto
-  position is open.
-- It walks **every daily bar since entry**, not just today's, so a stop that was hit and then
-  recovered isn't missed. **The entry day's daily bar is skipped** (the entry is priced at that day's
-  close or current price, so the bar's earlier low must not stop out a trade that didn't exist yet).
-  The rest of the entry day is checked **hour by hour** instead (see "The entry day, hour by hour" below).
-- A position closes **fully** at whichever comes first, **stop** or **TP1**. TP2 is for information
-  only, unless you switch on the partial scale-out below.
-- **Time limit (third way out).** If neither was touched, a position that has been open for the
-  **maximum holding time** is closed at the **close** of that day. The days are **trading days**
-  counted from the bars (the entry day is day 0 and is not counted), so weekends and holidays don't
-  count; a crypto pair trades every day, so each calendar day counts. It is a market order, so it pays
-  slippage like a stop. The time exit comes **last**: on that same day the stop is checked first, then
-  TP1, and only if both are clear does the time limit close it. The close used is that day's final one:
-  **a day still in progress is never used** (a US stock's day is final 30 minutes after the closing
-  bell, 13:30 on an early-close day; a crypto day at midnight UTC), so during the session the
-  position simply waits for the next check. Set the maximum to **0** to switch the limit off.
-- **If one day touches both** the stop and TP1, a daily bar can't show which came first. The engine
-  then asks for **that day's hourly bars** and takes whichever level was touched **first** (see "Which
-  level came first" below). If the hourly bars aren't available, the answer is a **stop**, the cautious
-  choice, and the trade is marked as decided that way.
-- **Gaps:** a day (or, when hourly bars are used, an hour) that opens past the stop fills at the **open**
-  (worse). One that opens past the target fills at the **open** (better).
-- Stop exits pay slippage (a market order). Target exits don't (a resting limit order).
-- **Liquidity-aware slippage (opt-in, Settings -> Paper Account, off by default):** when on, every market fill (entry, stop exit, time exit) pays extra basis points on top of the flat slippage: `coefficient x sqrt(shares / 20-day average volume)`, capped at 100 bps (default coefficient 100, so 1% of daily volume costs 10 bps). Target exits still pay nothing. The slippage actually paid is stored on the position (`entry_slippage_bps`, `exit_slippage_bps`). Backtests use the same engine and the same setting. The enabled flag and coefficient join the strategy-version fingerprint only while on. The missed-trades study stays on the flat slippage (it has no volume data).
-- **Partial scale-out (opt-in, Settings -> Paper Account, off by default):** when on, TP1 sells only a fraction of the shares (default 50%) instead of closing the position. The rest then gets a breakeven stop (or a trailing stop of 1R behind the best price, your choice) and runs to TP2, the stop or the time limit. The position still counts as **one trade** with one profit and one R (measured against the size at entry). With it off, results are identical to before. The settings join the strategy-version fingerprint only while on, and backtests use the same engine.
-- A **manual close** from the Portfolio page closes at the current market price, and only while the market is open. While it is closed the only quote is the last session's close, so the button is refused with the reopening time (a stop or target that was touched is still closed by the exit check).
-- **Why a time limit:** a stalled position used to sit open forever, holding one of the 5 slots and
-  a sector slot while its original reason aged. Turning the limit on changed behaviour for stalled
-  positions: ones already open longer than the limit close at the next check (at the close of the day their limit
-  ran out), and win rate and Avg R
-  now include those results. The limit needs the entry day to be in the 3 months of history the exit
-  check reads, so the maximum is capped at 60 trading days.
-
-### Which level came first, and the entry day, hour by hour
-Daily bars have two blind spots. Hourly bars (Yahoo keeps about two years of them) fill both. They
-are fetched **only when needed**: for a day that touched both levels, and for the entry day of a
-position whose entry day hasn't been checked yet, one request per stock per check (the data is also
-cached for 15 minutes). A check with nothing ambiguous makes no hourly request.
-
-**Which level came first.** For a day whose range holds both the stop and TP1:
-- The engine walks that day's hourly bars in order and closes at the **first** one that touches a
-  level. The same fill rules apply to the hour: a stop is a market order (an hour that opens past it
-  fills at that hour's open, and pays slippage), a target is a resting order (an hour that opens past
-  it fills at the open, which is better).
-- **Inside one hour the stop still comes before the target.** If both levels sit inside the same
-  hourly bar, the order can't be known, so the stop is taken (the cautious choice, one level down).
-- A day that **opens past the stop** needs no hourly look: the open itself triggered the stop.
-- The hourly bars must themselves reach both levels, like the daily bar did. If an hour seems to be
-  missing, they aren't trusted and the stop is taken.
-- Hourly bars that can't be fetched, or that turn out not to be hourly, change nothing: the stop is
-  taken, as before.
-
-**The entry day, hour by hour.** The position's **opening hour** and every later hour of the entry
-day are checked, so a stop or target touched later that day is no longer missed (a missed stop only
-ever deletes losses):
-- The hour the position was **opened in** is partly before the entry, and an hourly bar can't say
-  which part its extremes came from. In that hour only the **stop** counts (the cautious reading: at
-  worst it closes a trade that was never exposed); a target there is ignored (it may have been reached
-  before the entry, and counting it would flatter the trade). A stop in that hour fills **at the stop
-  price**, not at the hour's open, which was before the position existed.
-- A position opened exactly at the start of an hourly bar has that whole bar checked.
-- Every later hour is checked in full. If a stop or target was touched, the position closes there.
-- A US stock's day is New York time; a crypto pair's day is a UTC day.
-- When the day has been fully checked, the position's **entry-day check** is saved as "hourly". If the
-  hourly bars never arrive (or stay incomplete for a day after the close), it is saved as
-  "daily_only": the entry day then stays unchecked, as before, and the row says so.
-- A position that was already open before this check existed gets its entry day looked at the first
-  time the exit check runs.
-
-**How each exit was decided** is saved on the closed position as its **exit resolution**:
-
-| Value | Meaning |
-|---|---|
-| `daily` | One level on the daily bar (or the open already settled it). |
-| `hourly` | Found on an hourly bar. |
-| `daily_ambiguous_stop_first` | The day held both levels and no hourly answer was available: the stop. |
-| `hourly_ambiguous_stop_first` | Both levels sat inside one hourly bar: the stop. |
-
-A time-limit exit is `daily`; a manual close has none. The Portfolio page shows it as the hover text
-of a closed trade's reason. Comparing the "ambiguous" rows with the rest later shows how much the
-cautious rule costs.
-
-**Limits.** Hourly bars only go back about two years (the engine asks for at most one year). Hourly
-is also a resolution, not a tick: two levels inside one hour still go to the stop. The backtester
-turns hourly bars off and keeps the plain daily rules, because its data source has no hourly bars for
-past dates.
+### Closing: the hold exit
+- The exit check runs every 15 minutes during US market hours, plus 30 minutes after the close (after the 1:00
+  pm close on an early-close day; not at all on a holiday), and around the clock if a crypto position is open.
+- It walks **every daily bar since entry**, not just today's, so a close beyond the stop that later recovered is
+  not missed. **The entry bar is skipped** (entry is priced at that day's close or current price, so the bar must not
+  close out a trade that didn't exist yet).
+- A position closes **fully** at the first **final** daily bar whose **close** is beyond the stop (a long: at or below
+  it), at that close plus slippage, with the reason `disaster_stop`. A wick through the stop that closes back above it
+  does nothing, a gap-down fills at the close (the unfavourable choice), and a day still in progress is never used.
+  `hold_stop_pct` 0 means alert-only: no stop, never an exit.
+- There is **no target, no time limit, no partial scale-out and no hourly check** any more. A still-open old swing row
+  is managed by its stop alone through the same rule (a stop that was a swing stop closes at the daily close beyond it).
+- **The sell plan** can also close a position (reason `sell_plan`) or raise its stop (§27). A raised stop starts counting
+  from that day's later bars: a close under the new stop before the raise never closes the position.
+- Stop exits pay slippage (a market order). **Liquidity-aware slippage** (opt-in, Settings -> Paper Account, off by
+  default) adds `coefficient x sqrt(shares / 20-day average volume)` basis points to every market fill, capped at 100 bps.
+- A **manual close** from the Portfolio page closes at the current market price, and only while the market is open.
 
 ### Best and worst price during a trade (MFE and MAE)
+*Written for swing trades and still true for the exit day rule; hold positions have no target, so there is no TP1-hit day.*
+
 Win rate can't tell you whether stops are too tight or exits too slow. Two numbers per closed trade
 can:
 - **MFE** (maximum favourable excursion): the furthest the price moved **in the trade's favour**
@@ -836,7 +471,7 @@ How they are worked out, with the same honesty rules as the exit check:
   price), so a day settled as "target first" does not count the low that came after the target. A stop-hit day does not count its low (that may be far
   below the fill and came after the position was gone) or its high; a TP1-hit day does not count its
   high or low beyond the fill. Leaving something out only makes an excursion look smaller, never better.
-  A time-limit exit happens at the close, so that whole day counts.
+  A time-limit exit (old swing rows) happens at the close, so that whole day counts.
 - They are saved when the position closes. A **manual close** fetches the bars at that moment; if the
   price history can't be fetched, the close still goes through and the figures stay empty.
 - If the bars aren't available, or the entry day is outside the history window, the figures are
@@ -852,14 +487,13 @@ The **Trade excursions** block on the Portfolio page averages them over closed t
 figures: winners' and losers' average best and worst price in R, **exit efficiency** (realized R
 divided by the best R reached, for winners), how many losers were at least **+1R ahead** first, and
 how many winners came within 0.2R of the stop. Read it like this: losers that were far ahead first
-suggest slow exits; winners that nearly hit the stop suggest the stop may be too tight. Because the
-whole position closes at TP1, a winner leaves at its target, so exit efficiency stays near 100% by
-design; the best price **after** an exit is unknowable and is never shown.
+suggest slow exits; winners that nearly hit the stop suggest the stop may be too tight. In hold mode R is measured against the wide disaster stop, so read
+the percent figures; the best price **after** an exit is unknowable and is never shown.
 
 ### Statistics
 Portfolio value, total return (including open positions at current prices), win rate, total closed
 trades, **Avg R** (the average result per closed trade, in R), active positions and cash, plus the
-**exit mix**: how many closed trades ended at the stop, TP1, the time limit or by hand. The
+**exit mix**: how many closed trades ended at the disaster stop, by the sell plan or by hand (old rows: stop, TP1, time limit). The
 **equity curve** is built from snapshots taken when a position opens, when one closes by hand, and on
 each scheduled exit-check pass. Opening the Dashboard or Portfolio page runs the exit check too, but
 never adds a point, so the curve follows time and trades, not page views. If a page load closes a
@@ -871,14 +505,15 @@ position, the curve shows it at the next snapshot.
 
 | What | When | Default |
 |---|---|---|
-| **Auto-execute** | Right after any tradeable plan is generated, whether by you, auto-scan or auto-trade, **if the stock's market is open**. Otherwise the plan waits for the market-open redo. | **On** |
-| **Auto-scan** | Mon–Fri at **10:00, 13:00 and 16:15 New York time**, skipping US market holidays. It evaluates every stock in the list that isn't already held, and auto-executes while position slots remain. The 16:15 run comes after the close, so its plans can't execute: they're queued for the redo (on a 1:00 pm early-close day, so are the 13:00 run's). | **Off** |
-| **Auto-trade button** (Market Scan) | When you click it. It runs the same loop as auto-scan, at most once a minute. At night or at the weekend, its plans are queued for the redo too. | — |
+| **Auto-execute** | Lets the hold scan and the smart-money pipeline open positions on their own. Off: nothing is bought by itself and smart-money candidates go to the review queue. | **On** |
+| **Auto-scan (hold scan)** | Mon–Fri at **10:00 New York time**, skipping US market holidays: the quality gate on every unheld watchlist stock, up to the per-scan cap (§27). Needs auto-execute to buy | **Off** |
+| **Auto-trade button** (Market Scan) | When you click it. It runs the same hold scan, at most once a minute | — |
+| **Smart-money jobs** | 09:27 New York time: SEC and smart-money watchers fetched once; 09:50: the smart-money pipeline (§20, §27) | Always |
+| **Sell plan** | Mon–Fri at **10:30 New York time**: sell signals and the rebuy watch (§27) | Always |
 | **Watchers** | One check every **5 minutes** (a setting, 1 to 60) that runs whichever watchers are due; nothing happens while the master switch is off. See §19. | **Off** |
 | **Price alert** | A message you ask for when a stock's price meets a condition you set (§23). It never trades. |
 | **Market-open redo** | Checked every 15 minutes through the US session; acts from **09:45 New York time** on trading days | Always |
 | **Exit check** | Every **15 minutes** (a setting), only during US hours plus 30 minutes, unless crypto is held | Always |
-| **Missed-trades refresh** | Mon–Fri at **16:45 New York time**: computes what the declined plans would have earned, once the day's bars are final (§5, "Missed trades"). Analysis only; it places nothing | Always |
 | **Trade lessons** | Every **5 minutes**: writes an AI lesson for up to 3 trades closed in the last 3 days that have none (§9). Does nothing without an AI provider | Always (needs an AI provider) |
 | **Price alerts** | Every **5 minutes**. Checks your alerts and the open positions against fresh quotes; stocks only while the US market is open, crypto always (§23) | Always (alerts on open positions can be switched off) |
 | **Morning note** | Looked at every 5 minutes; sent at the time you set (default **08:45 New York time**) on US trading days (§23) | **Off** |
@@ -886,25 +521,12 @@ position, the curve shows it at the next snapshot.
 | **Health check** | Every 15 minutes, and once at startup. It checks a SPY quote, the AI setting and Finnhub, and messages you on Telegram only when one **changes** between up and down | Always |
 
 ### The market-open redo
-A tradeable plan made while its market is closed was built on the last session's prices: a Sunday
-plan is Friday's close, and by Monday the news and the opening price can make it stale. So it is
-never filled. Instead:
-1. The plan stays **pending**, and the stock goes into a **queue** (the `DeferredEvaluation` table),
-   due at **09:45 New York time** on the next trading day: 15 minutes after the bell, once the
-   opening auction is over. One entry per stock: generating it twice on a Sunday doesn't queue two.
-2. From 09:45 the stock is **evaluated again from fresh data**, with the same account size and risk
-   as the original request. The new plan goes through every normal check, including auto-execute,
-   so the auto-execute setting *at that moment* decides whether it opens a position.
-3. The old plan is **discarded** either way, so only the new plan can ever execute. If the new
-   evaluation says "no trade", that is the answer.
-4. **Skipped** if the stock is already held by then, or the old plan was already replaced by one
-   made during the session.
-5. If the data can't be fetched, it **tries again** 15 minutes later, 3 attempts in all, then gives
-   up and discards the old plan with a note to generate a fresh one by hand.
-6. A redo missed while the app was off runs on the next check during a session, still from 09:45.
-
-Telegram gets a one-line summary of each redo pass, plus the usual message for each new plan.
-Crypto is never queued: its market never closes.
+Only **smart-money candidates** are queued now. A smart-money buy or review-queue Buy that arrives while the market is
+closed is not filled at the last close: it goes into the queue (the `DeferredEvaluation` table), due at **09:45 New York
+time** on the next trading day, and is redone from fresh data by the pipeline with its own routing and caps. A queued
+row with no candidate (an old swing plan) is closed as skipped. If the data can't be fetched it tries again 15 minutes
+later (3 attempts), and a redo missed while the app was off runs on the next check during a session. The scheduler checks
+every 15 minutes through the US session. Crypto is never queued.
 
 ### The US market calendar
 `backend/app/markets.py` works the calendar out from the exchange's own rules, so it doesn't need
@@ -934,7 +556,7 @@ updating each year:
   instead of about 68k, which matters on a subscription's usage window; the one exception is a research call
   with web search allowed, see "Research mode" below). The model is **pinned** (default
   `sonnet`, set in Settings): without a pin the CLI answers with whichever model you last picked in an
-  interactive session, so the narratives and the AI overlay's objections could change model without any
+  interactive session, so the narratives could change model without any
   sign of it. `sonnet`, `opus` and `haiku` always mean the latest model of that family; a full id such
   as `claude-sonnet-5-5` fixes one exact version. A blank value means "don't pin": whatever the CLI is
   set to. The sidebar shows the pin (for example `AI · claude_code_cli (sonnet)`), and **Test
@@ -943,37 +565,17 @@ updating each year:
 - **OpenRouter, OrcaRouter, OpenAI, Gemini:** with your own key.
 
 ### Two models: a normal one and a decision one
-Every provider can use two models:
-
-| Tier | Used for | Setting |
-|---|---|---|
-| **Routine** | The writing: AI take, AI Summary, AI Insight, and **Test Connection** | The provider's normal model (for example `claude_cli_model`) |
-| **Decision** | The AI Trading Overlay's verdict, the one answer that can stop a trade | The provider's **Decision model (AI overlay)** (for example `claude_cli_decision_model`) |
-
-- **Why:** the writing needs speed and low cost, and nothing hangs on it. The verdict can stop a trade,
-  so it is worth a stronger model. Later features that need a judgement (rather than prose) will use
-  the decision tier too.
-- **Blank means "use the same model".** Every decision model is blank until you set one, so an
-  install that never touches it behaves exactly as before: one model does everything.
-- **It only changes which model answers.** The overlay can still only stop a trade, never start or
-  change one (below).
-- **Seeing it:** the plan card's overlay block says "AI overlay · <model>" (the model that really
-  answered, as the provider reports it, and saved with the plan). The sidebar still shows the normal
-  model; **Test decision model** (next to **Test Connection**) sends one small request to the decision
-  model and names it in the result. If no decision model is set, the result says it used the normal one.
-- **Checks:** every model name is checked when it is saved (letters, digits and `. _ - : @ [ ]`, and `/`
-  for gateways such as OpenRouter and OrcaRouter, starting with a letter or digit). Gemini names can't
-  contain `/` because they go into a web address.
-- **Strategy version:** while the overlay is on, changing the decision model makes a new strategy
-  version (the verdicts change). Changing only the normal model doesn't, once a decision model is set.
+Every provider can still be given two models (settings `claude_cli_decision_model`, `openrouter_decision_model`,
+`orcarouter_decision_model`, `openai_decision_model`, `gemini_decision_model`; blank = the normal model). **Nothing calls
+the decision tier now**: its only caller was the AI Trading Overlay, deleted on 2026-10-15. Every AI text (chart insight,
+research summary, morning note, thesis review, lessons, Test Connection) uses the routine model. The AI Committee still
+labels some steps "decision" (§25). Whether to keep the decision tier is an open owner decision.
 
 ### Research mode (web search for research calls only)
-AI calls come in three kinds: **narration** (prose from numbers the rules computed), the **overlay
-verdict** (the one call that can stop a trade) and **research** (background a person reads). Only
+AI calls come in two kinds: **narration** (prose from numbers the rules computed) and **research** (background a person reads). Only
 research calls may search the web, and only when the **Research mode** setting is **Allow web search**.
-The default is **Our data only**. Narration and the overlay never use the web in either mode, because a
-web page can carry text written to steer an AI, which is harmless in a research note and not acceptable
-in a call that can stop a trade. The setting is not part of the strategy version: research never decides
+The default is **Our data only**. Narration never uses the web in either mode, because a
+web page can carry text written to steer an AI. The setting is not part of the strategy version: research never decides
 a trade. No research feature uses it yet; this is the switch they will share.
 
 | Provider | How web search is done |
@@ -989,9 +591,8 @@ source for every web fact, keep sourced facts apart from inference, no investmen
 whether the web was really used and the sources. Web search may cost extra with the provider.
 
 ### What the AI writes
-1. **AI take:** a short narrative on each tradeable plan. Settings -> AI has a switch (on by default); off = the rule-based Analyst's take and no AI call.
-2. **AI Summary:** on the research panel.
-3. **AI Insight:** a short chart explanation on the Analysis page. Settings -> AI has a switch (on by default); off = the rule-based "Chart summary" and no AI call (one call per chart load while on).
+1. **AI Summary:** on the research panel.
+2. **AI Insight:** a short chart explanation on the Analysis page. Settings -> AI has a switch (on by default); off = the rule-based "Chart summary" and no AI call (one call per chart load while on).
 
 It only explains numbers the rules already computed. If the AI fails or is slow, the app shows the
 rule-based text instead; a request never fails because of the AI.
@@ -1004,10 +605,10 @@ held up, and one concrete lesson.
 - **Facts only.** The AI is handed the trade's own figures (entry and exit, result in R and dollars,
   holding days, best and worst price), SPY's move between the same two daily closes (from real price
   history; if it can't be fetched, or the trade opened and closed on the same day, the note says the
-  comparison is not available), the plan's confidence points and score parts, the plan's reasons and
-  the AI overlay's opinion, if there was one. The app does the arithmetic; the AI is told to invent
-  nothing and give no advice. The plan's reasons come partly from headlines, so they are marked as
+  comparison is not available) and the plan's recorded reasons. The app does the arithmetic; the AI is told to invent
+  nothing and give no advice. The plan's reasons can contain headlines, so they are marked as
   untrusted text it must describe and never obey.
+
 - **No fake lessons.** If the AI is unavailable or fails, **no lesson is stored**: only a short reason
   is kept, and the row is tried again later. There is no template text in its place, because a canned
   lesson would be made-up insight. A failed rewrite keeps the earlier lesson.
@@ -1018,64 +619,22 @@ held up, and one concrete lesson.
 - **Older trades** (closed before lessons existed, or before an AI was set up) get no lesson by
   themselves, so nothing spends your AI quota on history. **Write lesson** on the Portfolio page does one
   on request, with a 20-second wait per trade.
-- **Lessons feed the AI Trading Overlay.** When the overlay is on, its prompt gets the **3 most recent
-  lessons** on that stock, in a block labelled as notes written by an earlier AI pass, not facts or
-  instructions. They can only help the overlay decide to object; they cannot start a trade or change
-  the entry, stop, targets or size. In a backtest the overlay sees only lessons written before the
-  simulated moment.
+- **Lessons are notes only.** They used to feed the AI Trading Overlay's prompt; the overlay and `lesson_notes.py` were
+  deleted on 2026-10-15, so nothing reads a lesson back into a decision.
 
-### The AI Trading Overlay (off by default)
-- **What it is:** an independent second opinion on every evaluation where the rules propose a trade. It's
-  one extra AI call per such stock. A stock the rules reject as "no trade" gets no call (the overlay can only stop a trade, and there is none to stop). The AI sees the same data and returns:
-  - its **stance** (bullish, bearish or neutral),
-  - a **trade verdict** ("take" or "pass"),
-  - its **conviction %**, its reasoning, and its own reading of the news.
-- **Which model answers:** the decision model if you set one, otherwise the provider's normal model.
-- **It can stop a trade, never start one or change one.** Direction, entry, stop and size always come
-  from the rules. Two settings control how much it counts:
-  - **Count disagreement in the confidence score:** 0 to −3 points (§5).
-  - **What an objection does:**
-    - **cancel**: the evaluation becomes a "no trade" naming the AI,
-    - **hold**: the plan is saved but not auto-executed,
-    - **none**: the objection is recorded only.
-- **An objection** means the verdict is "pass", or, with no verdict, a stance that's the flat opposite
-  of the trade.
-- **Headlines are treated as untrusted text** in its prompt, so a headline can't give it instructions.
-- **It answers a fixed form.** The AI is asked for exactly five fields (stance, trade verdict, conviction
-  0 to 100, reasoning, news reading). Where a provider has its own "answer in this shape" mode, the app
-  uses it: the Claude CLI's `--json-schema`, the `json_schema` response format for OpenAI, OpenRouter and
-  OrcaRouter, and Gemini's response schema. If a gateway refuses that mode for a model, the call is retried
-  once without it and a warning is logged. The AI's reply is then **read three ways, strictest first**, and
-  the way used is saved on the plan:
-  - **structured**: the whole reply was one JSON object that matched the form,
-  - **lenient**: the reply was damaged (wrapped in a code fence or a sentence, a field missing or
-    out of range) but a stance or verdict could still be recovered,
-  - **failed**: nothing usable. The AI's own words are kept and shown, the log gets a warning, and the plan
-    card says "AI overlay answered but its reply could not be read". **No verdict is ever invented**, so a
-    failed read has no say in the trade, and now you can see that it happened instead of mistaking it
-    for "the AI had no objection".
-- **It is given a block of ground-truth numbers.** Before the other data, the prompt carries a block marked
-  GROUND TRUTH that the app computed itself, with no AI: price and latest quote, change, trend and momentum,
-  RSI, the 20 and 50 day averages, the nearest support and resistance, ATR, volume against its average, the
-  52-week range, the next earnings date and how many days away it is, the options-implied move, and what the
-  rules concluded (verdict, confidence, points by part). Units and rounding are fixed, and anything the app
-  doesn't have reads "not available". The AI is told that every price, level, percentage or date it states
-  must come from that block or the other data given.
-- **Quoted figures are checked.** After the reply, the app looks for specific dollar prices and decimal
-  percentages in the AI's reasoning that appear nowhere in the data it was given (within 1%, or equal at the
-  precision quoted). Any it finds are saved on the plan and shown under the opinion as "Check these figures:
-  model quoted $412.50, not in the data given". The check is deliberately cautious: it ignores years, round
-  levels like "$550", whole-number percentages (often the AI's own confidence), and figures that appear in
-  the headlines or fundamentals it was shown. **It is an honesty signal only: it never changes the verdict,
-  the score, the direction or the size.**
+### The AI Trading Overlay
+*Retired on 2026-10-15.* The overlay (a second opinion that could stop a swing trade), its `ai_overlay_*` settings,
+trade verdicts, ground-truth block and the "Check these figures" warnings were deleted. No AI takes part in any buy,
+sell or sizing decision; an AI may only narrate or extract facts from text. Old `settings.json` files that still carry
+the retired keys load fine (unknown keys are ignored).
 
 ---
 
 ## 10. Telegram notifications
 
 Needs a bot token and a chat ID in Settings, and the Settings page has a test button.
-- **Every tradeable plan:** symbol, direction, entry, stop, TP1, confidence, and whether it was
-  auto-executed (or why not).
+- **Every hold buy:** the hold scan sends one line with the symbols bought; the sell plan sends an alert per signal and a
+  line per sale.
 - **Provider down or back up:** market data, AI or Finnhub, sent only when the state changes.
 - **Morning note, weekly digest and price alerts:** see §23. Each is its own switch in the Notifications card.
 
@@ -1538,51 +1097,43 @@ Every call the app makes to a source is counted once, in one place, since the se
 |---|---|---|
 | AI provider | none | Which AI writes the narratives (§9) |
 | Model and key per provider | per provider | For example OpenRouter `anthropic/claude-3.5-haiku`, OpenAI `gpt-4o-mini`, Gemini `gemini-1.5-flash`, OrcaRouter `orcarouter/auto` |
-| Decision model, per provider (`claude_cli_decision_model`, `openrouter_decision_model`, `orcarouter_decision_model`, `openai_decision_model`, `gemini_decision_model`) | blank | The model that answers the AI overlay's verdict. Blank = the same model as the provider's normal one. Same characters as the normal model; Gemini's can't contain `/` (§9) |
+| Decision model (unused now), per provider (`claude_cli_decision_model`, `openrouter_decision_model`, `orcarouter_decision_model`, `openai_decision_model`, `gemini_decision_model`) | blank | Nothing uses it since the overlay was deleted. Blank = the same model as the provider's normal one. Same characters as the normal model; Gemini's can't contain `/` (§9) |
 | Claude CLI model | `sonnet` | The model the Claude Code CLI is pinned to (`--model`). An alias or a full id; letters, digits and `. _ - : @ [ ]` only, up to 64 characters. Blank = don't pin, use whatever the CLI is set to (§9) |
 | Finnhub enabled, and key | off | Adds Finnhub as the first source for what it offers |
-| AI take on trade plans (`ai_plan_take_enabled`) | on | Off: the rule-based Analyst's take, no AI call for it |
 | AI insight on charts (`ai_chart_insight_enabled`) | on | Off: the rule-based chart summary, no AI call for it |
-| AI Trading Overlay | off | The second opinion (§9) |
-| Count disagreement in the confidence score | on | The overlay can cost 0 to −3 points |
-| Overlay objection action | cancel | cancel, hold or none (§9) |
-| Research mode | Our data only | Our data only, or Allow web search for research calls (§9). Never affects narration or the overlay |
-| Minimum confidence for a trade | 16% | The trade / no-trade bar (5 of 32 points) |
+| Research mode | Our data only | Our data only, or Allow web search for research calls (§9). Never affects narration |
 | Telegram bot token, and chat ID | empty | Messages (§10) |
 | Scan universe size | 50 | How many symbols from the top of the watchlist to scan (25, 50, 100 or 200 in the app) |
 | News cards on / off (`news_cards_enabled`) | on | The AI labels each new headline and the labels score the news part (§5, §11). Spends up to 3 AI calls per symbol evaluated, only for unlabelled headlines. Off = keyword news scoring |
 | Most headlines labelled per run (`news_card_batch_limit`) | 20 | 1 to 30. A run also never makes more than 3 AI calls |
 | Watchlist | the bundled list | The symbols to scan, saved separately in `runtime/universe.json` (§11), not in `settings.json` |
 | Starting cash | $100,000 | Only applies to a fresh or reset account |
-| Default risk per trade | 1% | Sets the share count (§6) |
 | Exit-check interval | 15 minutes | How often positions are checked |
 | Slippage | 5 bps | The cost added to market fills (entries and stops) |
 | Liquidity-aware slippage (`liquidity_slippage_enabled`, `liquidity_slippage_coefficient`) | off, 100 | When on, market fills pay extra bps that grow with order size versus average daily volume (§7). The coefficient is the extra bps at 100% of daily volume, capped at 100 bps |
 | Commission per trade | $0 | — |
 | Watchers on / off (`watchers_enabled`) | off | Master switch for the background watchers (§19). Installed: the SEC filings watcher, the Fed watcher and the posts watcher |
-| What a watcher event does (`watchers_action`) | record, alert and re-evaluate | `record`, `alert` or `alert_and_reevaluate` (§19) |
+| What a watcher event does (`watchers_action`) | record and alert | `record` or `alert`; re-evaluation is gone, `alert_and_reevaluate` now only alerts (§19) |
 | Congress follow mode (`smart_money_follow_congress`) | all | `all` follows every House member; `list` limits the Congress tab's follow filter and the House watcher's alerts to the names below (section 20) |
 | Followed funds (`smart_money_followed_funds`) | empty | Up to 50 fund manager CIK numbers (digits only, at most 10 each) whose 13F reports the Funds tab loads and the fund filings watcher checks. Empty means the built-in starting list: Berkshire Hathaway, Pershing Square, Scion Asset Management, Duquesne Family Office, Appaloosa and Bridgewater (section 20) |
 | Followed members (`smart_money_followed_members`) | empty | Up to 50 member names, each 1 to 80 characters, matched ignoring case and punctuation. Only used in `list` mode |
 | Watcher check interval (`watchers_poll_minutes`) | 5 | How often the app looks for watchers that are due, 1 to 60. Takes effect after a restart |
-| Auto-execute trade plans | on | Opens a position as soon as a plan is made, if the market is open (otherwise the plan is redone at the next open, §8) |
-| Unattended auto-scan | off | The 3-times-a-day loop (§8) |
-| Max open positions | 5 | — |
-| Maximum holding time | 20 trading days | A position still open after this many trading days is closed at that day's close (§7). 0 = no limit. Up to 60 |
+| Auto-execute trade plans | on | Lets the hold scan and the smart-money pipeline open positions on their own (§8) |
+| Unattended auto-scan | off | The 10:00 hold scan (§8, §27) |
+| Hold settings (`hold_target_weight_pct` 4.5, `hold_stop_pct` 25, `hold_max_positions` 20, `hold_max_per_sector` 4, `hold_max_new_per_scan` 3, `hold_buy_only_dips`, `hold_add_on_dips` off, `hold_failed_gate_size_pct` 50, `hold_alert_drawdown_pct`) | see §27 | The portfolio builder card |
+| Sell plan and rebuy (`sell_ma200_days` 5, `sell_trail_pct` 10, `rebuy_cooldown_days` 30) | see §27 | Sell signals and the rebuy watch |
+| News discovery (`news_discovery_enabled` off, `news_discovery_max_per_run` 5) | off | Tickers named in headlines of watched stocks (§27) |
+| Max open positions (`max_concurrent_positions`) | 5 | Applies to non-hold sleeves and the fingerprint; hold positions use `hold_max_positions` |
 | Morning note on / off (`morning_note_enabled`) | off | The daily Telegram brief (§23) |
 | Morning note time (`morning_note_time_et`) | 08:45 | When it is sent, as HH:MM New York time. Checked every 5 minutes, so a change applies at once |
 | Weekly digest on / off (`weekly_digest_enabled`) | off | The Friday Telegram review (§23) |
 | Alerts on open positions (`price_alert_positions_enabled`) | on | A message when an open position gets close to its stop or first target. Without Telegram it only records the event (§23) |
 | Close to the stop (`price_alert_stop_atr`) | 1 ATR | How near the stop counts as close, in multiples of the average daily range. Above 0, up to 10 |
-| Close to the first target (`price_alert_tp1_pct`) | 1% | How near the first target counts as close, as a % of the price. Above 0, up to 20 |
 | Max positions per sector | 2 | — |
 | Max position, as a % of average daily volume | 1% | — |
 | Thesis alerts | on | One Telegram message when an open position's thesis first becomes broken |
 | AI Committee: most AI calls per run | 14 (6 to 40) | A hard cap on the AI calls of one committee run (§25) |
 | AI Committee: bull / bear rounds, risk debate rounds | 1 and 1 (each 1 to 3) | How many rounds each debate may run. Never more than 3, whatever is saved |
-| Committee gate (`committee_gate_enabled`) | off | Send every plan the rules approved to the committee at the moment a position would open; an objection stops it (§25) |
-| Committee gate action (`committee_gate_action`) | cancel | `cancel` saves the plan as a no-trade; `hold` leaves it pending for you |
-| Committee runs per scan (`committee_gate_max_per_scan`) | 5 (1 to 20) | Caps the committee runs one auto-scan or redo pass may spend |
 
 ### On the server (the `backend/.env` file, or Docker environment variables)
 
@@ -1634,17 +1185,12 @@ Every call the app makes to a source is counted once, in one place, since the se
   reports no transaction rows leaves no trace and is simply re-read (from the local copy) on the next run.
 - **The posts source is unofficial and slow for what it measures** (§11, §19). Trump's posts come from a
   third-party archive that can lag, drop posts, change format or stop, and a post moves a stock in minutes while
-  the watcher polls every 5 minutes and the scans run 3 times a day. Testing it needs hourly bars (about two
+  the watcher polls every 5 minutes and the hold scan runs once a day. Testing it needs hourly bars (about two
   years exist). Only the newest ~100 posts and the Fed feeds' newest ~15 items per feed can be loaded; older
   history is not.
 - **Fed speakers are a hand-kept list** (§11). When the Board changes the list in `fed_feed.py` must be
   edited, or a new member's speeches are stored but never alert. The tone of a speech is not read.
-- **Missed-trade results are hypothetical** (§5): entry at the last known daily close, daily bars only,
-  today's rules, no cash or position limits, and the quote a plan used is not stored. A small count
-  proves nothing; the card says "too early to tell" below 20 resolved trades.
-- **The "Check these figures" test (§9) is cautious on purpose.** It only looks at dollar amounts and
-  decimal percentages, so a made-up whole-number percentage, a round price like "$550" or a wrong date
-  won't be caught. It also can't tell whether a number the AI *did* quote correctly is being used sensibly.
+- **Missed-trade results are hypothetical** (§5): old rows only, entry at the last known daily close, daily bars only, today's rules. The card says "too early to tell" below 20 resolved trades.
 - **The stock list is today's S&P 500 only** (§11). A backtest over past years sees the survivors and
   not the companies that left the index, which flatters results. A scan covers the first 50 rows by
   default and at most 200 symbols.
@@ -1652,17 +1198,12 @@ Every call the app makes to a source is counted once, in one place, since the se
   at the last price, which nobody could trade at either.
 - **One-off market closures** (a national day of mourning, a storm) must be added to the calendar by
   hand when announced (§8).
-- **Exits:** a position closes fully at the stop, TP1 or the time limit (§7). There's no partial exit
-  and no trailing stop.
-- **The time limit counts bars it can see.** A missing bar in the data delays it by a day, and a
-  position whose entry day is older than the 3 months of history the exit check reads is never
-  time-limited (its age can't be counted from real bars). A new limit applies to positions that are
-  already open.
-- **Hourly bars are a finer rule, not a perfect one.** A day touching both levels is settled by that
-  day's hourly bars, but two levels inside one hour still count as a stop, and where the hourly bars
-  can't be fetched (or are older than about a year) the whole day counts as a stop. The same hourly
-  bars check the rest of the entry day; when they never arrive that day stays unchecked (the row says
-  "daily_only"). See §7.
+- **Exits:** a hold position closes only on a final daily close beyond its disaster stop, by the sell plan, or by
+  hand (§7, §27). There is no target, no trailing stop beyond the sell plan's raise, and no partial exit. The wide stop
+  (25%, or the 200-day if lower) means a loss can be large before it triggers; a gap-down fills at the close.
+- **The hold flow is new and mostly unproven live** (§27): news discovery, dip adds, thesis/insider/Congress/news sell
+  signals, the scheduler timings and the 09:27 / 09:50 smart-money jobs have not run against real data yet, and the
+  numbers are starting guesses.
 - **Best/worst price figures (MFE/MAE) are daily-bar approximations.** The exit day counts only its
   open and the exit price, so the true range can be a little wider; a stop-hit day's real low and a
   target-hit day's real high are never counted (§7). Trades closed before the figures existed, or with
@@ -1706,15 +1247,14 @@ Every call the app makes to a source is counted once, in one place, since the se
   S&P 500 backtest run (§12). Docker passes it in from the `.env` file next to `docker-compose.yml`.
 - **The first plan for a stock** can take about 20 seconds on a cold cache (SEC and earnings
   downloads).
-- **The backtester tests a smaller strategy than the live one** (§18): by default only the price-based
-  part of the score. Fundamentals, insider buying and the earnings surprise record can be switched on
-  per run, but only where their facts were stored first. News, options, the earnings-date penalty,
-  macro events and the AI always count as 0 in it. Revenue is dated by the SEC filing **day** (public
+- **The backtester tests a smaller strategy than the live one** (§18): only the trend check of the quality gate (and the
+  dip rule); profit, growth and valuation are not known for a past date. News discovery, dip adds, the sell plan, the
+  rebuy watch and the AI are not in it. Revenue is dated by the SEC filing **day** (public
   from its end) and earnings reports by the report day, so some information appears a little later than
   it really did. Its results are **probably optimistic**: it trades today's winners (§11)
-  and it does not see a stop or target touched later on the day a position opens.
+  and it uses daily bars only and has no costs beyond slippage.
 - **Lessons are one AI's reading of one trade.** A single small trade proves little, so a lesson can be
-  wrong or over-fitted, and the overlay is told to treat it as a note. Lessons are written only for
+  wrong or over-fitted; it is a note, never read back into a decision. Lessons are written only for
   recent closes automatically (§9), and there is no setting to switch the automatic job off other than
   choosing no AI provider.
 - **Paper trading only:** no real broker.
@@ -1790,7 +1330,7 @@ Every route except login, auth status and health needs you logged in (or an API 
 | `POST /api/portfolio/positions/{id}/close` | Close at the market |
 | `POST /api/portfolio/positions/{id}/lesson` | Write (or rewrite) the AI lesson for one closed position (§9). `404` unknown position, `400` if it is still open or no AI provider is set up, `409` if a lesson is already being written for it, `429` for a repeat within 20 seconds. If the AI fails this is still a `200`: the position comes back with `lesson_error` set and any earlier lesson kept. Positions carry `lesson_text`, `lesson_provider`, `lesson_model`, `lesson_at` and `lesson_error` |
 | `GET /api/portfolio/stats`, `GET /api/portfolio/equity-curve` | Statistics (including the `excursions` block, §7); the equity curve |
-| `GET /api/portfolio/calibration` | The confidence report card (§5): win rate and average R per confidence band, the information coefficient overall, by direction and per score part, each with its trade count and intervals, plus how many closed trades were left out. Read-only; it runs no exit check |
+| `GET /api/portfolio/calibration` | The confidence report card of old swing trades (§5): win rate and average R per confidence band, the information coefficient overall, by direction and per score part, each with its trade count and intervals, plus how many closed trades were left out. Read-only; it runs no exit check |
 | `POST /api/portfolio/reset` | Reset the paper account |
 | `GET /api/settings`, `PUT /api/settings`, `GET /api/settings/status`, `POST /api/settings/test-connection` | Read or save settings, check status, test a provider. The test accepts an optional `tier` (`routine`, the default, or `decision`) to test the decision model, and optional `overrides` (unsaved form values: provider, models, keys, Telegram token and chat ID; unknown names are rejected, masked keys mean "unchanged") |
 | `GET /api/cache/status`, `POST /api/cache/clear` | The Data cache card (§11): entries in memory and on disk, how often answers were reused since the app started, the price history store's symbols, bar count, date range and size (read-only, writes nothing); and empty the cache, memory and file (30-second cooldown; the price history store is not touched) |
@@ -1807,9 +1347,9 @@ Every route except login, auth status and health needs you logged in (or an API 
 | `POST /api/backtests/validate`, `GET /api/backtests/validation-options`, `GET /api/backtests/validations`, `GET /api/backtests/validations/{id}`, `POST /api/backtests/validations/{id}/cancel` | Walk-forward validation (§18). POST takes the symbols, dates, `folds`, `mode` (`rolling` or `anchored`), `train_ratio`, `embargo_days`, a `grid` of settings to try and fixed `overrides`; it answers `202` with an id (`409` while any backtest or validation is active, `400` when the folds do not fit the period or history is missing, `422` for an invalid body). The options endpoint lists the settings a grid may vary with your live value for each, and the limits. GET one returns the folds, the stitched out-of-sample curve, the deflated Sharpe block and the scorecard |
 | `POST /api/backtests`, `GET /api/backtests`, `GET /api/backtests/{id}`, `GET /api/backtests/{id}/trades`, `GET /api/backtests/{id}/equity`, `POST /api/backtests/{id}/cancel` | The backtester (§18). The POST body also takes `include_fundamentals`, `include_insiders` and `include_earnings` (default false: the dated parts of §18), `run_baseline` (default true) and `baseline_runs` (default 20, 0 to 50); a run's progress says whether the main run or which baseline seed is going. POST starts a run in the background and answers `202` with its id at once (`409` while another run is active, `429` if one was started in the last 5 seconds, `400` for a request that can't work, such as missing price history, `422` for an invalid body); GET list and GET one give the status, progress, settings used, coverage and summary; trades and equity give the stored results; cancel stops a run at its next simulated day and keeps what it did so far |
 | `GET /api/watchers`, `GET /api/watchers/events?limit=`, `PUT /api/watchers/{name}`, `POST /api/watchers/{name}/run` | Watchers (§19). The first two only read. PUT turns one watcher on or off. POST polls one watcher now (`429` for a repeat within 30 seconds, `404` for an unknown name) |
-| `POST /api/replay` | The What if? card (Trade Plans page, §18). Body: `{"overrides": {...}}` with one or more replayable settings (`min_confidence_for_trade`, `ai_overlay_objection_action`, `ai_overlay_scores_confidence`, `allowed_directions`). Re-decides every stored plan (newest 5000) and returns before and after trades taken, win rate and average R with their 95% intervals, the list of decisions that flip (newest 300) with the rules version of each, and the caveats. Sizing, cap, slippage, commission and exit settings are refused with `422` and the reason. Read-only: nothing is written or fetched |
-| `GET /api/missed-trades`, `POST /api/missed-trades/refresh` | The Missed trades card (§5). GET: per kind of missed trade (AI veto, under the confidence bar, held by the AI, written but never filled, no trend, other) the number of plans, resolved and open hypothetical trades, win rate and average R with their 95% intervals, total R; the closed trades for comparison; the two headline questions with their verdicts; every declined plan (newest 300); and the caveats. Read-only: it never computes, fetches prices or writes. POST: compute the results that are new or still open (at most 200 per call; `429` for a repeat within 30 seconds; results already final are never recomputed) |
-| `POST /api/signals/finra/refresh`, `GET /api/signals/finra/{symbol}` | FINRA short volume (§5 "Silent signals"). POST downloads the last days for the given symbols (default: the watchlist) and stores them; days already stored are not downloaded again (`429` for a repeat within 60 seconds). GET shows what is stored for one symbol (recent days, recent ratio, baseline) and what the silent signal reads for an optional `?direction=long|short`. Read-only: it never downloads or writes. Plans carry a `shadow_signals` list |
+
+| `GET /api/missed-trades` | The stored Missed trades report of old declined plans (§5). Read-only. `POST /api/missed-trades/refresh` was removed on 2026-10-15 |
+| `POST /api/signals/finra/refresh`, `GET /api/signals/finra/{symbol}` | FINRA short volume data (§11). POST downloads the last days for the given symbols (default: the watchlist); days already stored are not downloaded again (`429` for a repeat within 60 seconds). GET shows what is stored for one symbol. Read-only: it never downloads or writes. It no longer feeds any plan |
 | `GET /api/alerts?status=`, `POST /api/alerts`, `DELETE /api/alerts/{id}` | Price alerts (§23). GET lists them newest first with the active count and the cap of 100. POST saves one (`symbol`, `condition`, `threshold`, `unit` for stop and target alerts, `repeat`, `cooldown_minutes`, `note`; a `422` with the reason for a bad symbol, a threshold at or below 0, a stop or target alert with no open position, or a 101st active alert). DELETE cancels an active alert, or removes one that already triggered or was cancelled (`404` unknown id). Alerts only ever send a message |
 | `POST /api/notes/morning/preview`, `POST /api/notes/weekly/preview` | The morning note or weekly digest as it would be sent now (§23): the text, whether an AI paragraph was added, which parts were unavailable and how many Telegram messages it takes. `?ai=true` adds the AI paragraph (one model call). Sends and stores nothing |
 | `POST /api/notes/morning/send`, `POST /api/notes/weekly/send` | Send the note to Telegram now, on any day (`409` when Telegram is not configured, `429` for a repeat within 60 seconds; the two notes have separate waits) |
@@ -1833,30 +1373,30 @@ Every route except login, auth status and health needs you logged in (or an API 
 | **ATR** | Average True Range: how much a stock normally moves in a day |
 | **Support / resistance** | Price levels where the stock turned before |
 | **Stop (SL)** | The price where a losing trade is closed |
-| **TP1 / TP2** | First / second target price |
+| **TP1 / TP2** | First / second target price of an old swing plan. Hold positions have none (stored as 0) |
 | **R** | The amount one trade risks (entry to stop). +2R means it made twice what it risked. |
 | **R:R** | Reward-to-risk ratio of a plan |
 | **Avg R** | The average result per closed trade, in R (also called expectancy) |
 | **MFE / MAE** | Maximum favourable / adverse excursion: the best and worst price a trade reached while it was open, as % of entry and in R (§7). Win rate can't show whether stops were too tight; these can. |
 | **Watcher** | A small background poller that checks one source and reports events (§19) |
 | **Watcher event** | One thing a watcher found: a symbol (or none), a headline, a link and the time it became public. Always saved first (§19) |
-| **Missed trade** | A plan the app did not take: declined, vetoed by the AI, held back or refused by the engine. The Missed trades card replays each one on past prices to see what it would have earned (§5). |
-| **Resolved / open (hypothetical trade)** | Resolved: the replay reached a stop, TP1 or the time limit, so the result is final. Open: it has not, so it is marked at the latest close and left out of the statistics. |
-| **Lesson** | A 2 to 4 sentence AI note written after a paper trade closes: right or wrong against SPY, which reasons held, one takeaway. Stored with the trade; never templated; fed back to the AI Trading Overlay as notes (§9). |
+| **Missed trade** | A plan the app did not take (old swing rows only). The stored report replays each one on past prices (§5). |
+| **Resolved / open (hypothetical trade)** | Resolved: the replay reached a stop, TP1 or the time limit (old swing rules), so the result is final. Open: it has not, so it is marked at the latest close and left out of the statistics. |
+| **Lesson** | A 2 to 4 sentence AI note written after a paper trade closes: right or wrong against SPY, which reasons held, one takeaway. Stored with the trade; never templated; shown only. |
 | **Calibration** | Checking whether the confidence score means what it appears to: do higher-scoring plans really win more or earn more per unit of risk? The Portfolio card does it from closed trades (§5). |
 | **IC (information coefficient)** | A number from -1 to +1 saying whether higher scores tend to come with better results (the Spearman rank correlation between a score and the trade's R). 0 means no link. Always read it with its trade count and interval (§5). |
 | **Wilson interval** | A 95% range for a win rate that stays honest for small samples: 3 wins in 5 trades could really be anything from about 23% to 88% |
 | **p-value** | How often pure luck would produce a result at least this strong. Small (under 0.05) means luck is an unlikely explanation. |
 | **Slippage / bps** | The small cost of filling at a worse price. 1 bps = 0.01%. |
-| **Exit resolution** | How a closed trade's exit was placed in time: on a daily bar, on an hourly bar, or by the cautious stop-first rule when the order could not be known (§7). |
-| **Hourly bars** | Price bars one hour long. They show which of two levels was touched first inside a day, and what happened later on a position's first day (§7). |
-| **Time limit** | The maximum number of trading days a position may stay open. After it, the position closes at that day's close (§7). |
+| **Exit resolution** | How a closed trade's exit was placed in time (old swing rows: daily bar, hourly bar or the cautious stop-first rule; hold exits are always daily, §7). |
+| **Hourly bars** | Price bars one hour long. No longer used by the exit engine; some studies still use them. |
+| **Time limit** | Retired. Old swing positions could be closed after N trading days; hold positions have none (§7). |
 | **VIX** | The market's "fear gauge" |
 | **SPY** | The fund that tracks the S&P 500, used as "the market" |
 | **Discounted earnings estimate** | A rough value today of a company's projected future profits |
 | **Put/call ratio** | Bets on a fall vs bets on a rise in the options market |
 | **Implied move** | The size of move the options market expects |
-| **Silent signal** | A new signal that is recorded on every plan with the points it would have added, but is not scored until a backtest shows it beats luck (§5). The Smart Money, filing, Fed and posts signals were promoted early, at the owner's request |
+| **Silent signal** | Retired with the confidence score (§5). |
 | **Short volume** | The share of a day's trading volume that was a short sale. Not the same as short interest, the number of shares currently sold short (§11) |
 | **8-K** | The SEC form a company files within four business days of a material event (results, a major contract, an officer leaving, a delisting notice). It lists numbered item codes (§11) |
 | **Form 4** | The SEC filing an insider must submit within 2 business days of trading their company's stock |
@@ -1880,14 +1420,20 @@ Every route except login, auth status and health needs you logged in (or an API 
 
 ## 18. Backtesting
 
-A **backtest** replays the app's own rules over past days to see what they would have done. It is a
-"time machine" built on the same code that makes live decisions, not a separate copy of the rules:
+A **backtest** replays the app's own rules over past days to see what they would have done. Since 2026-10-15 it replays
+the **hold scan** (§27): a time machine built on the same code that makes live decisions, not a separate copy.
 
-- the **decision** (the score, direction, entry, stop, targets and size) is made by the same function
-  that makes a live trade plan, and
-- the **paper-trading engine** (§7) opens, marks and closes the positions, with all its rules: the
-  1% risk size, slippage, the position and sector caps, the stop checked before the target, gap fills
-  and the time limit.
+- the **decision** is made by `hold_scan_symbol`, the same per-symbol function the live 10:00 scan uses, with
+  `price_only=True`, at most `hold_max_new_per_scan` buys a day, and
+- the **paper-trading engine** (§7) opens, marks and closes the positions, with all its rules: sizing by target weight,
+  slippage, the position and sector caps and the disaster stop on a final daily close.
+
+**Price-only, optimistic, judged by return %.** Only the **trend check** of the quality gate (and the dip flag) can run for
+a past date: net income and P/E are not known-at-T, and a missing figure never counts as a pass. So results are
+**optimistic and not comparable with the live gate** (it also trades today's survivors, daily bars only), and each run's
+coverage says which checks ran (trend, dip) and which did not (growth, profit, valuation, news discovery, dip add, sell
+plan, rebuy). Hold trades are judged by **return %** and holding days; there is no R. Runs from before the change still
+show R and the old exit labels, marked "older run". `min_confidence_for_trade` no longer matters.
 
 Only the world underneath is swapped: the **data** (stored price history, cut off at the simulated
 moment), the **clock** (a simulated one), the **database** (a throwaway one in memory, discarded when
@@ -1917,27 +1463,17 @@ refuses (raises an error) if asked for anything later or if there is no simulate
   from known bars.
 - **SPY and the VIX** follow the same rules.
 
-### What is in the score, and what isn't (the "price-only core")
-Only the parts built from prices can be rebuilt for past days:
+### What is in the gate, and what isn't (the "price-only" profile)
+Coverage profile `hold_price_only`:
 
-| Part | In the backtest |
+| Check | In the backtest |
 |---|---|
-| Daily chart (trend, momentum, near a key level, RSI) | **Yes**, up to 5 of its 6 points (not the volume point) |
-| Weekly chart and SPY agreeing | **Yes**, up to 2 points |
-| VIX regime | **Yes**, a penalty only |
-| Fundamentals (revenue growth, nearness to the 52-week high or low) | **Only if switched on for the run**, up to 2 points (see below); otherwise 0 |
-| Insiders (buying and selling) | **Only if switched on**, up to 2 points; otherwise 0 |
-| Earnings surprise record | **Only if switched on**, up to 1 point; otherwise 0 |
-| Return against SPY, accumulation or distribution (from prices and volume) | **Yes**, 1 point each |
-| News, options, Smart Money, filings, valuation, consensus, Fed items and posts | **No**: 0 |
-| Expected-move and macro-event penalties, the earnings-date penalty, the AI overlay | **No**: 0 |
+| Close above the 200-day average (trend) | **Yes** |
+| Dip rule (10% under the 63-day high; only with "buy only dips") | **Yes** |
+| Revenue growth, profit, valuation | **No**: not known for a past date, so they are not run |
+| News discovery, dip adds, sell plan, rebuy watch, smart money, the AI | **No** |
 
-With nothing switched on, a backtested plan can earn at most **9 of the 32 points** (28%), not 32. The **confidence bar is not
-changed**: the live bar of 16% still means 5 points, which here is 5 of the 9 that can be earned, a
-tougher bar than live. Every run stores this explanation (its **coverage**) next to its results: the
-bar as a percentage and as points of the achievable maximum. A run may override the bar (see below);
-the override is recorded beside the live value. The coverage also lists which dated parts the run
-switched on (next section), and the reachable points grow by what those parts can really add.
+A run stores this explanation (its **coverage**) next to its results and shows an always-visible optimistic warning.
 
 ### Dated company data (switched on per run)
 Three parts of the score can be rebuilt for a past day, because their data comes with a date. A run
@@ -1984,9 +1520,9 @@ All three accept `--db FILE` (a scratch database) and `--report` (show what is s
 `POST /api/backtests` (§16) takes the **symbols** (their prices must already be stored: run
 `scripts/preload_history.py` for them and for `--benchmarks`, SPY and ^VIX, first; a run never
 downloads anything), a **start** and **end** date, `decision_every_n_days` (default 1) and optional
-**overrides** of these settings only: `slippage_bps`, `commission_per_trade`, `default_risk_pct`,
-`min_confidence_for_trade`, `max_concurrent_positions`, `max_positions_per_sector`,
-`max_position_pct_of_adv`, `max_holding_days`, `paper_starting_cash`. Everything else follows your
+**overrides** of these settings only: `slippage_bps`, `commission_per_trade`, `hold_stop_pct`,
+`hold_target_weight_pct`, `hold_buy_only_dips`, `max_concurrent_positions`, `max_positions_per_sector`,
+`max_position_pct_of_adv`, `paper_starting_cash`. Everything else follows your
 saved settings, except the fixed choices: no AI, no Telegram, no Finnhub, auto-execute on. Crypto
 symbols are not supported yet.
 
@@ -2028,7 +1564,7 @@ out (no trades, no losing day) is shown as a dash, never as a made-up zero.
 | **Exposure** | Share of days with at least one position open |
 | **Longest losing streak** | Most closed trades in a row that did not make money |
 | **Year and month tables** | Equity change over each calendar year and month. A year or month the run only partly covers is marked |
-| **How trades ended, long against short** | Count, share, average R and profit for stop, target, time limit and still open; and the same for each direction |
+| **How trades ended** | Count, share, average return % and profit for disaster stop and still open at the end (older runs: stop, target, time limit); and the same for each direction |
 
 ### Benchmarks (`GET /api/backtests/{id}/benchmarks`)
 - **SPY buy-and-hold:** the same starting cash put into SPY at the close before the first simulated day
@@ -2047,15 +1583,15 @@ times** (default 20, 0 to 50; set `baseline_runs`, or `run_baseline: false`, in 
 entries chosen by chance. Everything else is the same as the real run: symbols, days, settings, the
 way stops, targets and size are worked out (the very same functions the live plans use), the position caps
 and the exit rules. Random runs may use only data known at that moment, like the real one.
-- Each day and symbol gets an entry with the probability the real run had (its trade plans per evaluated
-  stock-day), long or short with equal odds. Every choice depends only on the seed, the symbol and the
-  day, so a seed always gives the same run.
+- The baseline is a **random hold entry**: a seeded draw replaces the gate's yes/no for each day and symbol, at the
+  rate the real run bought per evaluation, then the same `hold_buy` sizing and engine exits apply. The two differ only in
+  the pick. Every choice depends only on the seed, the symbol and the day, so a seed always gives the same run.
+
 - The page shows where the real run falls among the random ones for total return, average R and Sharpe:
-  the **percentile** (the share of random runs it beat; a tie counts half), and the **chance luck does
+  the **percentile** (the share of random runs it beat; a tie counts half; compared on average return %), and the **chance luck does
   this well** ((1 + random runs at least as good) / (K + 1)). With K = 10 that can never go below 9%.
 - It is a sanity check, not a significance test; the page repeats the small-K caveat, and the scorecard
-  line reads "not enough data" below 10 random runs. Random shorts lose in a rising market, which makes
-  the baseline easier to beat than a long-only one.
+  line reads "not enough data" below 10 random runs. Hold entries are long only.
 The random runs run after the main run. The main results are readable the moment it finishes; if a cancel
 or an error stops the baseline, the finished random runs are kept and the run still counts as done.
 
@@ -2084,15 +1620,12 @@ roughly half an hour, and the full S&P 500 several hours (an estimate from that 
 ### Why the results are probably optimistic
 - **Today's winners.** The stock list is today's big companies; those that fell out of the index aren't in
   it (§11, §14). Results on NVDA and AAPL especially say little about the strategy.
-- **The entry day isn't fully watched.** The engine skips a position's first bar (its range before the
-  entry must not stop it out), and the backtest has no hourly bars, so a stop or target touched later
-  on the day a position opens is only seen from the next day's bar.
+- **The entry day isn't watched.** The engine skips a position's first bar and the backtest has no hourly bars.
 - **Gap-ups are skipped.** If a stock opens more than 2% away from the price the plan was made at, the
   engine refuses the trade as stale, exactly as live.
 - **Adjusted prices.** The stored prices are adjusted for splits and dividends, so old prices differ
   from what was quoted then; percentages and R are not affected, dollar figures are.
-- **Price-only.** The 3 missing news and options points, the insiders, and the AI can't be tested this
-  way; they are measured going forward instead (§5).
+- **Price-only.** Growth, profit and valuation, news, insiders and the AI are not tested; they can only be measured going forward.
 
 ### Walk-forward validation and the deflated Sharpe ratio (the Validation tab)
 A single backtest judges a strategy on the same days its settings were chosen on, which flatters it.
@@ -2103,8 +1636,8 @@ has a **train** window and a later **test** window, with an **embargo** (a gap o
 The train window is a chosen multiple (default 2) of one test window, and each window needs at least
 20 trading days.
 
-Optionally you give a small **grid** of settings to try: the confidence bar, the risk per trade, the
-holding limit and slippage (up to 5 values each, 16 combinations, 100 runs in all). In every fold each
+Optionally you give a small **grid** of settings to try: the
+stop %, target weight, buy-only-dips (0/1) and slippage (up to 5 values each, 16 combinations, 100 runs in all). In every fold each
 combination ("variant") is run on the train days, the one with the best **in-sample Sharpe** is
 **selected**, and only that one is run on the test days it has never seen. Without a grid there is a
 single variant and nothing is selected. Every window is a separate run of the same backtester on a
@@ -2154,26 +1687,10 @@ reader of dated data, and any new one has to pass it:
   and fail if one is not on the guarded list, so a new reader cannot ship unchecked.
 
 ### What if? (replaying a settings change)
+*Retired on 2026-10-15.* The What if? card and `POST /api/replay` re-decided stored swing plans against the confidence bar
+and were deleted with it. To test a settings change, run a backtest or a walk-forward validation (above).
 
-Before switching a setting on, the **What if?** card (Trade Plans page) re-decides the plans already made
-under it and shows what would have changed. Only settings that decide take or skip can be replayed,
-because only their inputs are stored on every plan:
-
-| Replayable | Not replayable (use a backtest) |
-|---|---|
-| Minimum confidence to trade | Risk per trade, caps, starting cash |
-| What an AI objection does (cancel, hold, nothing) | Slippage, commission |
-| Whether an objection costs confidence points | Stops, targets, holding limit |
-| Long only or short only | |
-
-How it works: for each stored plan the take/skip verdict is recomputed from the stored confidence points
-and AI opinion. A decision flips only if the new setting gives a different verdict from today's setting
-on the same stored inputs. A trade that is now taken uses its hypothetical result from the Missed trades
-list (§5); a trade that is now skipped loses its real result. A flipped trade with no result yet is
-listed but not counted in the rates. The card shows before and after trades taken, win rate and average R
-with 95% intervals, the flipped decisions with the rules version each was made under, and the limits:
-taking an extra trade would change cash and caps for later trades, which the replay does not model.
-It writes nothing.
+---
 
 ## 19. Watchers
 
@@ -2200,16 +1717,9 @@ information became public.
 |---|---|
 | **Record only** | Nothing more |
 | **Record and alert** | Also a Telegram message (§10) with the headline and the link. The text never contains your tokens |
-| **Record, alert and re-evaluate** (default) | Also a full evaluation of the symbol, the same one the auto-scan runs |
+| **Record, alert and re-evaluate** (kept as a value for old settings) | Behaves as record and alert: re-evaluation was deleted with the swing code |
 
-**The market-closed rule.** If the symbol's market is open, the evaluation runs at once and follows
-every normal rule: the same confidence bar, caps and AI second-opinion veto, and auto-execute only when
-you have auto-execute on and a free position slot. A symbol you already hold is skipped. If the market
-is **closed**, nothing is evaluated, because the plan would be priced off the last close and could fill
-at a stale price. The evaluation is queued instead, in the same queue as off-hours plans (§8), and done
-from fresh data at 09:45 New York time on the next trading day. Crypto (`-USD`) never closes, so it is
-evaluated at once. An event never changes a trade's direction, size or levels. At most it asks for an
-ordinary evaluation, and a plan made that way says "Triggered by <watcher>: <headline>".
+**No re-evaluation.** A watcher event never requests a plan or an evaluation (that code was deleted with the swing engine on 2026-10-15): it is recorded and, if the action says so, alerted. An event never changes a trade's direction, size or levels.
 
 **Failures.** If a watcher's source fails, the error is saved and shown, and the app waits before
 trying that watcher again (its normal interval, doubled after each failure in a row, never more than
@@ -2427,7 +1937,7 @@ ignoring capitals and punctuation. Following nobody in list mode means no member
 click, looking back 60 days, and asks you to click again while reports are waiting. It answers `429` if used in the last
 60 seconds. The backfill script is resumable: stored reports are skipped without a request.
 
-**How it relates to the score (section 5).** `congress_buying` scores every trade plan, both ways: the number of different members who bought minus those who sold the symbol in reports filed over the last 45 days. A net of at least 2 members is 1 point and 4 or more is 2, signed by the trade direction (net buying supports a long and argues against a short; net selling does the reverse). With no Congress data stored it reads "not available" and scores 0.
+**How it relates to the score.** `congress_buying` scored every swing trade plan; that scoring was deleted on 2026-10-15. The data and the Smart Money candidate score (above) remain.
 
 ### The Funds tab (13F holdings)
 
@@ -2470,7 +1980,7 @@ funds themselves. It answers `429` if used in the last 60 seconds and the button
 resumable: stored filings are skipped without a request. Requests share the SEC client (section 11), so the contact address
 for SEC (`SEC_EDGAR_USER_AGENT`) matters; the tab warns when it is still the placeholder.
 
-**How it relates to the score (section 5).** `fund_accumulation` scores every trade plan, both ways: among the followed funds with a filing accepted in the last 120 days that report the symbol, how many newly hold it or hold more than the quarter before, minus how many hold less or have sold out. A net of 1 or 2 funds is 1 point and 3 or more is 2, signed by the trade direction (net buying supports a long and argues against a short; net selling does the reverse). With no filings stored it reads "not available"; with filings but no fund holding the symbol it reads "none".
+**How it relates to the score.** `fund_accumulation` scored every swing trade plan; that scoring was deleted on 2026-10-15. The data and the Smart Money candidate score (above) remain.
 
 The SEC also publishes a quarterly bulk file of every manager's 13F data. The app does not use it; it is a possible later
 source for covering the whole market.
@@ -2498,7 +2008,7 @@ Only the **structured filings (2024 onward)** are read; older free-text filings 
 guessed. Filings by the **funds you follow** are loaded too (for example a 13D from an activist fund), with the company's
 ticker looked up from SEC's company list.
 
-**How it relates to the score (section 5).** `ownership_5pct_filing` scores every trade plan, both ways, from the Schedule 13D and 13G filings of each 5% holder in the last 90 days: a new Schedule 13D (an activist crossing 5%) is buying worth 2 points, a later filing that shows the stake up by a point or more is buying worth 1, one that shows it down by a point or more is selling worth 1, and one that shows it under the 5% line (the holder has left) is selling worth 2. A new passive 13G is routine and counts for nothing. The net is signed by the trade direction (buying supports a long and argues against a short), up to 2 points; with no clear direction it reads 0.
+**How it relates to the score.** `ownership_5pct_filing` scored every swing trade plan; that scoring was deleted on 2026-10-15. The data and the Smart Money candidate score (above) remain.
 
 ### The smart-money tracker (optional, off until you turn watchers on)
 
@@ -2521,8 +2031,8 @@ claims anyone "knows" anything.
   14 days; a buy while the market is closed waits for the open and is re-checked from fresh data). The same stock can be
   held in core and in a smart-money sleeve; the queue and the alert say when it is.
 - **Reports.** A per-sleeve report compares closed trades with SPY and with random picks and says `not enough data`
-  below 100 trades. A position's exit rules are the usual stop and first target, plus a longer time limit
-  (`smart_money_max_holding_days`, default 120 trading days).
+  below 100 trades. A position's exit is the hold rule (disaster stop on a final daily close; no target or time limit).
+  A smart-money buy whose gate fails buys at `hold_failed_gate_size_pct` of a slice (§27).
 - Nothing here trades real money: it is paper trading only.
 
 ## 21. Market Terminal
@@ -2638,7 +2148,7 @@ Sent at **16:30 New York time on the last trading day of the week** (Friday, or 
 |---|---|
 | Trades closed this week | How many won, total result in money and R, the best and worst trade, each trade. With fewer than the minimum number of trades it says so plainly |
 | Equity | Equity at the start of the week (the last snapshot before it) and now |
-| Plans this week | Evaluations taken, tradeable but not taken, and no-trade decisions; and, from the missed-trades report (§5), what the declined plans that already have a final result would have earned (idealised fills, not real results) |
+| Plans this week | Positions opened and closed this week (hold mode creates no declined plans) |
 | Calibration | The headline of the calibration report (§5), with its own warning about small samples |
 | Lessons | Which symbols got an AI lesson this week (the text stays on the Portfolio page) |
 | Watchers | How many watcher events came in |
@@ -2675,15 +2185,15 @@ Paper trading only: nothing was traded or changed.
 
 A **sleeve** is a separate paper account for one trading style. Each sleeve has its **own cash, positions, statistics and equity curve**. The strategy settings (risk per trade, caps, slippage, exits) are shared by all sleeves.
 
-There is always one built-in sleeve, **core** ("Swing (rules)"). It is the account the app always had: every position, plan and equity point from before sleeves existed belongs to it, with no change and no conversion. The automatic scan, the backtester, the replay and the missed-trades study all work on core only.
+There is always one built-in sleeve, **core** (named "Swing (rules)" for historical reasons; it now holds the hold positions). It is the account the app always had: every position, plan and equity point from before sleeves existed belongs to it, with no change and no conversion. The automatic hold scan and the backtester work on core only.
 
 | Question | Answer |
 |---|---|
 | Where is a sleeve chosen? | Tabs at the top of the Dashboard and the Portfolio page. The choice is kept in the address (`?sleeve=key`). Core is the default. |
 | Can two sleeves hold the same symbol? | Yes. They are separate accounts. Inside one sleeve the one-position-per-symbol rule still holds. |
 | Do the caps apply together? | No. The maximum number of positions and the sector cap are checked **per sleeve**. |
-| What does a disabled sleeve do? | It opens nothing new. Its open positions are still marked and closed by their stops and targets. Core cannot be disabled. |
-| Which sleeve does a plan trade in? | The one it was made for. Pressing Execute opens the position in the plan's sleeve, and an off-hours plan is redone in that sleeve. |
+| What does a disabled sleeve do? | It opens nothing new. Its open positions are still marked and closed by their stops. Core cannot be disabled. |
+| Which sleeve does a buy go to? | The one it was made for: the hold scan uses core, smart-money buys use their own sleeve. |
 | Which starting cash? | Core follows Settings, Paper Account. Another sleeve starts with the cash it was created with. |
 | What does "Reset" do? | It wipes one sleeve (positions, curve, cash). `all` wipes every sleeve and needs `confirm=true`. The sleeves themselves stay. |
 | Can a sleeve be deleted? | Only if it never held a position or a plan. Otherwise disable it, so the history that the statistics came from is kept. |
@@ -2698,7 +2208,7 @@ Reads never write: opening the page marks positions to market without adding an 
 
 ## 25. AI Committee
 
-The **AI Committee** page (`/committee`) gives a second, written opinion on one symbol. It is an **opinion only**: it never opens, sizes, stops or cancels a trade, it never changes the rules engine's direction or size, and the AI overlay and the rules never read it. It needs a real AI provider (the "none" provider only echoes text, so the page refuses to start).
+The **AI Committee** page (`/committee`) gives a second, written opinion on one symbol. It is an **opinion only**: it never opens, sizes, stops or cancels a trade and nothing in the rules reads it. It needs a real AI provider (the "none" provider only echoes text, so the page refuses to start).
 
 **The steps, in order**
 
@@ -2715,13 +2225,13 @@ The "routine" and "decision" models are the ones set in Settings (a blank decisi
 
 **What it is given.** One data pack, built by the app with no AI, for every analyst: price and indicators (market); company size, P/E, revenue growth and net margin by year, the next earnings date, the consensus for it and the last quarters' earnings surprises (fundamentals); headlines plus recent 8-K filings (news and catalysts); insider Form 4 totals, Congress net buyers, followed funds' 13F changes, new 13D stakes and FINRA short volume (smart money and insiders); put/call, implied volatility and the implied move (options). A source that was never loaded says so instead of reading as "nothing happened". With Research mode set to allow web search the analysts may add to this; they are never required to search.
 
-**As a gate (Settings, AI Committee, "Use the committee as a final gate").** Off by default. The rules scan and score every symbol with no AI. Only a plan every rule approved, when a position would really open (market open, auto-execute on, a free slot), goes to the committee, in auto-scan and the market-open redo (inline: nobody is watching, and the result decides whether the position opens), and for a manual Generate click, which returns the plan at once and runs the committee in the background: each report appears on the plan card as it is written, the Execute button waits for the verdict, and a plan made for a person is never opened automatically (a backing rating just says "you can execute it"). Never in a backtest. A plan you execute by hand is still read, and the card shows the rating with a link to the full debate. Buy or Overweight backs a long, Sell or Underweight backs a short; any other rating is an objection. The action setting turns an objection into a no-trade (the levels the rules computed stay on the record) or leaves the plan pending. It can only stop a trade: it never starts one or changes direction, entry, stop or size. A committee that cannot run, fails, or gives no readable rating records no objection and says so on the plan. Cost: at most `committee_gate_max_per_scan` runs per pass, each capped by the call limit. The gate is part of the strategy fingerprint only while on. Not built yet: ranking survivors before spending the allowance (it takes them in scan order), and a separate sleeve to compare gated and ungated results (compare strategy versions instead).
+**The gate is retired (2026-10-15).** The committee used to be able to stop a rules-approved swing plan (`committee_gate_*` settings). That gate and the plan card's committee rating were deleted; the committee is an opinion layer only, started by hand.
 
 **Live view.** The page shows the whole path as soon as a run starts. Each step turns from "waiting" to "writing" to "done" and its text appears the moment it is finished. The page asks the server every second and a half; there is no push connection.
 
 **Cost control.** A run has a cap on AI calls (default 14; Settings, AI Committee limits). Optional steps (analysts and debate turns) run only while enough calls are left for the three required ones (research manager, trader, final rating); the rest are shown as skipped with the reason. Debate rounds are capped at 3 whatever is saved. One run at a time. Every report is saved with the run, so reading an old run costs nothing.
 
-**What it is given.** The same computed numbers the AI overlay gets (price, trend, RSI, EMAs, support and resistance, ATR, volume, 52-week range, earnings date), but **not** the rules engine's verdict, so the committee forms its own view. Headlines are fenced as outside text to weigh, never to obey. Any dollar amount or decimal percentage a step quotes that is not in the data it was given is listed under that step as a warning. The warning never changes the rating.
+**What it is given.** The app's computed numbers (price, trend, RSI, EMAs, support and resistance, ATR, volume, 52-week range, earnings date), but **not** the rules engine's verdict, so the committee forms its own view. Headlines are fenced as outside text to weigh, never to obey. Any dollar amount or decimal percentage a step quotes that is not in the data it was given is listed under that step as a warning. The warning never changes the rating.
 
 **When something goes wrong.** If a required step fails, the run stops, later steps show as skipped, and the run is saved as failed. If the final reply cannot be read as one of the five ratings, **no rating is recorded** and the card says so. A run left running when the app stops is marked failed at the next start.
 
@@ -2737,6 +2247,8 @@ The "routine" and "decision" models are the ones set in Settings (a blank decisi
 `GET /api/sleeves/pauses/history` lists every pause. There is no Settings or Sleeves screen for these yet; use the API.
 
 ## 26. Forecast Lab: the ML style
+
+*Status after 2026-10-15: probably unused.* It trains on closed backtest trades with realized R and the plan's score components, and hold backtests have neither (they are judged by return %), so there is nothing new to train on; whether to keep it is an open owner decision.
 
 The **Forecast Lab** page (`/forecast-lab`) trains a small LightGBM model on the closed trades of finished backtests and uses it as an **opinion that can only stop a trade**, in its own sleeve (style `ml`). Off by default (`ml_style_enabled`); nothing trains by itself.
 
@@ -2760,3 +2272,4 @@ The app no longer opens swing trades. Every position is a **hold**: bought at a 
 - **Sell plan (10:30 ET).** Each holding is checked for bad signals: the gate fails, N closes under the 200-day (`sell_ma200_days`, 5), the thesis tracker flags it, several insiders or Congress members selling, and clearly negative news (counts only as a second signal). One signal sends an alert and, if the position is in profit, raises the stop to breakeven or `sell_trail_pct` (10%) below the high. Two or more sell the whole position (reason `sell_plan`). Fund 13F sells are not used (no per-stock feed). Rules only: the AI never sells.
 - **Rebuy watch.** A stock sold by the stop or the sell plan can be bought again after `rebuy_cooldown_days` (30), only if a fresh gate read passes without the 200-day rule and the dip rule fires (close 10% under the 63-day high). A rebuy that is stopped again leaves the watch for good. Shown on the Portfolio page and at `GET /api/portfolio/rebuy-watch`.
 - **Caveats.** None of this has run live yet. The numbers above are starting guesses. The studies behind the gate are optimistic (survivors, daily bars, no costs) and show the gate alone is about equal to SPY.
+- **Backtest in hold mode (§18).** The Backtest Lab replays this scan with `hold_scan_symbol(price_only=True)`: only the trend check and dip rule run, because profit and P/E are not known for a past date. A random-hold-entry baseline and walk-forward validation (stop %, target weight, buy-only-dips, slippage) judge it by **return %**. The result is optimistic (survivors, daily bars) and not comparable with the live gate, which also checks growth, profit and valuation.

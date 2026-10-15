@@ -1,15 +1,15 @@
 # Strategeia
 
 A personal, paper-trading stock dashboard: market scanner → chart/technical analysis →
-fundamentals & news research → risk/position sizing → an AI-narrated trade plan you can
-execute as a simulated position. Every stat on the dashboard (win rate, return, R:R) is
-computed from real simulated trade history — nothing is hardcoded.
+fundamentals & news research → a rules-based quality gate that picks stocks to hold, bought
+as simulated positions with a wide disaster stop. Every stat on the dashboard (win rate, return)
+is computed from real simulated trade history — nothing is hardcoded.
 
-Fixed rules make every decision. A plan's confidence is scored from the chart, fundamentals, news (read by
-AI labels), options, insiders, Congress, followed funds, 5% owners, short volume, filings, valuation, analyst
-consensus and how the stock moves against the market, buying and selling both counting. An optional **AI
-Committee** (analyst reports, a bull/bear debate, a risk debate and a final rating) can read every plan the rules
-approve before it opens: it can only stop a trade, never start one or change its entry, stop or size.
+Fixed rules make every decision: a stock is bought only if it passes the quality gate (above its 200-day average,
+revenue not shrinking, profitable, not expensive), and sold by a disaster stop or a daily sell plan. The AI only
+narrates and takes notes; it never picks, sizes or sells. An optional **AI Committee** (analyst reports, a bull/bear
+debate, a risk debate and a final rating) gives a written opinion on one symbol when you ask; it never touches a trade.
+(The earlier swing-trading engine, with trade plans, a confidence score and an AI overlay, was removed on 2026-10-15.)
 
 **This is not investment advice, and it does not place real trades.** v1 is analysis +
 paper trading only. Market data comes from free tiers (`yfinance`, `stooq`, optional
@@ -134,10 +134,6 @@ files or restart. Keys are stored in `backend/runtime/settings.json` (gitignored
 never committed, never echoed back by the API — the Settings GET only reports whether a
 key is set, not its value).
 
-**AI Committee gate.** In Settings, AI tab, "Use the committee as a final gate" is off by default because each
-run costs about a dozen AI calls. When on, auto-scan and the market-open redo run it before a position opens, and
-the Generate button runs it in the background so the reports appear on the plan card as they are written.
-
 **Claude Code CLI in Docker.** The image has its own copy of the CLI but not your login. Run `claude setup-token`
 on your machine and put the result in a gitignored `.env` next to `docker-compose.yml` as
 `CLAUDE_CODE_OAUTH_TOKEN=...`, then `docker compose up -d`. Without it the text falls back to rule-based wording.
@@ -185,14 +181,14 @@ Hugging Face, and a full run is slow on a CPU. Results (a CSV and a text summary
 ```
 backend/app/
   data_providers/   yfinance + stooq + optional Finnhub, with fallback + caching
-  analysis/         EMA/RSI/support-resistance, trend/momentum classification, scanner scoring
-  risk/             position sizing + target derivation
+  analysis/         EMA/RSI/support-resistance, trend/momentum classification, scanner scoring, the quality gate
+  risk/             position sizing (the Risk Manager calculator)
   llm_providers/    pluggable AI narrative layer (none/claude_code_cli/openrouter/openai/gemini)
-  committee/        AI Committee: analyst reports, debates, final rating, and the stop-only gate
+  committee/        AI Committee: analyst reports, debates, final rating (opinion only)
   knowledge/        dated facts (insider trades, Congress, funds, filings, news) read as of a moment
   portfolio/        paper-trading engine + SQLite models + stats
   api/routers/      REST endpoints per screen
-  services/         orchestration combining the above per screen
+  services/         orchestration combining the above per screen (hold scan, sell plan, news discovery)
 
 frontend/src/
   pages/            one per dashboard screen
@@ -211,28 +207,26 @@ daily sell plan plus a rebuy watch handle exits. Paper money only. See FEATURES.
 
 ## Known limitations (v1)
 
-- Paper-trading exit rule: a position closes fully at whichever of stop-loss or TP1 hits
-  first (checked against each bar's high/low). TP2 is informational only unless you turn on
-  the opt-in partial scale-out (Settings -> Paper Account, off by default): then part of the
-  position is sold at TP1 and the rest runs to TP2 behind a breakeven or trailing stop.
-  A position that touches neither is closed at the close of its 20th
-  trading day (Settings -> Maximum Holding Time; 0 turns it off).
+- Paper-trading exit rule: a position closes fully only when a final daily close is beyond its disaster stop
+  (`hold_stop_pct`, 25%, or the 200-day average if lower; Settings -> Portfolio builder), when the daily sell plan sells
+  it, or by hand. There is no profit target, no time limit and no partial exit, so a loss can be large before the stop
+  triggers (a gap-down fills at the close). Much of the hold flow (news discovery, dip adds, the sell signals, the
+  scheduled jobs) has not run against live data yet, and the numbers are starting guesses.
 - The bundled `backend/data/sp500.csv` is the default list; you can replace it with your own in
   Settings -> Watchlist (up to 200 symbols, saved in `runtime/universe.json`). It holds the current S&P 500 members plus three crypto pairs (about
   500 rows). A scan still evaluates only the first 50 rows (the Scan size setting): the hand-picked large
   caps at the top. It lists today's members only, so a backtest over past years sees survivors and not the
   companies that have since left the index. Refresh it with `python scripts/refresh_universe.py` (see the
   script's header for the source).
-- The evidence parts added later (Smart Money both ways, valuation, analyst consensus, relative strength, volume
-  trend, options open interest, Fed items and posts) were promoted to real scoring before a backtest could test
-  them. Treat them as unproven until the Portfolio calibration report has 20 or more closed trades. A backtest
-  rebuilds only the two price-only parts.
+- Backtests run the hold scan with only the price check (the trend); profit, growth and valuation are not known for a
+  past date, so results are optimistic (today's survivors, daily bars) and not comparable with the live gate. They are
+  judged by return %, not R.
 - The optional smart-money tracker (off until the Watchers switch is on) turns reported insider, House, 5%-holder and
-  followed-fund filings into candidates for the normal evaluation. Those reports arrive up to 45 days after the trade,
+  followed-fund filings into candidates for the hold buy (same quality gate, half size if it fails). Those reports arrive up to 45 days after the trade,
   its score is a starting guess and not a validated signal, and it trades paper money only, in its own two sleeves
   (`smart-money-auto` and `smart-money-manual`, the latter fed by a Review queue). Settings: `smart_money_scope`
   (watchlist or market-wide), `smart_money_min_score`, `smart_money_max_open_positions`, `smart_money_max_new_per_week`,
-  `smart_money_max_holding_days`, `smart_money_max_companies_per_poll` and `smart_money_followed_member_multiplier`.
+  `smart_money_max_companies_per_poll` and `smart_money_followed_member_multiplier`.
   See FEATURES.md, section 20.
 - No free source exists for short interest, the balance sheet or cash flow, institutional-ownership totals, or
   analyst-estimate revisions, so those are not used.
@@ -243,7 +237,7 @@ daily sell plan plus a rebuy watch handle exits. Paper money only. See FEATURES.
 ## More documentation
 
 [FEATURES.md](FEATURES.md) describes what the app does, page by page, how every decision is
-scored, and where the data comes from.
+made, and where the data comes from.
 
 ## Credits and licenses
 
