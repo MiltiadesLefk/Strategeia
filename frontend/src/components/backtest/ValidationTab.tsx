@@ -215,13 +215,27 @@ function ValidationForm({ onStarted }: { onStarted: (id: number) => void }) {
           {o.knobs.map((knob) => (
             <label key={knob.name} style={{ fontSize: 13 }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{knob.label}</div>
-              <input
-                aria-label={knob.label}
-                placeholder={knob.kind === 'bool' ? `now ${knob.live_value ? 1 : 0}; e.g. 0, 1` : `now ${knob.live_value}; e.g. ${knob.live_value}, ${knob.kind === 'int' ? Math.round(knob.live_value * 1.5) : +(knob.live_value * 1.5).toFixed(2)}`}
-                value={grid[knob.name] ?? ''}
-                onChange={(e) => setGrid({ ...grid, [knob.name]: e.target.value })}
-                style={{ width: '100%' }}
-              />
+              {knob.kind === 'bool' ? (
+                <select
+                  aria-label={knob.label}
+                  value={grid[knob.name] ?? ''}
+                  onChange={(e) => setGrid({ ...grid, [knob.name]: e.target.value })}
+                  style={{ width: '100%' }}
+                >
+                  <option value="">As it is now ({knob.live_value ? 'on' : 'off'})</option>
+                  <option value="0">Off only</option>
+                  <option value="1">On only</option>
+                  <option value="0,1">Both (tests each)</option>
+                </select>
+              ) : (
+                <input
+                  aria-label={knob.label}
+                  placeholder={`now ${knob.live_value}; e.g. ${knob.live_value}, ${knob.kind === 'int' ? Math.round(knob.live_value * 1.5) : +(knob.live_value * 1.5).toFixed(2)}`}
+                  value={grid[knob.name] ?? ''}
+                  onChange={(e) => setGrid({ ...grid, [knob.name]: e.target.value })}
+                  style={{ width: '100%' }}
+                />
+              )}
               <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>{knob.help} Allowed {knob.low} to {knob.high}.</div>
             </label>
           ))}
