@@ -749,6 +749,8 @@ class AppSettings(BaseModel):
     hold_max_positions: int = Field(default=20, ge=1, le=100)
     hold_max_per_sector: int = Field(default=4, ge=1, le=50)
     hold_max_new_per_scan: int = Field(default=3, ge=0, le=50)
+    # A smart-money buy that fails the quality gate still buys, at this % of the normal slice.
+    hold_failed_gate_size_pct: float = Field(default=50.0, gt=0, le=100)
 
     # Liquidity-aware slippage (opt-in, off = the flat slippage_bps only, results
     # unchanged): market fills pay extra bps that grow with the order's size

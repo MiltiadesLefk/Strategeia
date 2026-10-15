@@ -507,6 +507,8 @@ export interface AppSettings {
   hold_max_positions: number;
   hold_max_per_sector: number;
   hold_max_new_per_scan: number;
+  /** A smart-money buy that fails the quality gate buys this % of the normal slice. */
+  hold_failed_gate_size_pct: number;
   /** Share of the position sold at TP1 (0.1 to 0.9). */
   scale_out_fraction: number;
   /** Where the remainder's stop goes after TP1: its entry price, or trailing behind the best price. */
@@ -600,6 +602,7 @@ export interface SettingsUpdateRequest {
   hold_max_positions?: number;
   hold_max_per_sector?: number;
   hold_max_new_per_scan?: number;
+  hold_failed_gate_size_pct?: number;
   scale_out_fraction?: number;
   scale_out_stop_mode?: ScaleOutStopMode;
   scale_out_trail_r?: number;

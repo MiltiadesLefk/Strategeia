@@ -87,6 +87,7 @@ class SettingsUpdateRequest(BaseModel):
     hold_max_positions: int | None = Field(default=None, ge=1, le=100)
     hold_max_per_sector: int | None = Field(default=None, ge=1, le=50)
     hold_max_new_per_scan: int | None = Field(default=None, ge=0, le=50)
+    hold_failed_gate_size_pct: float | None = Field(default=None, gt=0, le=100)
     liquidity_slippage_enabled: bool | None = None
     liquidity_slippage_coefficient: float | None = Field(default=None, ge=0, le=1000)
     scale_out_enabled: bool | None = None

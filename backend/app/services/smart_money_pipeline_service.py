@@ -304,7 +304,8 @@ def _evaluate_hold(
 ) -> str:
     """Hold mode (PORTOFOLIO_BUILDER step 3): the quality gate decides instead of a swing plan. A pass inside the
     sleeve caps is hold-bought at the target weight; a failed gate, a reached cap or an engine refusal goes to the
-    review queue with the reason. The smart-money score only chose which stock was looked at."""
+    review queue with the reason. A failed gate does not stop a smart-money buy: it buys a smaller slice
+    (`hold_failed_gate_size_pct`). The smart-money score only chose which stock was looked at."""
     from app.services.hold_buy_service import check_quality, hold_buy
 
     try:
@@ -314,9 +315,6 @@ def _evaluate_hold(
         session.rollback()
         candidate = session.get(SmartMoneyCandidate, candidate.id)
         return _skip(session, candidate, REASON_EVALUATION_ERROR, f"{type(exc).__name__}: {exc}", now)
-    if not gate.passed:
-        return route_plan(session, candidate, None, "no_trade", False, None, settings, sleeve, now,
-                          note="Failed the quality gate: " + "; ".join(gate.failed_reasons))
     if cap_note is not None:
         return route_plan(session, candidate, None, "pending", False, cap_note, settings, sleeve, now)
     if not settings.auto_execute_trade_plans:
@@ -325,7 +323,9 @@ def _evaluate_hold(
     engine = build_sleeve_engine(session, data_provider, settings, sleeve, clock=clock, hold=True)
     try:
         position = hold_buy(session, engine, data_provider, settings, candidate.symbol, sleeve_id=sleeve.id,
-                            reason=f"smart money score {candidate.score:g}; passed the quality gate")
+                            reason=f"smart money score {candidate.score:g}; "
+                            + ("passed the quality gate" if gate.passed else "failed the quality gate (" + "; ".join(gate.failed_reasons) + "), half size"),
+                            size_pct=100.0 if gate.passed else settings.hold_failed_gate_size_pct)
     except (MarketClosedError, *_ENGINE_REFUSALS) as exc:
         return route_plan(session, candidate, None, "pending", False, None, settings, sleeve, now, note=str(exc))
     return route_plan(session, candidate, position.trade_plan_id, "executed", False, None, settings, sleeve, now)

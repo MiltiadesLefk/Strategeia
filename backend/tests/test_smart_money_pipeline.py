@@ -215,19 +215,6 @@ def test_a_good_rating_is_bought_automatically_in_the_auto_sleeve(session, sent)
     assert any("auto-buy" in m and "reported filings" in m and "not a prediction" in m for m in sent)
 
 
-def test_a_stock_that_fails_the_gate_goes_to_the_review_queue_not_dropped(session, sent):
-    row = add_candidate(session)
-    assert evaluate(session, row, provider=Bearish()) == STATUS_NEEDS_REVIEW
-    session.refresh(row)
-    assert row.status == STATUS_NEEDS_REVIEW and row.reason == "rated_bad"
-    assert abs((row.expires_at - NOW).days - REVIEW_EXPIRY_DAYS) <= 1
-    assert "quality gate" in row.reason_detail and row.plan_id is None
-    assert positions_in(session, AUTO_SLEEVE_KEY) == []
-    text = " ".join(sent)
-    assert "waiting for your decision" in text and "not a prediction" in text and "smart money knows" not in text.lower()
-
-
-
 def test_a_passing_stock_with_auto_execute_off_is_not_dropped(session, sent):
     row = add_candidate(session)
     assert evaluate(session, row, settings=settings_(auto_execute_trade_plans=False)) == STATUS_NEEDS_REVIEW
@@ -419,7 +406,7 @@ def client(engine):
 
 def queue_item(session, symbol="AAA") -> SmartMoneyCandidate:
     row = add_candidate(session, symbol)
-    evaluate(session, row, provider=Bearish())
+    evaluate(session, row, settings=settings_(auto_execute_trade_plans=False))
     session.refresh(row)
     assert row.status == STATUS_NEEDS_REVIEW
     return row
@@ -437,8 +424,8 @@ def test_the_review_list_keeps_the_contract_the_frontend_relies_on(client, sessi
         assert key in item, key
     assert item["id"] == row.id and item["status"] == "needs_review" and item["score"] == 5.5
     assert item["components"][0].keys() >= {"source", "points", "reason"}
-    assert item["rating"] is None  # hold mode: no swing rating, the quality gate's reasons are shown instead
-    assert "quality gate" in item["reasons_declined"][0]
+    assert item["rating"] is None  # hold mode: no swing rating, the reason it was not bought is shown instead
+    assert "Auto-execute is off" in item["reasons_declined"][0]
     assert item["market_open"] is True
     assert "Reported filings" in item["delay_note"] and "knows" not in item["delay_note"].lower()
     assert item["decided_by"] is None and item["plan_id"] == row.plan_id

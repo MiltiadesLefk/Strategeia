@@ -49,8 +49,9 @@ def hold_buy(
     *,
     reason: str = "hold buy",
     sleeve_id: int | None = None,
+    size_pct: float = 100.0,
 ) -> PaperPosition:
-    """Buy `symbol` in hold mode. Raises the engine's errors (market closed, duplicate, no cash...)."""
+    """Buy `symbol` in hold mode (`size_pct` of the normal slice). Raises the engine's errors (market closed, duplicate, no cash...)."""
     with fresh_data_only():
         price = float(data_provider.get_quote(symbol).price)
         try:
@@ -58,9 +59,9 @@ def hold_buy(
             ma200 = float(closes.tail(MA_DAYS).mean()) if len(closes) >= MA_DAYS else None
         except Exception:  # noqa: BLE001 - no 200-day average just means the percentage stop alone
             ma200 = None
-    shares = hold_shares(account_value(session, engine), settings.hold_target_weight_pct, price)
+    shares = hold_shares(account_value(session, engine), settings.hold_target_weight_pct * size_pct / 100, price)
     if shares <= 0:
-        raise InsufficientCashError(f"A {settings.hold_target_weight_pct:g}% slice of the account can't buy 1 share of {symbol} at ${price:.2f}.")
+        raise InsufficientCashError(f"A {settings.hold_target_weight_pct * size_pct / 100:g}% slice of the account can't buy 1 share of {symbol} at ${price:.2f}.")
     plan = TradePlanRecord(
         symbol=symbol, direction="long", entry=price, stop=hold_stop_level(price, ma200, settings.hold_stop_pct),
         tp1=0.0, tp2=0.0, suggested_shares=shares, confidence_score=0, status="pending",
