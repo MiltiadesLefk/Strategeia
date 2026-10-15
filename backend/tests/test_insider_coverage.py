@@ -57,3 +57,12 @@ def test_insider_window_is_one_number_everywhere():
 
     assert INSIDER_WINDOW_DAYS == DEFAULT_WINDOW_DAYS == 180
     assert inspect.signature(insider_sell_split).parameters["window_days"].default == INSIDER_WINDOW_DAYS
+
+
+def test_the_scheduled_job_runs_with_the_watchers_switch_off(monkeypatch):
+    from app import scheduler
+
+    calls = []
+    monkeypatch.setattr(scheduler, "run_insider_coverage_tick", lambda session, symbols: calls.append(symbols))
+    scheduler._insider_coverage_job()
+    assert len(calls) == 1

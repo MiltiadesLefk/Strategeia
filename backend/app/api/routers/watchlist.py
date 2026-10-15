@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from app.api.deps import get_app_settings, get_data_provider, require_auth
 from app.config import AppSettings
@@ -25,6 +25,7 @@ def get_watchlist(settings: AppSettings = Depends(get_app_settings)) -> Watchlis
 @router.put("", response_model=WatchlistResponse)
 def save_watchlist(
     body: WatchlistSaveRequest,
+    background: BackgroundTasks,
     data_provider: DataProvider = Depends(get_data_provider),
     settings: AppSettings = Depends(get_app_settings),
 ) -> WatchlistResponse:
@@ -33,6 +34,9 @@ def save_watchlist(
         watchlist_service.save_watchlist(body.symbols, data_provider)
     except WatchlistError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    from app.scheduler import kick_insider_coverage
+
+    background.add_task(kick_insider_coverage)  # a new symbol gets its year of insider filings now, not in 10 minutes
     return watchlist_service.describe_watchlist(settings)
 
 

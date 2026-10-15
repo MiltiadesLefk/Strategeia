@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import threading
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -270,10 +271,16 @@ def _morning_fetch_job() -> None:
 INSIDER_COVERAGE_INTERVAL_MINUTES = 10
 
 
+_insider_coverage_lock = threading.Lock()
+
+
 def _insider_coverage_job() -> None:
+    # Runs whether or not the Watchers switch is on: a year of insider history must always be stored for every
+    # symbol in the universe (the pacing is the shared SEC rate limiter plus the tick budget).
+    if not _insider_coverage_lock.acquire(blocking=False):
+        return  # a tick is already running (the scheduled one, or one started by a watchlist save)
     try:
-        settings = load_app_settings()
-        if not settings.watchers_enabled or is_simulated():
+        if is_simulated():
             return
         from app.data_providers.universe import load_universe
 
@@ -281,6 +288,13 @@ def _insider_coverage_job() -> None:
             run_insider_coverage_tick(session, [e.symbol for e in load_universe()])
     except Exception:
         logger.exception("Insider coverage tick failed")
+    finally:
+        _insider_coverage_lock.release()
+
+
+def kick_insider_coverage() -> None:
+    """Start a coverage tick now in the background (after the watchlist changed), instead of waiting for the next one."""
+    threading.Thread(target=_insider_coverage_job, name="insider-coverage-kick", daemon=True).start()
 
 
 # Smart-money pipeline: every few minutes the candidates the tracker flagged are evaluated (liquidity floor,
@@ -391,6 +405,7 @@ def start_scheduler() -> BackgroundScheduler:
         "interval",
         minutes=INSIDER_COVERAGE_INTERVAL_MINUTES,
         id="insider_coverage",
+        next_run_time=datetime.now(timezone.utc) + timedelta(seconds=30),  # first fill right after startup
         max_instances=1,
         coalesce=True,
     )

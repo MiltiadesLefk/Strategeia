@@ -102,6 +102,14 @@ def _isolate_watcher_registry():
 
 
 @pytest.fixture(autouse=True)
+def _no_insider_coverage_kick(monkeypatch):
+    """Saving the watchlist starts a background SEC load; no test may reach the network that way."""
+    import app.scheduler
+
+    monkeypatch.setattr(app.scheduler, "kick_insider_coverage", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def _reset_in_process_cooldowns(monkeypatch):
     """Every in-process, not-persisted cooldown in the API (matching the
     established pattern — see scanner.py's AUTO_TRADE_COOLDOWN_SECONDS and
