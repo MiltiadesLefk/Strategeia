@@ -8,7 +8,7 @@ pending, a redo is queued here, and shortly after the next open the redo job
 data; only that fresh plan may execute.
 
 This module only reads and writes the queue. It deliberately doesn't import
-trade_plan_service (which queues redos) or run anything, so both that service
+the smart-money pipeline or run anything, so both that service
 and the redo job can depend on it without an import cycle.
 """
 
@@ -143,13 +143,3 @@ def pending_redo_for_plan(session: Session, plan_id: int | None) -> DeferredEval
         )
     ).first()
 
-
-def pending_redo_times(session: Session) -> dict[int, datetime]:
-    """plan id -> when its redo is due, for every plan awaiting one. One query
-    for a whole list of plans instead of one per plan."""
-    rows = session.exec(
-        select(DeferredEvaluation).where(
-            DeferredEvaluation.status == PENDING, DeferredEvaluation.trade_plan_id.is_not(None)
-        )
-    ).all()
-    return {row.trade_plan_id: row.due_at for row in rows}

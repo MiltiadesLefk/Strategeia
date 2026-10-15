@@ -4,7 +4,7 @@ Every poll it (1) STORES the newest filings as dated facts, then (2) scores the
 symbols that have something new and (3) records a `SmartMoneyCandidate` for each
 one at or above the bar. It never trades, never evaluates and never sets a
 direction, size, stop or target: a candidate only says "this symbol deserves the
-ordinary full evaluation", which a later phase runs through `generate_trade_plan`.
+ordinary full evaluation", which the smart-money pipeline runs (the hold buy path).
 
 Two scopes, switched by the `smart_money_scope` setting, with no code change:
 

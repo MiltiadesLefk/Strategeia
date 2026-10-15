@@ -1,7 +1,7 @@
 """The data the backtest sees: local price history, cut off at the simulated moment.
 
 `BacktestDataProvider` implements the same DataProvider interface the live app
-uses, so generate_trade_plan and the paper-trading engine run on it unchanged.
+uses, so the hold scan step and the paper-trading engine run on it unchanged.
 Everything it returns is decided by ONE thing: the simulated moment T set by
 `with as_of(T):` (app.knowledge.point_in_time). There is no way to ask it for a
 date.

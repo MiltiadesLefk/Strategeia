@@ -8,8 +8,9 @@ The order inside one run is deliberate:
    what a watcher knew and when. A repeat of an item already recorded is dropped here.
 3. Apply the per-symbol cooldown and the daily cap. A throttled event is still
    recorded (with the reason) but does nothing else.
-4. Do what the Watchers setting says: nothing more, a Telegram alert, or an alert
-   plus an ordinary full evaluation of the symbol (see reevaluate.py).
+4. Do what the Watchers setting says: nothing more, or a Telegram alert. The old
+   `alert_and_reevaluate` value (an alert plus a swing evaluation) is still accepted and now
+   only alerts: nothing evaluates a swing plan any more.
 """
 
 from __future__ import annotations
@@ -24,16 +25,12 @@ from datetime import datetime, timedelta
 from sqlmodel import Session, select
 
 from app.config import AppSettings
-from app.data_providers.base import DataProvider
 from app.knowledge import FactKind, is_simulated, make_dedupe_key, record_fact
-from app.llm_providers.base import LLMProvider
 from app.markets import to_market_time
-from app.portfolio.engine import Clock
 from app.services.telegram_service import notify
 from app.timeutil import utcnow_naive
 from app.watchers.base import SEVERITIES, Watcher, WatcherContext, WatcherEvent
 from app.watchers.models import WatcherState
-from app.watchers.reevaluate import ReevaluationOutcome, reevaluate_for_event
 from app.watchers.registry import all_watchers
 
 logger = logging.getLogger(__name__)
@@ -54,7 +51,6 @@ SKIP_BACKOFF = "backing_off"
 SKIP_NOT_DUE = "not_due"
 
 Notifier = Callable[[str, str, str], None]
-Reevaluator = Callable[..., ReevaluationOutcome]
 
 
 @dataclass
@@ -165,18 +161,13 @@ def run_watcher_once(
     now: datetime | None = None,
     *,
     force: bool = False,
-    data_provider: DataProvider | None = None,
-    llm_provider: LLMProvider | None = None,
     notifier: Notifier = notify,
-    reevaluator: Reevaluator = reevaluate_for_event,
-    clock: Clock | None = None,
 ) -> WatcherRunResult:
     """One poll of one watcher, start to finish. Never raises.
 
     `force` (the manual Run button) skips the not-due and backoff checks but not
     the master switch, the per-watcher switch, the simulated-moment rule, the
-    cooldown or the daily cap. Providers are built only if an evaluation is
-    actually needed."""
+    cooldown or the daily cap."""
     result = WatcherRunResult(watcher=watcher.name)
     now = now if now is not None else utcnow_naive()
     try:
@@ -197,7 +188,7 @@ def run_watcher_once(
             if due_at is not None and due_at > now:
                 result.skipped_reason = SKIP_BACKOFF if state.consecutive_failures > 0 else SKIP_NOT_DUE
                 return result
-        return _run(session, watcher, settings, state, now, result, data_provider, llm_provider, notifier, reevaluator, clock)
+        return _run(session, watcher, settings, state, now, result, notifier)
     except Exception as exc:  # the scheduler must never see an exception from here
         logger.exception("Watcher %s: run failed", watcher.name)
         result.error = str(exc)[:MAX_ERROR_LENGTH]
@@ -215,11 +206,7 @@ def _run(
     state: WatcherState,
     now: datetime,
     result: WatcherRunResult,
-    data_provider: DataProvider | None,
-    llm_provider: LLMProvider | None,
     notifier: Notifier,
-    reevaluator: Reevaluator,
-    clock: Clock | None,
 ) -> WatcherRunResult:
     result.ran = True
     state.last_run_at = now
@@ -281,7 +268,7 @@ def _run(
         session.add(state)
         session.commit()
         result.fired += 1
-        _act(session, settings, watcher, event, now, result, data_provider, llm_provider, notifier, reevaluator, clock)
+        _act(session, settings, watcher, event, now, result, notifier)
     return result
 
 
@@ -292,35 +279,15 @@ def _act(
     event: WatcherEvent,
     now: datetime,
     result: WatcherRunResult,
-    data_provider: DataProvider | None,
-    llm_provider: LLMProvider | None,
     notifier: Notifier,
-    reevaluator: Reevaluator,
-    clock: Clock | None,
 ) -> None:
     action = settings.watchers_action
     if action == "record":
         result.actions.append("recorded")
         return
 
-    outcome: ReevaluationOutcome | None = None
-    if action == "alert_and_reevaluate" and event.symbol:
-        try:
-            if data_provider is None or llm_provider is None:
-                from app.data_providers.factory import get_data_provider
-                from app.llm_providers.factory import get_llm_provider
-
-                data_provider = data_provider or get_data_provider(settings)
-                llm_provider = llm_provider or get_llm_provider(settings)
-            outcome = reevaluator(session, settings, event, now, data_provider, llm_provider, clock=clock)
-        except Exception as exc:
-            logger.exception("Watcher %s: re-evaluation of %s failed", watcher.name, event.symbol)
-            session.rollback()
-            outcome = ReevaluationOutcome("failed", f"The evaluation of {event.symbol} failed: {exc}")
-        result.actions.append(f"reevaluate:{outcome.status}")
-
     try:
-        notifier(settings.telegram_bot_token, settings.telegram_chat_id, format_alert(event, outcome.detail if outcome else ""))
+        notifier(settings.telegram_bot_token, settings.telegram_chat_id, format_alert(event, ""))
         result.actions.append("alerted")
     except Exception:
         logger.exception("Watcher %s: alert failed", watcher.name)

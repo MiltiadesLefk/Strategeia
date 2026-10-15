@@ -53,6 +53,3 @@ def notify(bot_token: str, chat_id: str, text: str) -> None:
     if not result.ok:
         logger.warning("Telegram notification failed: %s", result.message)
 
-
-def notify_trade_plan(bot_token: str, chat_id: str, text: str) -> None:
-    notify(bot_token, chat_id, text)

@@ -13,7 +13,7 @@ from app.api.routers import valuation as valuation_router
 from app.api.routers import screener as screener_router
 from app.api.routers import alerts as price_alerts_router
 from app.api.routers import notes as notes_router
-from app.api.routers import analysis, archive, auth, dashboard, market, portfolio, research, risk, scanner, settings, trade_plans
+from app.api.routers import analysis, archive, auth, dashboard, market, portfolio, research, risk, scanner, settings
 from app.api.routers import signals as signals_router
 from app.api.routers import sleeves as sleeves_router
 from app.api.routers import forecast_lab as forecast_lab_router
@@ -121,7 +121,6 @@ app.include_router(analysis.router)
 app.include_router(research.router)
 app.include_router(calendar_router.router)
 app.include_router(risk.router)
-app.include_router(trade_plans.router)
 app.include_router(signals_router.router)
 app.include_router(news_router.router)
 app.include_router(portfolio.router)

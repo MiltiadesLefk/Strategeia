@@ -96,15 +96,6 @@ def ensure_core_sleeve(session: Session) -> Sleeve:
     return core
 
 
-def plan_sleeve_id(session: Session, sleeve: Sleeve | None) -> int | None:
-    """What to stamp on a new plan or queued redo for `sleeve` (None = core):
-    the sleeve's id, or the core's id if its row exists yet. Never writes."""
-    if sleeve is not None:
-        return sleeve.id
-    core = find_core_sleeve(session)
-    return core.id if core is not None else None
-
-
 def non_core_sleeve_id(session: Session, sleeve_id: int | None) -> int | None:
     """`sleeve_id` with core folded into None, so "no sleeve" and "the core
     sleeve's id" compare equal (queued redos are matched on it)."""
