@@ -14,6 +14,7 @@ type Draft = Pick<
   | 'hold_max_new_per_scan'
   | 'hold_failed_gate_size_pct'
   | 'news_discovery_enabled'
+  | 'hold_add_on_dips'
   | 'news_discovery_max_per_run'
 >;
 
@@ -42,7 +43,7 @@ export function HoldSettingsCard() {
         hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
         hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
         hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
-        news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
+        hold_add_on_dips: data.hold_add_on_dips, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
       });
     }
   }, [data]);
@@ -61,6 +62,10 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.hold_buy_only_dips} onChange={(v) => set('hold_buy_only_dips', v)} label="Only buy dips" />
         <span>Only buy a good stock while it is 10% or more under its 3-month high</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.hold_add_on_dips} onChange={(v) => set('hold_add_on_dips', v)} label="Add on dips" />
+        <span>Top up a held stock toward its target weight when it passes the check and is in a dip (off by default)</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.news_discovery_enabled} onChange={(v) => set('news_discovery_enabled', v)} label="News discovery" />
