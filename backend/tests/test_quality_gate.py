@@ -42,3 +42,11 @@ def test_dip_needs_ten_percent_under_the_three_month_high():
     assert is_dip(flat[:-1] + [90.0])
     assert not is_dip([50.0] * (DIP_LOOKBACK - 1))  # not enough history
     assert verdict().dip is False
+
+
+def test_price_only_runs_the_trend_check_alone_and_never_passes_on_missing_data():
+    r = verdict(price_only=True, overview=None, financial_years=[])  # what a backtest has: no fundamentals at all
+    assert r.passed and [c.name for c in r.checks] == ["trend"]
+    assert not verdict(price_only=True, price=100.0, overview=None, financial_years=[]).passed
+    assert not verdict(price_only=True, closes=RISING[:50], overview=None, financial_years=[]).passed  # too few bars
+    assert not verdict(price_only=True, require_trend=False, price=100.0).passed  # the trend can't be switched off

@@ -515,10 +515,10 @@ def test_asking_for_dated_data_without_a_fact_database_is_an_error():
 def test_dated_parts_change_points_only_where_the_data_exists(engine):
     _revenue_facts(engine, "AAA")  # BBB has prices but no stored filings
     book = _book()
-    plain = runner.run_backtest(BacktestParams(symbols=["AAA", "BBB"], start=START, end=END), _settings(), book)
+    plain = runner.run_backtest(BacktestParams(symbols=["AAA", "BBB"], start=START, end=END), _settings(), book, swing=True)
     rich = runner.run_backtest(
         BacktestParams(symbols=["AAA", "BBB"], start=START, end=END, include_fundamentals=True),
-        _settings(), book, fact_session_factory=lambda: Session(engine),
+        _settings(), book, fact_session_factory=lambda: Session(engine), swing=True,
     )
     assert plain.trades and rich.trades
     assert all(t["scores"]["fundamental_score"] == 0 for t in plain.trades)
@@ -547,7 +547,7 @@ def test_a_run_with_the_dated_parts_on_is_repeatable(engine):
     )
 
     def go():
-        return runner.run_backtest(params, _settings(), _book(), fact_session_factory=lambda: Session(engine))
+        return runner.run_backtest(params, _settings(), _book(), fact_session_factory=lambda: Session(engine), swing=True)
 
     first, second = go(), go()
     assert first.trades == second.trades and first.equity == second.equity

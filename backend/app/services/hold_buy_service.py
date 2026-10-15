@@ -86,11 +86,13 @@ def hold_add(
     return engine.add_to_hold_position(position, missing)
 
 
-def check_quality(data_provider: DataProvider, symbol: str, require_trend: bool = True) -> GateResult:
+def check_quality(data_provider: DataProvider, symbol: str, require_trend: bool = True, price_only: bool = False) -> GateResult:
     """Fetch what the gate reads (fresh data only) and run it. A failed fetch is a failed check."""
     with fresh_data_only():
         price = float(data_provider.get_quote(symbol).price)
         closes = [float(c) for c in data_provider.get_ohlcv(symbol, period="1y", interval="1d")["close"]]
+        if price_only:
+            return evaluate_quality_gate(price, closes, None, [], require_trend, price_only=True)
         try:
             overview = data_provider.get_company_overview(symbol)
         except Exception:  # noqa: BLE001 - missing data fails the check instead of guessing

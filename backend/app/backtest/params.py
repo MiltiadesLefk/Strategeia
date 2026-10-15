@@ -40,8 +40,14 @@ class SettingsOverrides(BaseModel):
     max_position_pct_of_adv: float | None = Field(default=None, gt=0, le=100)
     max_holding_days: int | None = Field(default=None, ge=0, le=60)
     paper_starting_cash: float | None = Field(default=None, gt=0)
+    # Hold knobs (the run's decisions). The swing knobs above (min_confidence_for_trade, max_holding_days,
+    # default_risk_pct) no longer change a hold run; they stay only because validation.py/baseline.py still read them.
+    # shortcut: remove them with those two modules' re-aim.
+    hold_stop_pct: float | None = Field(default=None, ge=0, le=90)
+    hold_target_weight_pct: float | None = Field(default=None, gt=0, le=100)
+    hold_buy_only_dips: bool | None = None
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "forbid"}  # the whitelist: an unlisted setting is a 422, never silently applied
 
 
 class BacktestParams(BaseModel):
@@ -58,7 +64,7 @@ class BacktestParams(BaseModel):
     include_insiders: bool = False  # open-market insider buying (Form 4 by acceptance time)
     include_earnings: bool = False  # earnings-surprise track record (by report day)
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "ignore"}
 
     @property
     def uses_dated_facts(self) -> bool:

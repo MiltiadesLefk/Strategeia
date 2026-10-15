@@ -108,7 +108,7 @@ def test_no_draw_means_no_trades_and_every_draw_means_trades_up_to_the_caps(book
 
 
 def test_a_random_entry_gets_exactly_the_stop_target_and_size_the_live_plan_gets(book):
-    live = runner.run_backtest(params_for(symbols=("AAA",)), settings_for(), book)
+    live = runner.run_backtest(params_for(symbols=("AAA",)), settings_for(), book, swing=True)
     trade = live.trades[0]
     assert trade["direction"] == "long"
     provider = BacktestDataProvider(book)

@@ -70,7 +70,7 @@ class BacktestTradeSchema(BaseModel):
     exit_at: UtcDatetime | None = None
     exit_date: date | None = None
     exit_price: float | None = None
-    close_reason: str | None = None  # stop_hit | tp1_hit | time_exit | open_at_end
+    close_reason: str | None = None  # disaster_stop | open_at_end (older runs: stop_hit | tp1_hit | time_exit)
     realized_pnl: float | None = None
     realized_r: float | None = None
     fees_paid: float | None = None
@@ -79,6 +79,7 @@ class BacktestTradeSchema(BaseModel):
     mae_r: float | None = None
     mfe_pct: float | None = None
     mae_pct: float | None = None
+    return_pct: float | None = None
     confidence_points: int | None = None
     confidence_points_max: int | None = None
     confidence_score: int | None = None
