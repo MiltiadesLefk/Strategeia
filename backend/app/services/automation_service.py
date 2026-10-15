@@ -94,15 +94,39 @@ def run_auto_scan(
     return outcome
 
 
+def hold_scan_symbol(
+    settings: AppSettings, data_provider: DataProvider, session: Session, engine, symbol: str, reason: str,
+    *, price_only: bool = False,
+) -> bool:
+    """One symbol of the hold scan: gate, dip rule, hold buy. True = bought. Shared by the live scan and the
+    backtest (`price_only` = the trend check alone, the only part of the gate knowable at a past date).
+    The engine's refusals are logged and mean "not bought"; MarketClosedError and anything unexpected propagate."""
+    from app.portfolio.engine import (
+        DuplicatePositionError, InsufficientCashError, MaxPositionsExceededError, SectorConcentrationError,
+        SleeveDisabledError, StalePlanError,
+    )
+    from app.services.hold_buy_service import check_quality, hold_buy
+
+    try:
+        gate = check_quality(data_provider, symbol, price_only=price_only)
+        if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
+            return False
+        hold_buy(session, engine, data_provider, settings, symbol, reason=reason + (" and is in a dip" if gate.dip else ""))
+        return True
+    except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError, SectorConcentrationError,
+            SleeveDisabledError, StalePlanError) as exc:
+        logger.info("Hold scan: %s not bought: %s", symbol, exc)
+        return False
+
+
 def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: Session) -> list[str]:
     """The daily portfolio-builder scan: every watchlist stock not yet held goes through the quality
     gate and a pass is hold-bought (target weight, wide stop), up to `hold_max_new_per_scan`. A stock
     that fails is simply not bought. Returns the symbols bought. The engine's checks still apply."""
     from app.portfolio.engine import (
-        DuplicatePositionError, InsufficientCashError, MarketClosedError, MaxPositionsExceededError,
-        SectorConcentrationError, SleeveDisabledError, StalePlanError,
+        InsufficientCashError, MarketClosedError, SectorConcentrationError, SleeveDisabledError, StalePlanError,
     )
-    from app.services.hold_buy_service import check_quality, hold_buy
+    from app.services.hold_buy_service import check_quality
     from app.services.sleeve_service import build_sleeve_engine
 
     if not settings.auto_execute_trade_plans:
@@ -121,18 +145,11 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         if len(bought) >= settings.hold_max_new_per_scan:
             break
         try:
-            gate = check_quality(data_provider, symbol)
-            if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
-                continue
-            hold_buy(session, engine, data_provider, settings, symbol,
-                     reason=reason + (" and is in a dip" if gate.dip else ""))
-            bought.append(symbol)
+            if hold_scan_symbol(settings, data_provider, session, engine, symbol, reason):
+                bought.append(symbol)
         except MarketClosedError:
             logger.info("Hold scan stopped: the market is closed")
             break
-        except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError, SectorConcentrationError,
-                SleeveDisabledError, StalePlanError) as exc:
-            logger.info("Hold scan: %s not bought: %s", symbol, exc)
         except Exception:
             logger.exception("Hold scan: failed to evaluate %s", symbol)
     if settings.hold_add_on_dips:

@@ -58,6 +58,13 @@ def wiggly_uptrend(count: int, start_price: float = 100.0, daily: float = 0.006,
     return start_price * np.cumprod(1 + returns)
 
 
+def crashing_uptrend(count: int, crash_at: int, factor: float = 0.4, **kwargs):
+    """wiggly_uptrend whose price falls to `factor` of itself at bar `crash_at` and stays there."""
+    closes = wiggly_uptrend(count, **kwargs)
+    closes[crash_at:] *= factor
+    return closes
+
+
 def flat_series(count: int, price: float) -> np.ndarray:
     return np.full(count, price)
 

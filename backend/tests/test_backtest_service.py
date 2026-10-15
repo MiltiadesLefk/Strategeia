@@ -22,7 +22,7 @@ from app.data_providers.history_store import HistoryStore
 from app.main import app
 from app.portfolio.models import PaperPosition, TradePlanRecord
 from app.strategy.models import StrategyVersion
-from tests.backtest_helpers import standard_book, trading_days_from, wiggly_uptrend
+from tests.backtest_helpers import crashing_uptrend, standard_book, trading_days_from
 
 DAYS = trading_days_from(date(2024, 1, 2), 330)
 START, END = DAYS[250].isoformat(), DAYS[270].isoformat()
@@ -39,7 +39,7 @@ def env(tmp_path):
     SQLModel.metadata.create_all(engine)
 
     store = HistoryStore(tmp_path / "history.db")
-    book = standard_book(DAYS, {"AAA": wiggly_uptrend(330, daily=0.01, dip=-0.01)})
+    book = standard_book(DAYS, {"AAA": crashing_uptrend(330, 258, daily=0.01, dip=-0.01)})  # bought, then stopped out
     now = datetime(2025, 6, 1, tzinfo=timezone.utc)
     for symbol, series in book.series.items():
         store._upsert(symbol, series.frame, "yfinance", now, covered_from=DAYS[0])
@@ -81,14 +81,16 @@ def test_a_run_goes_from_queued_to_done_with_trades_equity_and_summary(env):
     assert summary["symbols_with_data"] == 1 and summary["symbols_skipped"] == []
     assert run["params"]["symbols"] == ["AAA"] and run["params"]["start"] == START
     assert run["params"]["history"]["AAA"]["bars"] == 271  # up to the run's last day
-    assert run["coverage"]["profile"] == "price_only" and run["coverage"]["achievable_points"] == 9
+    assert run["coverage"]["profile"] == "hold_price_only"
+    assert [c["check"] for c in run["coverage"]["checks_run"]] == ["trend"]
+    assert {"growth", "profit", "valuation", "news_discovery", "dip_add"} <= {c["check"] for c in run["coverage"]["checks_not_run"]}
 
     trades = client.get(f"/api/backtests/{run_id}/trades").json()
     assert len(trades) >= 1
     first = trades[0]
-    assert first["symbol"] == "AAA" and first["direction"] == "long" and first["confidence_points"] == 6
-    s = first["scores"]  # 5 from the chart and weekly/SPY, 1 from the price-only evidence (relative strength or volume trend)
-    assert s["technical_score"] + s["market_confirmation_score"] + s["relative_strength"] + s["volume_trend"] == 6
+    assert first["symbol"] == "AAA" and first["direction"] == "long" and first["confidence_points"] is None
+    assert first["close_reason"] == "disaster_stop" and first["return_pct"] < -25 and first["realized_r"] is None
+    assert first["tp1"] == 0.0 and first["scores"] == {}
 
     equity = client.get(f"/api/backtests/{run_id}/equity").json()
     assert len(equity) == summary["days_simulated"]
@@ -111,17 +113,24 @@ def test_a_run_writes_only_the_backtest_tables(env):
         assert session.exec(select(StrategyVersion)).first() is None
 
 
-def test_overrides_are_recorded_and_the_bar_is_reported_beside_the_live_one(env):
+def test_hold_overrides_are_recorded_and_reach_the_run(env):
     client, manager, _ = env
-    run_id = post(client, overrides={"min_confidence_for_trade": 12, "slippage_bps": 0}, decision_every_n_days=2).json()["id"]
+    body = {"hold_stop_pct": 10, "hold_buy_only_dips": True, "slippage_bps": 0}
+    run_id = post(client, overrides=body, decision_every_n_days=2).json()["id"]
     manager.wait(60)
     run = client.get(f"/api/backtests/{run_id}").json()
-    assert run["params"]["overrides"] == {"min_confidence_for_trade": 12, "slippage_bps": 0.0}
+    assert run["params"]["overrides"] == {"hold_stop_pct": 10.0, "hold_buy_only_dips": True, "slippage_bps": 0.0}
     assert run["params"]["decision_every_n_days"] == 2
-    assert run["params"]["effective_settings"]["min_confidence_for_trade"] == 12
-    assert run["coverage"]["min_confidence_for_trade"] == 12
-    assert run["coverage"]["live_min_confidence_for_trade"] == 16
-    assert run["coverage"]["bar_points_needed"] == 4 and run["coverage"]["live_bar_points_needed"] == 5
+    assert run["params"]["effective_settings"]["hold_stop_pct"] == 10 and run["params"]["hold"]["hold_buy_only_dips"] is True
+    assert [c["check"] for c in run["coverage"]["checks_run"]] == ["trend", "dip"]
+    assert "min_confidence_for_trade" in run["coverage"]["min_confidence_note"]
+
+
+def test_an_old_run_without_hold_coverage_still_describes_itself():
+    from app.backtest.coverage import describe_coverage
+
+    old = describe_coverage(16)  # the score-points shape older stored runs carry
+    assert old["profile"] == "price_only" and old["achievable_points"] and "checks_run" not in old
 
 
 def test_only_whitelisted_settings_can_be_overridden_and_crypto_is_rejected(env):

@@ -42,6 +42,7 @@ def build_sleeve_engine(
     *,
     clock: Clock | None = None,
     hold: bool = False,
+    intraday_exits: bool = True,
 ) -> PaperTradingEngine:
     """The engine for `sleeve` (None = core) with the shared strategy settings.
     Only the starting cash differs by sleeve: core follows Settings -> Paper
@@ -65,6 +66,7 @@ def build_sleeve_engine(
         scale_out_stop_mode=settings.scale_out_stop_mode,
         scale_out_trail_r=settings.scale_out_trail_r,
         sleeve=None if is_core else sleeve,
+        intraday_exits=intraday_exits,
         **({"exit_scan_period": SMART_MONEY_EXIT_SCAN_PERIOD} if is_smart_money else {}),
     )
 

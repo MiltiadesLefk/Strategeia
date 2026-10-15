@@ -54,16 +54,20 @@ def evaluate_quality_gate(
     overview: CompanyOverview | None,
     financial_years: list[FinancialYear],
     require_trend: bool = True,  # False = the rebuy gate: a stock that just fell is rarely above its 200-day
+    price_only: bool = False,  # trend check only (+ the dip flag): what a backtest can know at T. Never a pass by default
 ) -> GateResult:
     checks: list[GateCheck] = []
 
-    if not require_trend:
+    if not require_trend and not price_only:
         pass
     elif len(closes) >= MA_DAYS:
         ma = sum(closes[-MA_DAYS:]) / MA_DAYS
         checks.append(GateCheck("trend", price > ma, f"price {price:,.2f} vs 200-day average {ma:,.2f}"))
     else:
         checks.append(GateCheck("trend", False, f"only {len(closes)} daily bars, {MA_DAYS} needed"))
+
+    if price_only:  # growth, profit and valuation are not run at all (not passed, not failed)
+        return GateResult(all(c.ok for c in checks), checks, dip=is_dip(closes))
 
     if len(financial_years) >= 2 and financial_years[-2].revenue:
         latest, prior = financial_years[-1], financial_years[-2]

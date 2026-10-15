@@ -929,7 +929,7 @@ def test_every_request_made_during_a_backtest_passes_the_probe():
     book = standard_book(ENGINE_DAYS, {"AAA": ENGINE_CLOSES})
     provider = BacktestDataProvider(book, record_calls=True)
     engine_run(book, ENGINE_END, provider=provider)
-    assert len(provider.calls) > 50
+    assert len(provider.calls) > 20  # a hold run asks about a symbol only until it is bought
     probe = Probe(strict=False)
     for call in provider.calls:
         if call.last_bar_day is not None:

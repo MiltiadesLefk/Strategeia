@@ -43,6 +43,7 @@ TECHNICAL_VOLUME_POINT = 1
 
 PROFILE_PRICE_ONLY = "price_only"
 PROFILE_PRICE_PLUS_DATED = "price_plus_dated_data"
+PROFILE_HOLD_PRICE_ONLY = "hold_price_only"
 
 # What each switched-on part can add. Fundamentals: +1 for revenue growth and +1 for
 # sitting near the 52-week high (a near-low position is a separate branch of the
@@ -67,6 +68,43 @@ def points_needed_for(min_confidence_for_trade: int) -> int | None:
         if _confidence_score(points) >= min_confidence_for_trade:
             return points
     return None
+
+
+def describe_hold_coverage(buy_only_dips: bool = False) -> dict[str, Any]:
+    """The coverage record of a hold run: the live gate's trend check (and the dip rule when it is on)
+    is all a past date can know. Old runs keep the score-points shape of `describe_coverage`."""
+    checks_run = [{"check": "trend", "label": "Close above the 200-day average"}]
+    if buy_only_dips:
+        checks_run.append({"check": "dip", "label": "Buy only in a dip (10% under the 3-month high)"})
+    not_run = [
+        ("growth", "Revenue growth", "no dated net-income or revenue history is served to a backtest"),
+        ("profit", "Profitable", "no dated net-income history is served to a backtest; a missing figure is never counted as a pass"),
+        ("valuation", "Valuation (P/E)", "no dated P/E history is served to a backtest"),
+        ("news_discovery", "News discovery of tickers outside the list", "not in v1"),
+        ("dip_add", "Adding to a held dip", "not in v1"),
+        ("sell_plan", "Sell plan and rebuy watch", "not in v1; the only exit is the disaster stop on a final daily close"),
+    ]
+    if not buy_only_dips:
+        not_run.insert(3, ("dip", "Dip rule", "switched off for this run (hold_buy_only_dips)"))
+    return {
+        "profile": PROFILE_HOLD_PRICE_ONLY,
+        "summary": (
+            "Price-only approximation of the live quality gate (hold run): only the trend check"
+            + (" and the dip rule are" if buy_only_dips else " is")
+            + " run. Optimistic: today's index members (survivors), daily bars, no costs beyond slippage."
+        ),
+        "checks_run": checks_run,
+        "checks_not_run": [{"check": c, "label": label, "reason": reason} for c, label, reason in not_run],
+        "optimistic": True,
+        "min_confidence_note": "min_confidence_for_trade is irrelevant to a hold run: nothing is scored",
+        # Same keys the older readers use, empty or None, so the score-points views have nothing to misread.
+        "included": {"fundamentals": False, "insiders": False, "earnings": False},
+        "achievable_points": None,
+        "live_points_max": None,
+        "active_parts": [],
+        "inactive_parts": [{"part": c, "label": label, "live_points_max": None, "reason": reason} for c, label, reason in not_run],
+        "bar_reachable": None,
+    }
 
 
 def describe_coverage(

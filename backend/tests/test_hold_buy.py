@@ -68,7 +68,7 @@ def test_hold_scan_buys_passes_only_and_respects_the_per_scan_cap(session, monke
     provider = Provider()
     monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: ["AAA", "BAD", "BBB", "CCC"])
     monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
-    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(symbol != "BAD", []))
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol, **kw: GateResult(symbol != "BAD", []))
     settings = AppSettings(hold_max_new_per_scan=2)
 
     bought = automation_service.run_hold_scan(settings, provider, session)
@@ -88,7 +88,7 @@ def test_hold_scan_can_buy_only_dips(session, monkeypatch):
 
     monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: ["AAA", "BBB"])
     monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
-    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(True, [], dip=symbol == "BBB"))
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol, **kw: GateResult(True, [], dip=symbol == "BBB"))
     assert automation_service.run_hold_scan(AppSettings(hold_buy_only_dips=True), Provider(), session) == ["BBB"]
 
 
@@ -116,7 +116,7 @@ def test_hold_scan_adds_to_a_held_dip_only_when_enabled(session, monkeypatch):
     hold_buy(session, engine, provider, AppSettings(hold_target_weight_pct=2.5), "NOVA")  # 25 shares
     monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: [])
     monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
-    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(True, [], dip=True))
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol, **kw: GateResult(True, [], dip=True))
     automation_service.run_hold_scan(AppSettings(), provider, session)
     assert session.exec(select(PaperPosition)).one().shares == 25  # off by default
     automation_service.run_hold_scan(AppSettings(hold_add_on_dips=True), provider, session)
@@ -142,7 +142,7 @@ def test_hold_scan_buys_a_news_discovered_ticker_outside_the_universe(session, m
     monkeypatch.setattr("app.services.news_discovery_service.get_default_watchlist", lambda n: ["AAA"])
     monkeypatch.setattr("app.services.news_discovery_service.load_universe", lambda: [type("E", (), {"symbol": "AAA"})()])
     monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
-    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(True, []))
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol, **kw: GateResult(True, []))
     bought = automation_service.run_hold_scan(AppSettings(news_discovery_enabled=True), NewsProvider(), session)
     assert bought == ["AAA", "VST"]  # FAKE has no quote, AAA is already in the universe
     plan = session.exec(select(TradePlanRecord).where(TradePlanRecord.symbol == "VST")).one()

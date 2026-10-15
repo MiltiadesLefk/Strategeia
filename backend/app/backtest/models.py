@@ -86,6 +86,7 @@ class BacktestTrade(SQLModel, table=True):
     mae_r: Optional[float] = None
     mfe_pct: Optional[float] = None
     mae_pct: Optional[float] = None
+    return_pct: Optional[float] = None  # net P&L over cost, the number a hold trade is judged by
     # What the plan scored at entry: the points that decided the trade.
     confidence_points: Optional[int] = None
     confidence_points_max: Optional[int] = None

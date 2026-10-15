@@ -13,7 +13,6 @@ from app.backtest import runner
 from app.backtest.calendar import close_moment, decision_moment, trading_days
 from app.backtest.data_provider import BacktestDataProvider, PriceBook
 from app.backtest.params import BacktestInputError, BacktestParams, SettingsOverrides, effective_settings
-from app.services.trade_plan_service import MAX_SCORE_FOR_CONFIDENCE
 from app.config import AppSettings
 from app.knowledge.point_in_time import as_of
 from app.llm_providers.null_provider import NullLLMProvider
@@ -55,95 +54,114 @@ def opens_of(book: PriceBook, symbol: str = "AAA") -> np.ndarray:
 # --------------------------------------------------------------------- (a) hand-checked trade
 
 
-def test_a_clean_uptrend_gives_one_long_whose_numbers_match_the_bars(book, result):
+def test_a_clean_uptrend_gives_one_hold_buy_whose_numbers_match_the_bars(book, result):
     series = book.series["AAA"]
+    assert len(result.trades) == 1
     trade = result.trades[0]
-    assert trade["direction"] == "long" and trade["status"] == "closed"
+    assert trade["direction"] == "long" and trade["status"] == "open"
     entry = INDEX[trade["entry_date"]]
 
     # entry: the entry day's OPEN plus 10 bps of slippage, at 09:45 ET (14:45 UTC in winter)
     assert trade["entry_price"] == pytest.approx(series.opens[entry] * (1 + SLIPPAGE_BPS / 10_000))
     assert trade["entry_at"] == decision_moment(trade["entry_date"])
-    assert trade["entry_at"].hour == 14 and trade["entry_at"].minute == 45
-    # the plan was made from the previous close, and sized to risk 1% of the account
-    assert trade["planned_entry_price"] == pytest.approx(series.closes[entry - 1])
-    assert trade["stop_loss"] < trade["planned_entry_price"] < trade["tp1"]
-    assert trade["shares"] == int(STARTING_CASH * 0.01 / (trade["planned_entry_price"] - trade["stop_loss"]))
-
-    # exit: the first bar after the entry day whose range touches a level (the stop is checked first)
-    expected_exit = None
-    for j in range(entry + 1, len(DAYS)):
-        if series.lows[j] <= trade["stop_loss"]:
-            expected_exit = (j, "stop_hit")
-            break
-        if series.highs[j] >= trade["tp1"]:
-            expected_exit = (j, "tp1_hit")
-            break
-    assert expected_exit is not None
-    exit_index, reason = expected_exit
-    assert trade["exit_date"] == DAYS[exit_index] and trade["close_reason"] == reason == "tp1_hit"
-    # a take-profit is a resting limit: filled at its price (or the open, if the bar opened beyond it)
-    assert trade["exit_price"] == pytest.approx(max(series.opens[exit_index], trade["tp1"]))
-    assert trade["exit_at"] == close_moment(DAYS[exit_index])
-    assert trade["holding_days"] == exit_index - entry
-
-    pnl = (trade["exit_price"] - trade["entry_price"]) * trade["shares"]
-    assert trade["realized_pnl"] == pytest.approx(pnl)
-    assert trade["realized_r"] == pytest.approx(pnl / (abs(trade["entry_price"] - trade["stop_loss"]) * trade["shares"]))
-
-    # the score that let it in: 3 technical + 2 weekly/SPY + 1 for the clean uptrend leading the market or its
-    # volume trend (price-only evidence) = 6 points, above the 5-point bar
-    assert trade["confidence_points"] == 6 and trade["confidence_points_max"] == MAX_SCORE_FOR_CONFIDENCE
-    scores = trade["scores"]
-    assert scores["technical_score"] + scores["market_confirmation_score"] + scores["relative_strength"] + scores["volume_trend"] == 6
-    assert trade["scores"]["news_score"] == trade["scores"]["fundamental_score"] == 0
+    assert trade["planned_entry_price"] == pytest.approx(series.opens[entry])
+    # a 4.5% slice of the account, with the wider of the 25% stop and the 200-day average as the disaster stop
+    assert trade["shares"] == int(STARTING_CASH * 0.045 / series.opens[entry])
+    ma200 = series.closes[entry - 200 : entry].mean()
+    assert trade["stop_loss"] == pytest.approx(min(series.opens[entry] * 0.75, ma200))
+    assert trade["tp1"] == 0.0 and trade["realized_r"] is None  # no target, and R is a swing idea
+    # still held at the end: valued at the last close, return_pct is on cost
+    assert trade["close_reason"] == "open_at_end"
+    cost = trade["entry_price"] * trade["shares"]
+    assert trade["return_pct"] == pytest.approx(trade["realized_pnl"] / cost * 100)
+    assert trade["return_pct"] > 0
+    assert trade["confidence_points"] is None and trade["scores"] == {}
 
 
 def test_the_equity_curve_matches_cash_plus_shares_at_each_close(book, result):
     series = book.series["AAA"]
     trade = result.trades[0]
-    entry, exit_index = INDEX[trade["entry_date"]], INDEX[trade["exit_date"]]
+    entry = INDEX[trade["entry_date"]]
     cash_after_entry = STARTING_CASH - trade["shares"] * trade["entry_price"]
     by_day = {point["day"]: point for point in result.equity}
     assert set(by_day) == set(trading_days(START, END))
-    for index in range(INDEX[START], exit_index + 1):
-        day = DAYS[index]
+    for index in range(INDEX[START], INDEX[END] + 1):
+        point = by_day[DAYS[index]]
         if index < entry:
-            expected_equity, expected_cash, held = STARTING_CASH, STARTING_CASH, 0
-        elif index < exit_index:
-            # an open long is valued at THAT DAY'S CLOSE, not at the entry price or the open
-            expected_equity = cash_after_entry + trade["shares"] * series.closes[index]
-            expected_cash, held = cash_after_entry, 1
-        else:
-            expected_equity = STARTING_CASH + trade["realized_pnl"]
-            expected_cash, held = expected_equity, 0
-        point = by_day[day]
-        assert point["equity"] == pytest.approx(expected_equity), day
-        assert point["cash"] == pytest.approx(expected_cash), day
-        assert point["open_positions"] == held, day
+            assert (point["equity"], point["cash"], point["open_positions"]) == (STARTING_CASH, STARTING_CASH, 0)
+        else:  # an open long is valued at THAT DAY'S CLOSE
+            assert point["equity"] == pytest.approx(cash_after_entry + trade["shares"] * series.closes[index]), index
+            assert point["cash"] == pytest.approx(cash_after_entry) and point["open_positions"] == 1
 
 
-def test_a_gap_through_the_stop_fills_at_the_open_not_at_the_stop(book, result):
+def test_a_crash_through_the_disaster_stop_closes_at_that_days_close(book, result):
     entry = INDEX[result.trades[0]["entry_date"]]
     closes = CLOSES.copy()
     opens = np.r_[closes[0], closes[:-1]]
-    gap_day = entry + 2
-    closes[gap_day:] *= 0.8
-    opens[gap_day:] *= 0.8  # the market opens 20% lower, far below any stop
-    gapped = PriceBook.from_frames(
+    crash_day = entry + 3
+    closes[crash_day:] *= 0.4
+    opens[crash_day:] *= 0.4  # a gap far below the stop that never recovers
+    crashed = PriceBook.from_frames(
         {
             "AAA": frame_from(DAYS, closes, opens=opens),
             "SPY": frame_from(DAYS, wiggly_uptrend(330, 400.0, 0.002)),
             "^VIX": frame_from(DAYS, flat_series(330, 15.0)),
         }
     )
-    run = runner.run_backtest(params_for(), settings_for(), gapped)
+    run = runner.run_backtest(params_for(), settings_for(), crashed)
     trade = run.trades[0]
     assert trade["entry_date"] == DAYS[entry] and trade["entry_price"] == pytest.approx(result.trades[0]["entry_price"])
-    assert trade["exit_date"] == DAYS[gap_day] and trade["close_reason"] == "stop_hit"
-    assert opens[gap_day] < trade["stop_loss"]
-    assert trade["exit_price"] == pytest.approx(opens[gap_day] * (1 - SLIPPAGE_BPS / 10_000))  # a market order: slips
-    assert trade["realized_r"] < -1  # worse than the planned 1R loss, as in real life
+    assert trade["status"] == "closed" and trade["close_reason"] == "disaster_stop"
+    assert trade["exit_date"] == DAYS[crash_day] and trade["exit_at"] == close_moment(DAYS[crash_day])
+    assert closes[crash_day] < trade["stop_loss"]
+    assert trade["exit_price"] == pytest.approx(closes[crash_day] * (1 - SLIPPAGE_BPS / 10_000))  # the close, not the stop
+    assert trade["return_pct"] < -25
+    assert trade["return_pct"] == pytest.approx(trade["realized_pnl"] / (trade["entry_price"] * trade["shares"]) * 100)
+    assert trade["realized_r"] is None
+    assert run.summary["trade_count"] == 1 and run.summary["average_return_pct"] == pytest.approx(trade["return_pct"])
+
+
+def test_a_stock_below_its_200_day_average_is_never_bought():
+    flat = standard_book(DAYS, {"AAA": flat_series(330, 100.0)})  # price == average is not "above"
+    run = runner.run_backtest(params_for(), settings_for(), flat)
+    assert run.trades == [] and run.summary["evaluations"] > 0 and run.summary["executed"] == 0
+
+
+def test_buy_only_dips_leaves_a_clean_uptrend_alone(book):
+    run = runner.run_backtest(params_for(), settings_for().model_copy(update={"hold_buy_only_dips": True}), book)
+    assert run.trades == [] and run.coverage["checks_run"][-1]["check"] == "dip"
+
+
+def test_new_buys_per_day_are_capped_like_the_live_scan(result):
+    symbols = ["AAA", "BBB", "CCC"]
+    three = standard_book(DAYS, {name: CLOSES * (1 + 0.1 * i) for i, name in enumerate(symbols)})
+    settings = settings_for().model_copy(update={"hold_max_new_per_scan": 1})
+    run = runner.run_backtest(params_for(symbols=symbols), settings, three)
+    entry_days = [t["entry_date"] for t in run.trades]
+    assert len(entry_days) == 3 and len(set(entry_days)) == 3  # one a day, in list order
+    assert [t["symbol"] for t in run.trades] == symbols
+
+
+def test_the_backtest_and_the_live_scan_call_the_same_function(book, monkeypatch):
+    """One per-symbol decision function (gate, dip rule, hold buy), used by run_hold_scan and by the runner."""
+    from app.services import automation_service
+
+    seen: list[tuple[str, bool]] = []
+    real = automation_service.hold_scan_symbol
+
+    def spy(settings, provider, session, engine, symbol, reason, *, price_only=False):
+        seen.append((symbol, price_only))
+        return real(settings, provider, session, engine, symbol, reason, price_only=price_only)
+
+    monkeypatch.setattr(automation_service, "hold_scan_symbol", spy)
+    run = runner.run_backtest(params_for(end=DAYS[262]), settings_for(), book)
+    assert run.summary["evaluations"] == len(seen) > 0 and {price_only for _, price_only in seen} == {True}
+
+    seen.clear()
+    monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n=50: ["AAA"])
+    with Session(runner._new_scratch_db()) as session, as_of(decision_moment(DAYS[262])):
+        automation_service.run_hold_scan(settings_for(), BacktestDataProvider(book), session)
+    assert seen == [("AAA", False)]  # the live scan runs the full gate
 
 
 # --------------------------------------------------------------------- (b) no look-ahead
@@ -203,35 +221,28 @@ def test_same_inputs_give_identical_results(book, result):
 # --------------------------------------------------------------------- (d) it is the live code
 
 
-def test_the_runner_uses_the_live_scorer_and_the_live_engine(book, monkeypatch):
+def test_the_runner_uses_the_live_hold_scan_step_and_the_live_engine(book, monkeypatch):
     from app.portfolio import engine as live_engine
-    from app.services import trade_plan_service
+    from app.services import automation_service
 
-    assert runner.generate_trade_plan is trade_plan_service.generate_trade_plan
+    assert runner.automation_service is automation_service
     assert runner.PaperTradingEngine is live_engine.PaperTradingEngine
 
-    calls = {"plans": 0, "open": 0, "mark": 0}
-    real_generate = trade_plan_service.generate_trade_plan
+    calls = {"open": 0, "mark": 0}
     real_open = live_engine.PaperTradingEngine.open_position
     real_mark = live_engine.PaperTradingEngine.mark_to_market
 
-    def generate_spy(*args, **kwargs):
-        calls["plans"] += 1
-        return real_generate(*args, **kwargs)
-
-    def open_spy(self, plan):
+    def open_spy(self, plan, *args, **kwargs):
         calls["open"] += 1
-        return real_open(self, plan)
+        return real_open(self, plan, *args, **kwargs)
 
     def mark_spy(self, *args, **kwargs):
         calls["mark"] += 1
         return real_mark(self, *args, **kwargs)
 
-    monkeypatch.setattr(runner, "generate_trade_plan", generate_spy)
     monkeypatch.setattr(live_engine.PaperTradingEngine, "open_position", open_spy)
     monkeypatch.setattr(live_engine.PaperTradingEngine, "mark_to_market", mark_spy)
     run = runner.run_backtest(params_for(end=DAYS[262]), settings_for(), book)
-    assert calls["plans"] == run.summary["evaluations"] > 0
     assert calls["open"] == run.summary["executed"] > 0
     assert calls["mark"] == run.summary["days_simulated"]
 
@@ -250,38 +261,6 @@ def test_the_exit_engine_is_built_like_the_live_ones(book):
     assert {k: v for k, v in vars(ours).items() if k not in ignored} == {
         k: v for k, v in vars(live).items() if k not in ignored
     }
-
-
-def test_slots_and_order_follow_the_live_auto_scan(result, monkeypatch):
-    """One decision pass on the same day gives the same plans and the same executed symbols as the live
-    run_auto_scan, with the position cap binding."""
-    from app.services import automation_service
-
-    symbols = ["AAA", "BBB", "CCC"]
-    three = standard_book(DAYS, {name: CLOSES * (1 + 0.1 * i) for i, name in enumerate(symbols)})
-    settings = settings_for(max_concurrent_positions=1)
-    day = result.trades[0]["entry_date"]  # a day AAA signals; the others have the same shape, so they do too
-    provider = BacktestDataProvider(three)
-
-    def decide_with_runner():
-        stats, errors, hist, first, info = runner.Counter(), [], runner.Counter(), {}, {}
-        scratch = runner._new_scratch_db()
-        with Session(scratch) as session:
-            runner._decide(day, symbols, three, provider, NullLLMProvider(), session, settings, stats, errors, hist, first, info)
-            held = sorted(p.symbol for p in session.exec(select(PaperPosition)).all())
-        return stats, held
-
-    stats, held = decide_with_runner()
-    assert stats["plans"] >= 2, "the fixture should produce several tradeable plans on this day"
-
-    monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n=50: symbols)
-    with Session(runner._new_scratch_db()) as session, as_of(decision_moment(day)):
-        outcome = automation_service.run_auto_scan(settings, provider, NullLLMProvider(), session)
-        live_held = sorted(p.symbol for p in session.exec(select(PaperPosition)).all())
-    assert len(outcome.generated) == stats["plans"]
-    assert len(outcome.no_trade) == stats["no_trade"]
-    assert live_held == held and len(held) == 1  # the cap of one position let only the first signal in
-    assert stats["plans_not_executed"] == stats["plans"] - 1
 
 
 # --------------------------------------------------------------------- (e) calendar
@@ -334,17 +313,6 @@ def test_a_run_never_reads_the_saved_settings_never_messages_and_never_calls_an_
     monkeypatch.setattr(trade_plan_service, "load_app_settings", boom)
     monkeypatch.setattr(telegram_service, "send_message", boom)
     monkeypatch.setattr("app.llm_providers.factory.get_llm_provider", boom)
-    notified: list[tuple[str, str]] = []
-    monkeypatch.setattr(trade_plan_service, "notify_trade_plan", lambda token, chat, text: notified.append((token, chat)))
-    providers_seen: list[str] = []
-    real = trade_plan_service.generate_with_fallback
-
-    def fallback_spy(provider, prompt, fallback_text, *args, **kwargs):
-        providers_seen.append(provider.name)
-        return real(provider, prompt, fallback_text, *args, **kwargs)
-
-    monkeypatch.setattr(trade_plan_service, "generate_with_fallback", fallback_spy)
-
     loud = AppSettings(
         telegram_bot_token="123:secret", telegram_chat_id="42", llm_provider="claude_code_cli",
         ai_trading_overlay_enabled=True, finnhub_enabled=True, finnhub_api_key="k", auto_execute_trade_plans=False,
@@ -358,8 +326,6 @@ def test_a_run_never_reads_the_saved_settings_never_messages_and_never_calls_an_
 
     run = runner.run_backtest(params_for(end=DAYS[262]), effective, book)
     assert run.summary["executed"] > 0
-    assert notified and all(pair == ("", "") for pair in notified)
-    assert providers_seen and set(providers_seen) == {"none"}
 
 
 def test_a_run_does_not_touch_the_real_database(book, monkeypatch):
@@ -370,20 +336,6 @@ def test_a_run_does_not_touch_the_real_database(book, monkeypatch):
             raise AssertionError("a backtest must not open the real database")
 
     monkeypatch.setattr(database, "engine", Forbidden())
-    run = runner.run_backtest(params_for(end=DAYS[262]), settings_for(), book)
-    assert run.summary["evaluations"] > 0
-
-
-def test_macro_events_are_left_out_inside_a_simulation(monkeypatch):
-    """The macro-event check reads today's real date; inside a simulated moment that would apply this
-    week's releases to every past day, so the price-only backtest scores it 0."""
-    from app.services import trade_plan_service
-
-    def boom():
-        raise AssertionError("macro proximity must not be read during a simulation")
-
-    monkeypatch.setattr(trade_plan_service, "score_macro_event_proximity", boom)
-    book = standard_book(DAYS, {"AAA": CLOSES})
     run = runner.run_backtest(params_for(end=DAYS[262]), settings_for(), book)
     assert run.summary["evaluations"] > 0
 
@@ -438,12 +390,16 @@ def test_cancel_stops_at_the_next_day_and_keeps_what_was_done(book):
     assert run.status == "cancelled" and run.summary["days_simulated"] == 5 and run.summary["cancelled"] is True
 
 
-def test_summary_numbers(book, result):
+def test_summary_numbers(book):
+    crash = CLOSES.copy()
+    crash[INDEX[START] + 8 :] *= 0.4
+    result = runner.run_backtest(params_for(), settings_for(), standard_book(DAYS, {"AAA": crash}))
     summary = result.summary
     closed = [t for t in result.trades if t["status"] == "closed"]
     assert summary["trade_count"] == len(closed)
     assert summary["win_rate"] == sum(1 for t in closed if t["realized_pnl"] > 0) / len(closed)
-    assert summary["average_r"] == pytest.approx(sum(t["realized_r"] for t in closed) / len(closed))
+    assert summary["average_r"] is None  # R is a swing idea
+    assert summary["average_return_pct"] == pytest.approx(sum(t["return_pct"] for t in closed) / len(closed))
     assert summary["final_equity"] == result.equity[-1]["equity"]
     assert summary["total_return_pct"] == pytest.approx((summary["final_equity"] / STARTING_CASH - 1) * 100)
     assert summary["days_simulated"] == len(trading_days(START, END)) == len(result.equity)

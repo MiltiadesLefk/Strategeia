@@ -162,11 +162,14 @@ def _banners(
     ]
     if coverage:
         achievable, live = coverage.get("achievable_points"), coverage.get("live_points_max")
+        # shortcut: the scorecard's R-based criteria are not re-aimed at hold trades yet (separate chunk)
         left_out = ", ".join(part["label"].lower() for part in coverage.get("inactive_parts", []))
         text = (
             f"Price-only core: only the chart-based part of the score was tested ({achievable} of the live {live} points were reachable). "
             f"Not in this run: {left_out}."
         )
+        if coverage.get("profile") == "hold_price_only":
+            text = f"{coverage['summary']} Not in this run: {left_out}."
         if coverage.get("bar_reachable") is False:
             text += " The confidence bar is higher than any price-only setup can reach, so no trade could have been taken."
     else:

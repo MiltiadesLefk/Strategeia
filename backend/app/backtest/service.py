@@ -23,7 +23,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from app.backtest.coverage import describe_coverage
+from app.backtest.coverage import describe_hold_coverage
 from app.backtest.data_provider import PriceBook
 from app.backtest.models import (
     ACTIVE_STATUSES,
@@ -137,9 +137,7 @@ class BacktestManager:
                     params_json=json.dumps({"symbols": params.symbols, "start": params.start.isoformat(),
                                             "end": params.end.isoformat()}),
                     strategy_fingerprint=strategy_fingerprint(settings),
-                    coverage_json=json.dumps(describe_coverage(
-                        settings.min_confidence_for_trade, base_settings.min_confidence_for_trade, **params.dated_switches(),
-                    )),
+                    coverage_json=json.dumps(describe_hold_coverage(settings.hold_buy_only_dips)),
                 )
                 session.add(run)
                 session.commit()
@@ -317,7 +315,7 @@ class BacktestManager:
                 params, settings, book, progress=progress, should_cancel=self._cancel.is_set,
                 fact_session_factory=self._session_factory,
             )
-            coverage = describe_coverage(settings.min_confidence_for_trade, live_min_confidence, **params.dated_switches())
+            coverage = result.coverage
             # The random-entry baseline follows a main run that finished (a request that
             # does not carry the baseline fields, e.g. a direct call, gets none).
             baseline_runs = getattr(params, "baseline_runs", 0) if getattr(params, "run_baseline", False) else 0
@@ -381,12 +379,13 @@ class BacktestManager:
                         symbol=trade["symbol"], direction=trade["direction"], status=trade["status"],
                         entry_at=trade["entry_at"], entry_date=trade["entry_date"],
                         entry_price=trade["entry_price"], planned_entry_price=trade["planned_entry_price"],
-                        stop_loss=trade["stop_loss"], tp1=trade["tp1"], shares=trade["shares"],
+                        stop_loss=trade["stop_loss"], tp1=0.0, shares=trade["shares"],
                         exit_at=trade.get("exit_at"), exit_date=trade.get("exit_date"),
                         exit_price=trade.get("exit_price"), close_reason=trade.get("close_reason"),
                         realized_pnl=trade.get("realized_pnl"), realized_r=trade.get("realized_r"),
                         fees_paid=trade.get("fees_paid"), holding_days=trade.get("holding_days"),
                         mfe_r=trade["mfe_r"], mae_r=trade["mae_r"], mfe_pct=trade["mfe_pct"], mae_pct=trade["mae_pct"],
+                        return_pct=trade.get("return_pct"),
                         confidence_points=trade["confidence_points"],
                         confidence_points_max=trade["confidence_points_max"],
                         confidence_score=trade["confidence_score"],

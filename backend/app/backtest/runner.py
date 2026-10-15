@@ -1,8 +1,10 @@
 """The day loop: replay the live strategy over past trading days.
 
-What runs is the live code, unchanged: `generate_trade_plan` makes every decision
-(scoring, direction, stop, targets, size, the engine's open checks) and
-`PaperTradingEngine` fills, marks and closes positions. The runner only swaps the
+What runs is the live code, unchanged: `automation_service.hold_scan_symbol` (the hold scan's
+per-symbol step: gate, dip rule, hold buy) makes every decision and `PaperTradingEngine` fills,
+marks and closes hold positions (disaster stop on a final daily close). The gate is the trend
+check only (`price_only`): growth, profit and valuation are not knowable at a past date. A run
+with an `entry_policy` (the random baseline, not yet re-aimed) still runs the old swing loop. The runner only swaps the
 world underneath them:
 
 * data   -> BacktestDataProvider (local history, cut off at the simulated moment)
@@ -43,7 +45,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.backtest.calendar import close_moment, decision_moment, trading_days
-from app.backtest.coverage import describe_coverage
+from app.backtest.coverage import describe_coverage, describe_hold_coverage
 from app.backtest.data_provider import BacktestDataProvider, PriceBook
 from app.backtest.dated_sources import FactBackedSources
 from app.backtest.params import BENCHMARK_SYMBOLS, BacktestInputError, BacktestParams, settings_snapshot
@@ -51,8 +53,10 @@ from app.config import AppSettings
 from app.knowledge.point_in_time import as_of, current_as_of
 from app.llm_providers.null_provider import NullLLMProvider
 from app.markets import to_market_time
-from app.portfolio.engine import PaperTradingEngine
+from app.portfolio.engine import MarketClosedError, PaperTradingEngine
 from app.portfolio.models import PaperPosition, TradePlanRecord
+from app.services import automation_service
+from app.services.sleeve_service import build_sleeve_engine
 from app.services.trade_plan_service import generate_trade_plan
 
 logger = logging.getLogger(__name__)
@@ -169,6 +173,7 @@ def run_backtest(
     provider: BacktestDataProvider | None = None,
     entry_policy: EntryPolicy | None = None,
     fact_session_factory: Callable[[], Session] | None = None,
+    swing: bool = False,
 ) -> BacktestResult:
     """Replay `params` and return the trades, the daily equity and a summary.
 
@@ -181,7 +186,10 @@ def run_backtest(
     `fact_session_factory` opens a read-only session on the database that holds the
     dated facts (revenue filings, Form 4s, earnings reports): it is needed when the
     run switches any of those parts on (include_fundamentals / include_insiders /
-    include_earnings)."""
+    include_earnings).
+
+    `swing=True` runs the old generate_trade_plan loop (the dated-data tests still cover it);
+    shortcut: deleted with the swing code."""
     validate_run(params, book)
     provider = provider or _provider_for(params, book, fact_session_factory, entry_policy)
     llm = NullLLMProvider()
@@ -203,14 +211,21 @@ def run_backtest(
 
     try:
         with Session(scratch) as session:
-            exit_engine = _build_engine(session, provider, settings)
+            hold_run = entry_policy is None and not swing
+            exit_engine = (
+                build_sleeve_engine(session, provider, settings, clock=current_as_of, hold=True, intraday_exits=False)
+                if hold_run else _build_engine(session, provider, settings)
+            )
             for index, day in enumerate(days):
                 if should_cancel is not None and should_cancel():
                     cancelled = True
                     break
                 if index % params.decision_every_n_days == 0:
                     decision_days += 1
-                    _decide(day, symbols, book, provider, llm, session, settings, stats, errors, points_histogram, first_evaluated, plan_info, entry_policy)
+                    if hold_run:
+                        _decide(day, symbols, book, provider, session, settings, exit_engine, stats, errors, first_evaluated)
+                    else:
+                        _decide_policy(day, symbols, book, provider, llm, session, settings, stats, errors, points_histogram, first_evaluated, plan_info, entry_policy)
                 with as_of(close_moment(day)):
                     exit_engine.mark_to_market(snapshot=True)
                     point = _equity_point(session, day)
@@ -223,7 +238,10 @@ def run_backtest(
     finally:
         scratch.dispose()
 
-    coverage = describe_coverage(settings.min_confidence_for_trade, **_coverage_switches(params, entry_policy))
+    coverage = (
+        describe_hold_coverage(settings.hold_buy_only_dips) if entry_policy is None and not swing
+        else describe_coverage(settings.min_confidence_for_trade, **_coverage_switches(params, entry_policy))
+    )
     summary = summarize(
         params, settings, book, days, equity, trades, stats, errors, points_histogram, first_evaluated,
         skipped, decision_days, cancelled,
@@ -271,6 +289,61 @@ def _provider_for(
 
 
 def _decide(
+    day: date,
+    symbols: list[str],
+    book: PriceBook,
+    provider: BacktestDataProvider,
+    session: Session,
+    settings: AppSettings,
+    engine: PaperTradingEngine,
+    stats: Counter[str],
+    errors: list[str],
+    first_evaluated: dict[str, date],
+) -> None:
+    """One hold-scan pass on the simulated 09:45 moment: the live scan's loop (run_hold_scan) calling the
+    same per-symbol function, at most hold_max_new_per_scan buys. Dip add and news discovery are not in v1."""
+    with as_of(decision_moment(day)):
+        held = {p.symbol for p in session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()}
+        bought = 0
+        for symbol in symbols:
+            if bought >= settings.hold_max_new_per_scan:
+                break
+            if symbol in held:
+                continue
+            today_bar = book.series[symbol].bar_index_on(day)
+            if today_bar is None:
+                stats["skipped_no_bar_today"] += 1
+                continue
+            if today_bar < MIN_WARMUP_BARS:
+                stats["skipped_warmup"] += 1
+                continue
+            try:
+                took = automation_service.hold_scan_symbol(
+                    settings, provider, session, engine, symbol, "backtest hold scan: passed the trend check", price_only=True
+                )
+            except MarketClosedError:
+                break
+            except Exception as exc:  # noqa: BLE001 - one bad symbol must not end the run; it is counted and shown
+                session.rollback()
+                stats["evaluation_errors"] += 1
+                message = f"{symbol} on {day}: {type(exc).__name__}: {exc}"
+                logger.warning("Backtest evaluation failed: %s", message)
+                if len(errors) < MAX_ERROR_SAMPLES:
+                    errors.append(message)
+                continue
+            stats["evaluations"] += 1
+            first_evaluated.setdefault(symbol, day)
+            if took:
+                stats["plans"] += 1
+                stats["executed"] += 1
+                bought += 1
+            else:
+                stats["no_trade"] += 1
+        session.exec(delete(TradePlanRecord).where(TradePlanRecord.status != "executed"))
+        session.commit()
+
+
+def _decide_policy(
     day: date,
     symbols: list[str],
     book: PriceBook,
@@ -418,6 +491,7 @@ def _collect_trades(
             "signal_reasons": info.get("signal_reasons"),
             "mfe_r": position.mfe_r, "mae_r": position.mae_r, "mfe_pct": position.mfe_pct, "mae_pct": position.mae_pct,
         }
+        hold = position.mode == "hold"
         if position.status == "closed":
             exit_date = _market_date(position.closed_at)
             row.update(
@@ -426,6 +500,8 @@ def _collect_trades(
                 realized_r=position.realized_r, fees_paid=position.fees_paid,
                 holding_days=day_index[exit_date] - day_index[entry_date] if exit_date in day_index and entry_date in day_index else None,
             )
+            if hold:
+                row["realized_r"] = None  # R is a swing idea (risk to a tight stop); a hold trade is judged by return_pct
         else:
             # Still held when the run ended: value it at the last close, leave it out of the win rate.
             with as_of(close_moment(last_day)):
@@ -436,9 +512,11 @@ def _collect_trades(
             risk = abs(position.entry_price - position.stop_loss) * (position.original_shares or position.shares)
             row.update(
                 exit_at=None, exit_date=None, exit_price=price, close_reason="open_at_end", realized_pnl=pnl,
-                realized_r=pnl / risk if risk > 0 else 0.0, fees_paid=fees,
+                realized_r=None if hold else (pnl / risk if risk > 0 else 0.0), fees_paid=fees,
                 holding_days=day_index[last_day] - day_index[entry_date] if entry_date in day_index else None,
             )
+        cost = row["entry_price"] * row["shares"]
+        row["return_pct"] = row["realized_pnl"] / cost * 100 if cost and row.get("realized_pnl") is not None else None
         trades.append(row)
     return trades
 
@@ -465,6 +543,7 @@ def summarize(
     starting = settings.paper_starting_cash
     final_equity = equity[-1]["equity"] if equity else starting
     r_values = [t["realized_r"] for t in closed if t["realized_r"] is not None]
+    returns = [t["return_pct"] for t in closed if t.get("return_pct") is not None]
     return {
         "starting_cash": starting,
         "final_equity": final_equity,
@@ -473,6 +552,7 @@ def summarize(
         "wins": len(wins),
         "win_rate": (len(wins) / len(closed)) if closed else None,
         "average_r": (sum(r_values) / len(r_values)) if r_values else None,
+        "average_return_pct": (sum(returns) / len(returns)) if returns else None,
         "max_drawdown_pct": _max_drawdown_pct(starting, equity),
         "open_at_end": len(trades) - len(closed),
         "days_simulated": len(equity),
@@ -523,6 +603,7 @@ def params_to_json(params: BacktestParams, settings: AppSettings, book: PriceBoo
         "baseline_runs": getattr(params, "baseline_runs", 0),
         "overrides": params.overrides.model_dump(exclude_none=True),
         "effective_settings": settings_snapshot(settings),
+        "hold": {n: getattr(settings, n) for n in ("hold_stop_pct", "hold_target_weight_pct", "hold_buy_only_dips", "hold_max_new_per_scan")},
         "decision_convention": "09:45 ET: bars through t-1, quote = t's open; exits at the close of t",
         "min_warmup_bars": MIN_WARMUP_BARS,
         "history": history,

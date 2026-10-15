@@ -21,7 +21,7 @@ from app.backtest.service import BacktestManager
 from app.config import AppSettings
 from app.data_providers.history_store import HistoryStore
 from app.main import app
-from tests.backtest_helpers import standard_book, trading_days_from, wiggly_uptrend
+from tests.backtest_helpers import crashing_uptrend, standard_book, trading_days_from
 
 DAYS = trading_days_from(date(2024, 1, 2), 330)
 START, END = DAYS[250].isoformat(), DAYS[280].isoformat()
@@ -38,7 +38,7 @@ def env(tmp_path):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     store = HistoryStore(tmp_path / "history.db")
-    closes = wiggly_uptrend(330, daily=0.01, dip=-0.01)
+    closes = crashing_uptrend(330, 258, daily=0.01, dip=-0.01)  # held, then stopped out
     book = standard_book(DAYS, {name: closes * (1 + 0.1 * i) for i, name in enumerate(SYMBOLS)})
     now = datetime(2025, 6, 1, tzinfo=timezone.utc)
     for symbol, series in book.series.items():
