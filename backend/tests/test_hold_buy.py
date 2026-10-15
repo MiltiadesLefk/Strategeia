@@ -9,7 +9,7 @@ from app.config import AppSettings
 from app.data_providers.base import QuoteData
 from app.portfolio.engine import DuplicatePositionError, InsufficientCashError, PaperTradingEngine
 from app.portfolio.models import PaperPosition
-from app.services.hold_buy_service import hold_buy, hold_shares, hold_stop_level
+from app.services.hold_buy_service import AlreadyAtTargetError, hold_buy, hold_shares, hold_stop_level
 
 
 class Provider:
@@ -103,7 +103,7 @@ def test_add_averages_the_cost_and_stops_at_target(session):
     p = hold_add(session, engine, provider, settings, p)
     assert p.shares > 25 and p.entry_price == pytest.approx((25 * 100.0 + (p.shares - 25) * 110.0) / p.shares, rel=1e-3)
     assert p.stop_loss == pytest.approx(75.0)
-    with pytest.raises(InsufficientCashError):  # now at target
+    with pytest.raises(AlreadyAtTargetError):  # now at target
         hold_add(session, engine, provider, settings, p)
 
 

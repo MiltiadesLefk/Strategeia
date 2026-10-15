@@ -75,6 +75,10 @@ def hold_buy(
     return engine.open_position(plan, mode="hold")
 
 
+class AlreadyAtTargetError(InsufficientCashError):
+    """Nothing to add; subclasses the cash error so existing callers that catch it keep working."""
+
+
 def hold_add(
     session: Session, engine: PaperTradingEngine, data_provider: DataProvider, settings: AppSettings, position: PaperPosition
 ) -> PaperPosition:
@@ -84,7 +88,7 @@ def hold_add(
     target = hold_shares(account_value(session, engine), settings.hold_target_weight_pct, price)
     missing = target - position.shares
     if missing <= 0:
-        raise InsufficientCashError(f"{position.symbol} is already at or above its {settings.hold_target_weight_pct:g}% target weight.")
+        raise AlreadyAtTargetError(f"{position.symbol} is already at or above its {settings.hold_target_weight_pct:g}% target weight.")
     return engine.add_to_hold_position(position, missing)
 
 
