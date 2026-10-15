@@ -96,7 +96,6 @@ class SettingsUpdateRequest(BaseModel):
     weekly_digest_enabled: bool | None = None
     price_alert_positions_enabled: bool | None = None
     price_alert_stop_atr: float | None = Field(default=None, gt=0, le=10)
-    price_alert_tp1_pct: float | None = Field(default=None, gt=0, le=20)
 
     @field_validator("morning_note_time_et")
     @classmethod

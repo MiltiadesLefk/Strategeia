@@ -150,110 +150,6 @@ export interface ResearchResponse {
   generated_at: string;
 }
 
-export interface TradePlan {
-  id: number | null;
-  symbol: string;
-  direction: 'long' | 'short' | null;
-  reason?: string | null;
-  entry?: number | null;
-  stop?: number | null;
-  tp1?: number | null;
-  tp2?: number | null;
-  rr1?: number | null;
-  rr2?: number | null;
-  suggested_shares?: number | null;
-  account_risk_dollars?: number | null;
-  potential_gain?: number | null;
-  potential_risk?: number | null;
-  /** Size was cut to what the account can actually fund. */
-  capped_by_cash?: boolean | null;
-  /** ATR14, and how many ATRs the stop sits from entry. Under ~1 the stop is
-   *  inside the instrument's normal daily range and noise will take it out. */
-  atr?: number | null;
-  stop_atr_multiple?: number | null;
-  /** Options-implied +/-% move by the nearest usable expiration, and the
-   *  median actual +/-% move this stock has made around its last reported
-   *  earnings dates. Informational only, tradeable plans only — neither is a
-   *  prediction of direction. */
-  expected_move_pct?: number | null;
-  historical_earnings_move_pct?: number | null;
-  confidence_score?: number | null;
-  /** The raw evidence points behind confidence_score, and the most the engine
-   *  can award. Confidence is quantised — only 17 values are reachable, 6.25
-   *  apart — so the percentage alone implies precision it does not have. */
-  confidence_points?: number | null;
-  confidence_points_max?: number | null;
-  time_horizon?: string | null;
-  ai_take_text?: string | null;
-  ai_provider?: string | null;
-  status?: string | null;
-  /** What happened at the auto-execute step, in plain English — executed,
-   *  skipped with a reason, held for manual review because the AI Trading
-   *  Overlay's stance was the flat opposite of the rule-based direction, or
-   *  not executed because the market was closed (see redo_at).
-   *  With ai_overlay_vetoes_trade on (the default once the overlay is on) a
-   *  contradiction never reaches this step — the evaluation ends as a
-   *  no_trade record with the overlay named in `reason` instead. */
-  auto_execute_note?: string | null;
-  /** Set while a plan made with its market closed waits to be redone from
-   *  fresh data at the next open (ISO UTC). Such a plan can't be executed by
-   *  hand — only the fresh plan can. */
-  redo_at?: string | null;
-  created_at?: string | null;
-  technical_score?: number | null;
-  fundamental_score?: number | null;
-  news_score?: number | null;
-  market_confirmation_score?: number | null;
-  vix_regime_score?: number | null;
-  options_score?: number | null;
-  insider_score?: number | null;
-  // Points by part for Smart Money, 8-K filings, financials and valuation (absent on older plans).
-  extra_scores?: Record<string, number> | null;
-  /** Why each of those parts scored what it did; null on plans made before these were kept. */
-  extra_notes?: Record<string, string> | null;
-  // The AI Committee run that read this plan and its rating (absent when it did not run).
-  committee_run_id?: number | null;
-  committee_rating?: string | null;
-  // What the committee did with this plan, or why it did not read it.
-  committee_note?: string | null;
-  /** One-directional risk flags (0 or a penalty, never a bonus): options
-   *  market pricing an outsized move, and a scheduled FOMC/CPI/jobs release
-   *  in the next day. */
-  expected_move_score?: number | null;
-  macro_event_score?: number | null;
-  /** Genuine +/-, like fundamental_score: a consistent beat/miss streak on
-   *  reported (not upcoming) consensus EPS. */
-  earnings_surprise_score?: number | null;
-  /** What the AI Trading Overlay's disagreement cost the confidence score:
-   *  0 or negative, never positive. Distinct from ai_opinion_score below,
-   *  which is the AI's own stated conviction in its own stance. */
-  ai_overlay_score?: number | null;
-  signal_reasons?: string | null;
-  ai_opinion_stance?: 'bullish' | 'bearish' | 'neutral' | null;
-  /** The AI's answer to "would you take this trade?" — a different question
-   *  from ai_opinion_stance (where it thinks the stock goes), and the one
-   *  actually acted on. Null when the model gave no usable verdict. */
-  ai_trade_verdict?: 'take' | 'pass' | null;
-  /** Model that gave that verdict (the overlay's decision tier); null when the overlay did not run. */
-  ai_decision_model?: string | null;
-  /** How the overlay's reply was read: 'structured' (matched the form), 'lenient'
-   *  (pulled out of a damaged reply) or 'failed' (answered, nothing usable). */
-  ai_opinion_parse?: 'structured' | 'lenient' | 'failed' | null;
-  /** Newline-separated figures the overlay quoted that were not in the data it
-   *  was given. An honesty signal only; never affects the verdict or score. */
-  ai_grounding_warnings?: string | null;
-  ai_opinion_score?: number | null;
-  ai_opinion_text?: string | null;
-  ai_news_assessment?: string | null;
-  /** Number of the strategy version (rules + decision-relevant settings) this
-   *  plan was made under; null/absent for plans from before versioning. */
-  strategy_version?: number | null;
-  /** Sleeve (paper account) the plan was made for; "core" is the original account. */
-  sleeve_key?: string | null;
-  /** Silent signals: recorded, never part of confidence_score. */
-  shadow_signals?: ShadowSignal[] | null;
-}
-
 export interface ShadowSignal {
   name: string;
   value?: string | null;
@@ -282,7 +178,7 @@ export interface MarketSession {
 
 
 export interface Position {
-  /** 'hold' = no target or time exit (tp1/tp2 are 0); otherwise 'swing'. */
+  /** 'hold' = no target or time exit; otherwise 'swing'. */
   mode?: string;
   id: number;
   trade_plan_id: number | null;
@@ -292,8 +188,6 @@ export interface Position {
   /** What the plan asked for, vs entry_price = the actual fill. */
   planned_entry_price?: number | null;
   stop_loss: number;
-  tp1: number;
-  tp2: number;
   shares: number;
   opened_at: string;
   status: 'open' | 'closed';
@@ -423,8 +317,6 @@ export interface DashboardSummary {
   markets_scanned: number;
   potential_setups: number;
   top_setups: ScanResult[];
-  latest_trade_plan: TradePlan | null;
-  top_pick_trade_plan: TradePlan | null;
 }
 
 export interface AppSettings {
@@ -518,8 +410,6 @@ export interface AppSettings {
   price_alert_positions_enabled: boolean;
   /** "Close to the stop" = within this many ATRs. */
   price_alert_stop_atr: number;
-  /** "Close to the first target" = within this percentage of the price. */
-  price_alert_tp1_pct: number;
   /** The AI Insight note on the chart; off = the rule-based insight text. Narration only. */
   ai_chart_insight_enabled: boolean;
   min_confidence_for_trade: number;
@@ -602,7 +492,6 @@ export interface SettingsUpdateRequest {
   weekly_digest_enabled?: boolean;
   price_alert_positions_enabled?: boolean;
   price_alert_stop_atr?: number;
-  price_alert_tp1_pct?: number;
   ai_chart_insight_enabled?: boolean;
   min_confidence_for_trade?: number;
   research_mode?: ResearchMode;
@@ -814,7 +703,6 @@ export interface MissedTradeItem {
   confidence_score: number;
   entry: number | null;
   stop: number | null;
-  tp1: number | null;
   /** Final when state is "resolved", a mark when "open". */
   r_multiple: number | null;
   exit_reason: string | null;
@@ -1078,7 +966,6 @@ export interface BacktestTrade {
   entry_date: string;
   entry_price: number;
   stop_loss: number;
-  tp1: number;
   shares: number;
   exit_date: string | null;
   exit_price: number | null;
@@ -2621,8 +2508,6 @@ export interface ReviewPlanSummary {
   direction: string | null;
   entry: number | null;
   stop: number | null;
-  tp1: number | null;
-  rr1: number | null;
   suggested_shares: number | null;
   auto_execute_note: string | null;
   created_at: string;

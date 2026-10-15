@@ -144,8 +144,6 @@ def install_mocks(page, ctx) -> None:
                 "markets_scanned": 1,
                 "potential_setups": 1,
                 "top_setups": [scan_result("NVDA", STATE["price"])],
-                "latest_trade_plan": None,
-                "top_pick_trade_plan": None,
             },
         ),
     )

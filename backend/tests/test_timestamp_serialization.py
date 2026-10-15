@@ -13,7 +13,6 @@ import json
 from datetime import datetime, timezone
 
 from app.schemas.portfolio_schemas import EquityPointSchema, PositionSchema
-from app.schemas.trade_plan_schemas import TradePlanResponse
 from app.timeutil import utc_iso_from_timestamp, utcnow_naive
 
 
@@ -44,12 +43,6 @@ def test_equity_point_timestamp_is_utc_marked():
     point = EquityPointSchema(timestamp=utcnow_naive(), equity_value=1.0, cash_balance=1.0)
 
     assert json.loads(point.model_dump_json())["timestamp"].endswith("Z")
-
-
-def test_trade_plan_created_at_is_utc_marked():
-    plan = TradePlanResponse(symbol="AAPL", direction="long", created_at=utcnow_naive())
-
-    assert json.loads(plan.model_dump_json())["created_at"].endswith("Z")
 
 
 def test_serialized_instant_matches_the_stored_instant():

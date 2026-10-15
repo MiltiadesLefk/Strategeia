@@ -546,7 +546,7 @@ def test_notification_settings_validate_and_default_off():
     cfg = settings()
     assert cfg.morning_note_enabled is False and cfg.weekly_digest_enabled is False
     assert cfg.morning_note_time_et == "08:45" and cfg.price_alert_positions_enabled is True
-    assert cfg.price_alert_stop_atr == 1.0 and cfg.price_alert_tp1_pct == 1.0
+    assert cfg.price_alert_stop_atr == 1.0
     from pydantic import ValidationError
 
     from app.schemas.settings_schemas import SettingsUpdateRequest
@@ -557,6 +557,6 @@ def test_notification_settings_validate_and_default_off():
             SettingsUpdateRequest(morning_note_time_et=bad)
         with pytest.raises(ValidationError):
             AppSettings(morning_note_time_et=bad)
-    for kw in ({"price_alert_stop_atr": 0}, {"price_alert_tp1_pct": -1}, {"price_alert_stop_atr": 11}):
+    for kw in ({"price_alert_stop_atr": 0}, {"price_alert_stop_atr": 11}):
         with pytest.raises(ValidationError):
             SettingsUpdateRequest(**kw)

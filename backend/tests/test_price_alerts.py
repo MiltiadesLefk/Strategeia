@@ -113,12 +113,12 @@ def test_day_move_counts_a_fall_as_well_as_a_rise_and_needs_a_change():
 
 def test_near_stop_in_percent_for_a_long_and_a_short():
     # Long, stop 95: at 96 the stop is 1.04% away.
-    long_result = pas.evaluate_condition("near_stop", 1.5, "pct", price=96, direction="long", stop=95, tp1=110)
+    long_result = pas.evaluate_condition("near_stop", 1.5, "pct", price=96, direction="long", stop=95)
     assert long_result.met is True and long_result.value == pytest.approx(1 / 96 * 100)
-    assert pas.evaluate_condition("near_stop", 1.0, "pct", price=96, direction="long", stop=95, tp1=110).met is False
+    assert pas.evaluate_condition("near_stop", 1.0, "pct", price=96, direction="long", stop=95).met is False
     # Short, stop 105: at 104 the stop is 1 above the price.
-    assert pas.evaluate_condition("near_stop", 1.5, "pct", price=104, direction="short", stop=105, tp1=90).met is True
-    assert pas.evaluate_condition("near_stop", 1.5, "pct", price=100, direction="short", stop=105, tp1=90).met is False
+    assert pas.evaluate_condition("near_stop", 1.5, "pct", price=104, direction="short", stop=105).met is True
+    assert pas.evaluate_condition("near_stop", 1.5, "pct", price=100, direction="short", stop=105).met is False
 
 
 def test_near_stop_in_atr_uses_the_average_daily_range():
@@ -130,12 +130,12 @@ def test_near_stop_in_atr_uses_the_average_daily_range():
     assert pas.evaluate_condition("near_stop", 1.5, "atr", price=98, direction="long", stop=95, atr=None).met is None
 
 
-def test_near_tp1_for_a_long_and_a_short_and_a_price_already_past_it():
-    assert pas.evaluate_condition("near_tp1", 1.0, "pct", price=109, direction="long", stop=95, tp1=110).met is True
-    assert pas.evaluate_condition("near_tp1", 1.0, "pct", price=105, direction="long", stop=95, tp1=110).met is False
-    assert pas.evaluate_condition("near_tp1", 1.0, "pct", price=90.5, direction="short", stop=105, tp1=90).met is True
-    through = pas.evaluate_condition("near_tp1", 1.0, "pct", price=112, direction="long", stop=95, tp1=110)
-    assert through.met is True and "reached" in through.detail
+def test_old_near_tp1_alert_is_inert_and_still_described():
+    assert pas.evaluate_condition("near_tp1", 1.0, "pct", price=109, direction="long", stop=95).met is None
+    assert pas._CONDITION_HEADLINES["near_tp1"]
+
+
+def test_a_stop_condition_already_past_the_level_counts_as_met():
     through_stop = pas.evaluate_condition("near_stop", 1.0, "pct", price=94, direction="long", stop=95)
     assert through_stop.met is True
 
@@ -240,7 +240,7 @@ def test_a_user_stop_alert_in_atr_uses_the_open_position_and_fetches_the_atr(ses
 def test_automatic_position_alerts_fire_once_per_day_and_follow_the_settings(session):
     position = long_position(session, "AAA", entry=100, stop=95, tp1=110)
     spy = Spy()
-    cfg = settings(**TELEGRAM, price_alert_stop_atr=1.0, price_alert_tp1_pct=1.0)
+    cfg = settings(**TELEGRAM, price_alert_stop_atr=1.0)
     # Price 96.5: 1.5 from the stop with ATR 2 = 0.75 ATR (within 1); TP1 is 14% away.
     data = FakeData({"AAA": 96.5})
     first = pas.run_price_alert_check(session, cfg, data, OPEN_NOW, notifier=spy)
@@ -251,9 +251,6 @@ def test_automatic_position_alerts_fire_once_per_day_and_follow_the_settings(ses
     third = pas.run_price_alert_check(session, cfg, data, OPEN_NOW + timedelta(days=1), notifier=spy)
     assert third.fired == ["AAA:near_stop"]
     assert session.get(NotificationLog, f"position_alert:{position.id}:near_stop") is not None
-    # Near the first target within 1%.
-    tp = pas.run_price_alert_check(session, cfg, FakeData({"AAA": 109.5}), OPEN_NOW + timedelta(days=2), notifier=spy)
-    assert tp.fired == ["AAA:near_tp1"]
 
 
 def test_automatic_position_alerts_can_be_switched_off(session):

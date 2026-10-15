@@ -68,7 +68,7 @@ export function DashboardPage() {
   if (error) return <ErrorBanner message={(error as ApiError).message} />;
   if (!data) return null;
 
-  const { stats, markets_scanned, potential_setups, top_setups, top_pick_trade_plan } = data;
+  const { stats, markets_scanned, potential_setups, top_setups } = data;
   const equityTrend = equity?.map((p) => p.equity_value);
   const topPick = top_setups[0];
 
@@ -173,13 +173,10 @@ export function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <h3>Top Pick</h3>
           </div>
-          {!topPick && !top_pick_trade_plan ? (
-            <EmptyState>No scan or trade-plan data yet to summarize.</EmptyState>
+          {!topPick ? (
+            <EmptyState>No scan data yet to summarize.</EmptyState>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Every block below narrates topPick specifically — never a
-                  different, unrelated symbol's stale plan — so this card
-                  reads as one coherent take, not two mismatched ones. */}
               {topPick && (
                 <div style={{ display: 'flex', gap: 12 }}>
                   <IconBadge variant={topPick.trend === 'Bullish' ? 'up' : topPick.trend === 'Bearish' ? 'down' : 'info'} size={34} />
@@ -193,34 +190,6 @@ export function DashboardPage() {
                     </div>
                   </div>
                 </div>
-              )}
-              {top_pick_trade_plan && top_pick_trade_plan.direction === null && (
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <IconBadge variant="info" size={34} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>No Trade</div>
-                    <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-                      {top_pick_trade_plan.reason ?? `${top_pick_trade_plan.symbol} was evaluated but didn't clear the bar for a trade plan.`}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {top_pick_trade_plan && top_pick_trade_plan.direction !== null && (
-                <>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <IconBadge variant="info" size={34} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>
-                        {top_pick_trade_plan.ai_provider && top_pick_trade_plan.ai_provider !== 'none'
-                          ? `AI Take · ${top_pick_trade_plan.ai_provider}`
-                          : 'Rule-based take'}
-                      </div>
-                      <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-                        {top_pick_trade_plan.ai_take_text}
-                      </div>
-                    </div>
-                  </div>
-                </>
               )}
             </div>
           )}

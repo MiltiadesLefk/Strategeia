@@ -708,10 +708,8 @@ class AppSettings(BaseModel):
     # On by default: with no Telegram configured it only records the event.
     price_alert_positions_enabled: bool = True
     # "Close to" means within this many ATRs of the stop (the average daily range, so
-    # the same setting means the same thing for a calm stock and a wild one)...
+    # the same setting means the same thing for a calm stock and a wild one).
     price_alert_stop_atr: float = 1.0
-    # ...and within this percentage of the price of the first target.
-    price_alert_tp1_pct: float = 1.0
 
     @field_validator("morning_note_time_et", mode="before")
     @classmethod

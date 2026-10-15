@@ -41,8 +41,9 @@ from app.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
-CONDITIONS: tuple[str, ...] = ("price_above", "price_below", "day_move_pct", "near_stop", "near_tp1")
-POSITION_CONDITIONS: tuple[str, ...] = ("near_stop", "near_tp1")
+CONDITIONS: tuple[str, ...] = ("price_above", "price_below", "day_move_pct", "near_stop")
+# Old stored alerts may still say "near_tp1" (no first target any more): they load and list, never fire.
+POSITION_CONDITIONS: tuple[str, ...] = ("near_stop",)
 UNITS: tuple[str, ...] = ("pct", "atr")
 
 # A personal dashboard needs a handful of alerts; the cap also bounds the quotes one
@@ -97,7 +98,6 @@ def evaluate_condition(
     change_pct: float | None = None,
     direction: str | None = None,
     stop: float | None = None,
-    tp1: float | None = None,
     atr: float | None = None,
 ) -> ConditionResult:
     """Is this alert's condition met by the numbers given? Pure.
@@ -105,7 +105,7 @@ def evaluate_condition(
     - "price_above" / "price_below": the price is at or beyond `threshold`.
     - "day_move_pct": the move since the previous close is at least `threshold` percent,
       up or down (`change_pct`, as the provider reports it).
-    - "near_stop" / "near_tp1": the price of an open position (`direction`, `stop`, `tp1`)
+    - "near_stop": the price of an open position (`direction`, `stop`)
       is within `threshold` of the level, in `unit` ("pct" of the price or "atr"). A price
       already at or past the level counts as met (the distance is zero or negative).
     """
@@ -118,16 +118,12 @@ def evaluate_condition(
             return ConditionResult(None, None, "no day change available")
         return ConditionResult(abs(change_pct) >= threshold, change_pct, f"moved {change_pct:+.1f}% on the day (alert at {threshold:g}%)")
     if condition in POSITION_CONDITIONS:
-        level = stop if condition == "near_stop" else tp1
-        label = "stop" if condition == "near_stop" else "first target"
+        level, label = stop, "stop"
         if direction not in ("long", "short") or level is None or unit not in UNITS:
             return ConditionResult(None, None, f"no open position with a {label} to measure against")
         # Positive while the price is still on the safe/unreached side of the level.
         long_side = direction == "long"
-        if condition == "near_stop":
-            distance = price - level if long_side else level - price
-        else:
-            distance = level - price if long_side else price - level
+        distance = price - level if long_side else level - price
         measured = _in_unit(distance, price, atr, unit)
         if measured is None:
             return ConditionResult(None, None, "the average daily range is not available yet")
@@ -402,7 +398,6 @@ def run_price_alert_check(
                 change_pct=market.change_pct,
                 direction=position.direction if position else None,
                 stop=position.stop_loss if position else None,
-                tp1=position.tp1 if position else None,
                 atr=market.atr,
             )
             if outcome.met:
@@ -480,12 +475,10 @@ def _check_positions(
     result: PriceAlertRunResult,
 ) -> None:
     """The automatic alerts on open positions: near the stop (within price_alert_stop_atr
-    ATRs) and near the first target (within price_alert_tp1_pct percent), each at most once
-    per US trading day per position."""
+    ATRs), at most once per US trading day per position."""
     today = market_day_text(now)
     checks = (
         ("near_stop", settings.price_alert_stop_atr, "atr"),
-        ("near_tp1", settings.price_alert_tp1_pct, "pct"),
     )
     for position in positions:
         market = markets.get(position.symbol)
@@ -503,7 +496,6 @@ def _check_positions(
                 price=market.price,
                 direction=position.direction,
                 stop=position.stop_loss,
-                tp1=position.tp1,
                 atr=market.atr,
             )
             if not outcome.met:

@@ -15,11 +15,3 @@ export function TrendBadge({ trend }: { trend: string }) {
   if (trend === 'Bearish') return <span className="badge badge-red">Bearish</span>;
   return <span className="badge badge-neutral">Neutral</span>;
 }
-
-export function TradePlanStatusBadge({ status }: { status: string | null | undefined }) {
-  if (status === 'executed') return <span className="badge badge-green">Executed</span>;
-  if (status === 'pending') return <span className="badge badge-amber">Pending</span>;
-  if (status === 'discarded') return <span className="badge badge-neutral">Discarded</span>;
-  if (status === 'no_trade') return <span className="badge badge-neutral">No Trade</span>;
-  return <span className="badge badge-neutral">—</span>;
-}
