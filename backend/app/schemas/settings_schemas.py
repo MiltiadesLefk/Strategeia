@@ -94,6 +94,9 @@ class SettingsUpdateRequest(BaseModel):
     sell_ma200_days: int | None = Field(default=None, ge=1, le=60)
     sell_trail_pct: float | None = Field(default=None, ge=0, le=50)
     rebuy_cooldown_days: int | None = Field(default=None, ge=0, le=365)
+
+    hold_add_on_dips: bool | None = None
+
     liquidity_slippage_enabled: bool | None = None
     liquidity_slippage_coefficient: float | None = Field(default=None, ge=0, le=1000)
     scale_out_enabled: bool | None = None

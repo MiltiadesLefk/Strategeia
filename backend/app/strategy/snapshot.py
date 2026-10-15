@@ -81,6 +81,8 @@ DECISION_SETTINGS: dict[str, str] = {
     "sell_ma200_days": "sell plan days under 200-day",
     "sell_trail_pct": "sell plan trail %",
     "rebuy_cooldown_days": "rebuy cooldown days",
+    "hold_add_on_dips": "hold adds on dips",
+
     "auto_execute_trade_plans": "auto-execute",
     "ai_trading_overlay_enabled": "AI overlay",
     "smart_money_followed_member_multiplier": "smart-money followed-member multiplier",

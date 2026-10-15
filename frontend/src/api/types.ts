@@ -516,6 +516,8 @@ export interface AppSettings {
   sell_ma200_days: number;
   sell_trail_pct: number;
   rebuy_cooldown_days: number;
+  hold_add_on_dips: boolean;
+
   /** Share of the position sold at TP1 (0.1 to 0.9). */
   scale_out_fraction: number;
   /** Where the remainder's stop goes after TP1: its entry price, or trailing behind the best price. */
@@ -617,6 +619,8 @@ export interface SettingsUpdateRequest {
   sell_ma200_days?: number;
   sell_trail_pct?: number;
   rebuy_cooldown_days?: number;
+  hold_add_on_dips?: boolean;
+
   scale_out_fraction?: number;
   scale_out_stop_mode?: ScaleOutStopMode;
   scale_out_trail_r?: number;
