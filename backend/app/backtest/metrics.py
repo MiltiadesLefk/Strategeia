@@ -60,8 +60,8 @@ CONVENTIONS = {
     "sortino": "mean daily return / downside deviation (negative returns, target 0) x sqrt(252)",
     "cagr": f"(final / start) ^ (365.25 / calendar days) - 1; not shown for runs under {MIN_CALENDAR_DAYS_TO_ANNUALISE} calendar days",
     "drawdown": "from the highest daily close so far (the starting cash is the first peak); intraday lows are not seen",
-    "win": "realised P&L after costs above zero; trades still open at the end are left out",
-    "intervals": "Wilson 95% interval on the win rate, seeded bootstrap 95% interval on the average R",
+    "win": "realised P&L after costs above zero (return_pct above 0); trades still open at the end are left out",
+    "intervals": "Wilson 95% interval on the win rate, seeded bootstrap 95% interval on the average return per trade (and on the average R of runs that have R values)",
 }
 
 
@@ -87,6 +87,7 @@ class TradeRow:
     holding_days: int | None
     close_reason: str | None
     fees_paid: float | None = None
+    return_pct: float | None = None  # net P&L over cost: what a hold trade is judged by
 
 
 def _read(row: Any, name: str, default: Any = None) -> Any:
@@ -104,6 +105,15 @@ def equity_rows(items: Iterable[Any]) -> list[EquityRow]:
     return rows
 
 
+def _return_pct(item: Any) -> float | None:
+    """The stored return_pct, else (a run stored before it existed) P&L over entry cost."""
+    value = _read(item, "return_pct")
+    if value is not None:
+        return float(value)
+    pnl, price, shares = _read(item, "realized_pnl"), _read(item, "entry_price"), _read(item, "shares")
+    return pnl / (price * shares) * 100 if pnl is not None and price and shares else None
+
+
 def trade_rows(items: Iterable[Any]) -> list[TradeRow]:
     return [
         TradeRow(
@@ -117,6 +127,7 @@ def trade_rows(items: Iterable[Any]) -> list[TradeRow]:
             holding_days=_read(i, "holding_days"),
             close_reason=_read(i, "close_reason"),
             fees_paid=_read(i, "fees_paid"),
+            return_pct=_return_pct(i),
         )
         for i in items
     ]
@@ -293,6 +304,8 @@ def _trade_block(trades: Sequence[TradeRow]) -> dict[str, Any]:
     n = len(trades)
     wilson = wilson_interval(len(wins), n)
     r_interval = bootstrap_mean_interval(rs)
+    returns = [float(t.return_pct) for t in trades if t.return_pct is not None]
+    return_interval = bootstrap_mean_interval(returns)
     gross_profit = sum(wins)
     gross_loss = -sum(p for p in pnls if p < 0)
     win_rs = [t.realized_r for t in trades if t.realized_r is not None and (t.realized_pnl or 0) > 0]
@@ -309,6 +322,9 @@ def _trade_block(trades: Sequence[TradeRow]) -> dict[str, Any]:
         "average_r": sum(rs) / len(rs) if rs else None,
         "average_r_low": r_interval[0] if r_interval else None,
         "average_r_high": r_interval[1] if r_interval else None,
+        "average_return_pct": sum(returns) / len(returns) if returns else None,
+        "average_return_pct_low": return_interval[0] if return_interval else None,
+        "average_return_pct_high": return_interval[1] if return_interval else None,
         "expectancy_usd": sum(pnls) / n if n else None,
         "total_pnl": sum(pnls),
         "gross_profit": gross_profit,
@@ -345,12 +361,14 @@ def exit_reason_mix(trades: Sequence[TradeRow]) -> list[dict[str, Any]]:
     out = []
     for reason, group in sorted(groups.items(), key=lambda item: -len(item[1])):
         rs = [t.realized_r for t in group if t.realized_r is not None]
+        returns = [t.return_pct for t in group if t.return_pct is not None]
         out.append(
             {
                 "reason": reason,
                 "count": len(group),
                 "share_pct": len(group) / total * 100 if total else 0.0,
                 "average_r": sum(rs) / len(rs) if rs else None,
+                "average_return_pct": sum(returns) / len(returns) if returns else None,
                 "total_pnl": sum(float(t.realized_pnl or 0.0) for t in group),
             }
         )
@@ -370,6 +388,7 @@ def direction_split(trades: Sequence[TradeRow]) -> list[dict[str, Any]]:
                 "share_pct": len(group) / len(trades) * 100 if trades else 0.0,
                 "win_rate_pct": block["win_rate_pct"],
                 "average_r": block["average_r"],
+                "average_return_pct": block["average_return_pct"],
                 "total_pnl": block["total_pnl"],
             }
         )
@@ -449,6 +468,7 @@ def headline(metrics: Mapping[str, Any]) -> dict[str, Any]:
         "total_return_pct": returns["total_return_pct"],
         "sharpe": returns["sharpe"],
         "average_r": trades["average_r"],
+        "average_return_pct": trades["average_return_pct"],
         "win_rate_pct": trades["win_rate_pct"],
         "trade_count": trades["closed_trades"],
         "max_drawdown_pct": drawdown["max_drawdown_pct"],

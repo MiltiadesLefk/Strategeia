@@ -512,32 +512,17 @@ def test_asking_for_dated_data_without_a_fact_database_is_an_error():
         runner.run_backtest(params, _settings(), _book())
 
 
-def test_dated_parts_change_points_only_where_the_data_exists(engine):
-    _revenue_facts(engine, "AAA")  # BBB has prices but no stored filings
+def test_the_hold_gate_is_price_only_so_dated_parts_never_change_what_is_bought(engine):
+    _revenue_facts(engine, "AAA")
     book = _book()
-    plain = runner.run_backtest(BacktestParams(symbols=["AAA", "BBB"], start=START, end=END), _settings(), book, swing=True)
+    plain = runner.run_backtest(BacktestParams(symbols=["AAA", "BBB"], start=START, end=END), _settings(), book)
     rich = runner.run_backtest(
         BacktestParams(symbols=["AAA", "BBB"], start=START, end=END, include_fundamentals=True),
-        _settings(), book, fact_session_factory=lambda: Session(engine), swing=True,
+        _settings(), book, fact_session_factory=lambda: Session(engine),
     )
-    assert plain.trades and rich.trades
-    assert all(t["scores"]["fundamental_score"] == 0 for t in plain.trades)
-    assert plain.coverage["profile"] == "price_only"
-
-    by_symbol = {}
-    for t in rich.trades:
-        by_symbol.setdefault(t["symbol"], []).append(t)
-    aaa = by_symbol["AAA"][0]
-    assert "revenue grew 25.0% YoY" in aaa["signal_reasons"]
-    assert aaa["scores"]["fundamental_score"] >= 1
-    for t in by_symbol.get("BBB", []):
-        assert "revenue grew" not in (t["signal_reasons"] or "")  # no filings stored: no revenue point, only the price-range part
-        assert t["scores"]["fundamental_score"] <= 1
-
-    assert rich.coverage["profile"] == "price_plus_dated_data" and rich.coverage["achievable_points"] == 11
-    availability = rich.summary["dated_data"]["fundamentals"]
-    assert availability["symbols_with_data"] == 1 and 0 < availability["answered"] < availability["requests"]
-    assert "dated_data" not in plain.summary
+    assert plain.trades and rich.trades == plain.trades and rich.equity == plain.equity
+    assert plain.coverage["profile"] == rich.coverage["profile"] == "hold_price_only"
+    assert "dated_data" not in plain.summary and "fundamentals" in rich.summary["dated_data"]
 
 
 def test_a_run_with_the_dated_parts_on_is_repeatable(engine):
@@ -547,26 +532,20 @@ def test_a_run_with_the_dated_parts_on_is_repeatable(engine):
     )
 
     def go():
-        return runner.run_backtest(params, _settings(), _book(), fact_session_factory=lambda: Session(engine), swing=True)
+        return runner.run_backtest(params, _settings(), _book(), fact_session_factory=lambda: Session(engine))
 
     first, second = go(), go()
     assert first.trades == second.trades and first.equity == second.equity
     assert first.summary == second.summary
-    assert first.coverage["included"] == {"fundamentals": True, "insiders": True, "earnings": True}
     assert json.loads(runner.params_to_json(params, _settings(), _book()))["include_insiders"] is True
 
 
-def test_the_random_entry_baseline_stays_price_only(engine):
+def test_the_random_entry_baseline_needs_no_fact_database(engine):
+    from app.backtest.baseline import RandomHoldEntry
+
     params = BacktestParams(symbols=["AAA"], start=START, end=DAYS[251], include_fundamentals=True)
-    # A replacement entry policy never scores, so no fact database is needed and the coverage says so.
-    result = runner.run_backtest(params, _settings(), _book(), entry_policy=lambda *a, **k: _no_trade())
-    assert result.coverage["profile"] == "price_only" and "dated_data" not in result.summary
-
-
-def _no_trade():
-    from types import SimpleNamespace
-
-    return SimpleNamespace(direction=None, reason="test", confidence_points=0)
+    result = runner.run_backtest(params, _settings(), _book(), random_entry=RandomHoldEntry(1, 0.0))
+    assert result.coverage["profile"] == "hold_price_only" and "dated_data" not in result.summary
 
 
 def test_facts_of_other_kinds_do_not_leak_into_the_readers(session):

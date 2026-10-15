@@ -226,7 +226,6 @@ def test_the_runner_uses_the_live_hold_scan_step_and_the_live_engine(book, monke
     from app.services import automation_service
 
     assert runner.automation_service is automation_service
-    assert runner.PaperTradingEngine is live_engine.PaperTradingEngine
 
     calls = {"open": 0, "mark": 0}
     real_open = live_engine.PaperTradingEngine.open_position
@@ -245,22 +244,6 @@ def test_the_runner_uses_the_live_hold_scan_step_and_the_live_engine(book, monke
     run = runner.run_backtest(params_for(end=DAYS[262]), settings_for(), book)
     assert calls["open"] == run.summary["executed"] > 0
     assert calls["mark"] == run.summary["days_simulated"]
-
-
-def test_the_exit_engine_is_built_like_the_live_ones(book):
-    """Same arguments as the portfolio router and the scheduler pass; only the clock and the daily-only
-    exit rule differ."""
-    from app.api.routers.portfolio import build_engine
-
-    settings = settings_for(max_holding_days=7, max_concurrent_positions=3)
-    provider = BacktestDataProvider(book)
-    with Session(runner._new_scratch_db()) as session:
-        ours = runner._build_engine(session, provider, settings)
-        live = build_engine(session, provider, settings)
-    ignored = {"_clock", "_intraday_exits"}
-    assert {k: v for k, v in vars(ours).items() if k not in ignored} == {
-        k: v for k, v in vars(live).items() if k not in ignored
-    }
 
 
 # --------------------------------------------------------------------- (e) calendar

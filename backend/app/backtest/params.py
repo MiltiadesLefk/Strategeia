@@ -33,16 +33,13 @@ class SettingsOverrides(BaseModel):
 
     slippage_bps: float | None = Field(default=None, ge=0, le=500)
     commission_per_trade: float | None = Field(default=None, ge=0, le=1000)
-    default_risk_pct: float | None = Field(default=None, gt=0, le=100)
-    min_confidence_for_trade: int | None = Field(default=None, ge=0, le=100)
     max_concurrent_positions: int | None = Field(default=None, gt=0, le=1000)
     max_positions_per_sector: int | None = Field(default=None, gt=0, le=1000)
     max_position_pct_of_adv: float | None = Field(default=None, gt=0, le=100)
-    max_holding_days: int | None = Field(default=None, ge=0, le=60)
     paper_starting_cash: float | None = Field(default=None, gt=0)
-    # Hold knobs (the run's decisions). The swing knobs above (min_confidence_for_trade, max_holding_days,
-    # default_risk_pct) no longer change a hold run; they stay only because validation.py/baseline.py still read them.
-    # shortcut: remove them with those two modules' re-aim.
+    # Hold knobs (the run's decisions). Runs stored before hold mode carry min_confidence_for_trade /
+    # max_holding_days / default_risk_pct in their params_json: that JSON is only ever read back as a dict,
+    # never re-validated through this model, so the retired keys need no tolerance here.
     hold_stop_pct: float | None = Field(default=None, ge=0, le=90)
     hold_target_weight_pct: float | None = Field(default=None, gt=0, le=100)
     hold_buy_only_dips: bool | None = None

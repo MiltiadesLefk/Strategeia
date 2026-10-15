@@ -272,3 +272,15 @@ def test_rows_can_come_from_dicts_or_objects_and_are_sorted():
                           "exit_date": date(2024, 3, 2), "realized_pnl": 1.0, "realized_r": 0.1, "holding_days": 1,
                           "close_reason": "tp1_hit", "fees_paid": 0.0}])
     assert parsed[0].symbol == "A" and parsed[0].close_reason == "tp1_hit"
+
+
+def test_hold_trades_are_judged_by_return_pct_and_old_rows_derive_it():
+    base = {"symbol": "AAA", "direction": "long", "status": "closed", "entry_date": date(2024, 1, 2),
+            "exit_date": date(2024, 2, 1), "realized_r": None, "holding_days": 20, "close_reason": "disaster_stop"}
+    rows = trade_rows([
+        {**base, "realized_pnl": 50.0, "return_pct": 5.0},
+        {**base, "realized_pnl": -100.0, "entry_price": 100.0, "shares": 10},  # stored before return_pct existed: -10%
+    ])
+    assert [r.return_pct for r in rows] == [5.0, -10.0]
+    t = compute_metrics([], rows, 1000.0)["trades"]
+    assert t["average_return_pct"] == pytest.approx(-2.5) and t["average_r"] is None and t["win_rate_pct"] == 50.0

@@ -74,35 +74,37 @@ def body(**extra):
 
 
 def test_grid_values_are_checked_and_cleaned():
-    params = v.ValidationParams(**body(grid={"min_confidence_for_trade": [30, 20, 30], "slippage_bps": []}))
-    assert params.grid == {"min_confidence_for_trade": [30, 20]}
+    params = v.ValidationParams(**body(grid={"hold_stop_pct": [30, 20, 30], "slippage_bps": []}))
+    assert params.grid == {"hold_stop_pct": [30, 20]}
     with pytest.raises(ValidationError, match="cannot be swept"):
         v.ValidationParams(**body(grid={"paper_starting_cash": [1000]}))
     with pytest.raises(ValidationError, match="between"):
-        v.ValidationParams(**body(grid={"min_confidence_for_trade": [150]}))
+        v.ValidationParams(**body(grid={"hold_stop_pct": [150]}))
     with pytest.raises(ValidationError, match="whole numbers"):
-        v.ValidationParams(**body(grid={"max_holding_days": [10.5]}))
+        v.ValidationParams(**body(grid={"hold_buy_only_dips": [0.5]}))
     with pytest.raises(ValidationError, match="at most"):
-        v.ValidationParams(**body(grid={"min_confidence_for_trade": [10, 20, 30, 40, 50, 60]}))
+        v.ValidationParams(**body(grid={"hold_stop_pct": [10, 20, 30, 40, 50, 60]}))
 
 
 def test_the_grid_and_run_count_are_capped():
-    wide = {"min_confidence_for_trade": [10, 20, 30, 40, 50], "default_risk_pct": [0.5, 1, 1.5, 2, 2.5]}
+    wide = {"hold_stop_pct": [10, 20, 30, 40, 50], "hold_target_weight_pct": [0.5, 1, 1.5, 2, 2.5]}
     with pytest.raises(ValidationError, match="25 variants"):
         v.ValidationParams(**body(grid=wide))
     with pytest.raises(ValidationError, match="folds"):
         v.ValidationParams(**body(folds=1))
     with pytest.raises(ValidationError, match="runs"):
-        v.ValidationParams(**body(folds=12, grid={"min_confidence_for_trade": [10, 20, 30, 40], "slippage_bps": [1, 2, 3, 4]}))
+        v.ValidationParams(**body(folds=12, grid={"hold_stop_pct": [10, 20, 30, 40], "slippage_bps": [1, 2, 3, 4]}))
 
 
 def test_variants_are_the_grid_product_in_a_fixed_order():
-    grid = {"slippage_bps": [1, 5], "min_confidence_for_trade": [20, 40, 60]}
+    grid = {"slippage_bps": [1, 5], "hold_stop_pct": [20, 40, 60]}
     variants = v.make_variants(grid)
     assert len(variants) == 6 == v.count_variants(grid)
-    assert variants[0] == {"min_confidence_for_trade": 20, "slippage_bps": 1}
-    assert variants[-1] == {"min_confidence_for_trade": 60, "slippage_bps": 5}
+    assert variants[0] == {"hold_stop_pct": 20, "slippage_bps": 1}
+    assert variants[-1] == {"hold_stop_pct": 60, "slippage_bps": 5}
     assert v.make_variants({}) == [{}]
+    # a yes/no knob takes 0 and 1, and a variant hands the run a real bool
+    assert v.ValidationParams(**body(grid={"hold_buy_only_dips": [0, 1]})).grid == {"hold_buy_only_dips": [0, 1]}
 
 
 def test_n_trials_is_variants_times_folds_and_one_without_a_search():
@@ -114,7 +116,7 @@ def test_n_trials_is_variants_times_folds_and_one_without_a_search():
 
 
 class FakeRunner:
-    """Window runs whose daily return depends on the confidence bar and on whether the window is
+    """Window runs whose daily return depends on the disaster stop and on whether the window is
     a test window, so the in-sample best and the out-of-sample best are different variants."""
 
     IN_SAMPLE = {20: 0.0006, 40: 0.0020, 60: 0.0}
@@ -126,7 +128,7 @@ class FakeRunner:
         self.calls: list[tuple[date, date, int, bool]] = []
 
     def __call__(self, params, settings, book, progress=None, should_cancel=None):
-        bar = settings.min_confidence_for_trade
+        bar = settings.hold_stop_pct
         is_test = params.start in self.test_starts
         self.calls.append((params.start, params.end, bar, is_test))
         days = trading_days(params.start, params.end)
@@ -145,7 +147,7 @@ class FakeRunner:
 
 
 PERIOD_DAYS = trading_days_from(date(2022, 1, 3), 700)
-GRID = {"min_confidence_for_trade": [20, 40, 60]}
+GRID = {"hold_stop_pct": [20, 40, 60]}
 
 
 def fake_params(folds=4, mode="rolling", grid=None):
@@ -170,7 +172,7 @@ def test_the_in_sample_best_is_selected_and_only_it_is_tested_out_of_sample():
         selected = fold["selected"]
         sharpes = [t["is"]["sharpe"] for t in fold["trials"]]
         assert selected["variant_index"] == sharpes.index(max(sharpes))
-        assert selected["params"] == {"min_confidence_for_trade": 40}
+        assert selected["params"] == {"hold_stop_pct": 40}
         assert selected["in_sample"] == fold["trials"][selected["variant_index"]]["is"]
         tests = [c for c in runner.calls if c[3] and c[0] == window.test.start]
         assert len(tests) == 1 and tests[0][2] == 40  # one out-of-sample run, with the selected setting
@@ -217,7 +219,7 @@ def test_the_stitched_out_of_sample_curve_is_continuous_and_covers_only_test_day
 
 def test_the_deflated_sharpe_penalises_the_search():
     searched, _, _ = run_fake()
-    single, _, _ = run_fake(grid={"min_confidence_for_trade": [40]})
+    single, _, _ = run_fake(grid={"hold_stop_pct": [40]})
     assert searched["dsr"]["available"] and searched["dsr"]["expected_max_sharpe_annualised"] > 0
     assert single["dsr"]["expected_max_sharpe_annualised"] == 0.0
     assert any("luck alone" in line for line in searched["dsr"]["reading"])
@@ -303,7 +305,7 @@ def real_book(change_after: date | None = None):
 def test_a_fold_does_not_change_when_only_later_prices_change():
     params = v.ValidationParams(
         symbols=["AAA"], start=DAYS[252], end=DAYS[329], folds=2, mode="anchored", train_ratio=1.0, embargo_days=2,
-        grid={"min_confidence_for_trade": [20, 30]},
+        grid={"hold_stop_pct": [20, 30]},
     )
     layout = v.make_folds(trading_days(params.start, params.end), 2, "anchored", 1.0, 2)
     plain = v.run_validation(params, AppSettings(), real_book())
@@ -346,7 +348,7 @@ def env(tmp_path):
 
 REQUEST = {
     "symbols": ["AAA"], "start": DAYS[252].isoformat(), "end": DAYS[329].isoformat(), "folds": 2, "train_ratio": 1.0,
-    "embargo_days": 2, "mode": "anchored", "grid": {"min_confidence_for_trade": [20, 30]},
+    "embargo_days": 2, "mode": "anchored", "grid": {"hold_stop_pct": [20, 30]},
 }
 
 
@@ -376,7 +378,7 @@ def test_the_get_routes_do_not_swallow_each_other(env):
     options = client.get("/api/backtests/validation-options").json()
     names = {k["name"]: k for k in options["knobs"]}
     assert set(names) == set(v.KNOBS)
-    assert names["min_confidence_for_trade"]["live_value"] == AppSettings().min_confidence_for_trade
+    assert names["hold_stop_pct"]["live_value"] == AppSettings().hold_stop_pct
     assert options["max_variants"] == v.MAX_VARIANTS and "rolling" in options["modes"]
 
 

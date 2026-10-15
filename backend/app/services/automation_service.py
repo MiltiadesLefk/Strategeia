@@ -96,10 +96,11 @@ def run_auto_scan(
 
 def hold_scan_symbol(
     settings: AppSettings, data_provider: DataProvider, session: Session, engine, symbol: str, reason: str,
-    *, price_only: bool = False,
+    *, price_only: bool = False, skip_gate: bool = False,
 ) -> bool:
     """One symbol of the hold scan: gate, dip rule, hold buy. True = bought. Shared by the live scan and the
-    backtest (`price_only` = the trend check alone, the only part of the gate knowable at a past date).
+    backtest (`price_only` = the trend check alone, the only part of the gate knowable at a past date;
+    `skip_gate` = no gate and no dip rule, only the random-entry baseline passes it).
     The engine's refusals are logged and mean "not bought"; MarketClosedError and anything unexpected propagate."""
     from app.portfolio.engine import (
         DuplicatePositionError, InsufficientCashError, MaxPositionsExceededError, SectorConcentrationError,
@@ -108,10 +109,13 @@ def hold_scan_symbol(
     from app.services.hold_buy_service import check_quality, hold_buy
 
     try:
-        gate = check_quality(data_provider, symbol, price_only=price_only)
-        if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
-            return False
-        hold_buy(session, engine, data_provider, settings, symbol, reason=reason + (" and is in a dip" if gate.dip else ""))
+        dip = False
+        if not skip_gate:
+            gate = check_quality(data_provider, symbol, price_only=price_only)
+            if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
+                return False
+            dip = gate.dip
+        hold_buy(session, engine, data_provider, settings, symbol, reason=reason + (" and is in a dip" if dip else ""))
         return True
     except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError, SectorConcentrationError,
             SleeveDisabledError, StalePlanError) as exc:

@@ -1,97 +1,55 @@
 """Can the strategy beat a random version of itself?
 
-A backtest that makes money proves little: in a rising market almost any
-long-biased rule does. The sharper question is whether the strategy's entries
-carry information, so this module reruns the run K times with the entries chosen
-at random and asks where the real run lands among them.
+A backtest that makes money proves little: in a rising market almost any long-biased
+rule does. The sharper question is whether the quality gate's picks carry information, so
+this module reruns the run K times with the picks chosen at random and asks where the real
+run lands among them.
 
 What is held the same as the real run
 -------------------------------------
-Same symbols, same days, same decision cadence, same settings (risk %, slippage,
-commission, position and sector caps, time limit), the same stop and target
-derivation (the very functions generate_trade_plan calls), the same sizing, the
-same engine and the same exit rules. Every request is answered by the same as-of
-data provider, so a random run cannot see the future either.
+The same loop (runner.run_backtest): same symbols, days, decision cadence, settings
+(slippage, commission, position and sector caps, hold stop, target weight), the same hold
+buy (`hold_scan_symbol`, so the same sizing and stop) and the same engine and exits. Every
+request is answered by the same as-of data provider, so a random run cannot see the future.
 
 What is random
 --------------
-* Whether a symbol gets an entry on a day: a draw with probability p, the real
-  run's own rate of trade plans per evaluated (symbol, day). So the random runs
-  look at the same opportunities and try to enter as often as the real run did;
-  how many of those attempts get filled is then up to the same position caps.
-* The direction: long or short with equal odds, weighted by nothing. In a rising
-  market the random shorts lose, which makes this baseline harder to be worse
-  than; read a percentile with that in mind.
-
-Each draw is a pure function of (seed, symbol, day), not of a shared stream, so a
-seed always makes the same choices whatever else happened in the run.
+Whether a symbol is bought on a day: a draw with probability p, the real run's own rate of
+buys per evaluated (symbol, day), with the quality gate (and the dip rule) switched off for
+the pick. How many drawn picks get filled is up to the same position caps. Each draw is a
+pure function of (seed, symbol, day), not of a shared stream.
 
 Reading the result
 ------------------
-K is small (20 by default, because each seed is a full run). The real run's
-percentile among K seeds moves in steps of 100/K points, and the smallest "chance a
-random run did at least this well" it can show is 1/(K+1). It is a sanity check
-that the strategy is not just riding the market, not a significance test, and the
-numbers say so.
+K is small (20 by default, because each seed is a full run). The real run's percentile among
+K seeds moves in steps of 100/K points, and the smallest "chance a random run did at least
+this well" it can show is 1/(K+1). It is a sanity check that the gate is not just riding the
+market, not a significance test, and the numbers say so.
 """
 
 from __future__ import annotations
 
 import hashlib
-import logging
 import math
 from datetime import date
 from typing import Any, Callable, Sequence
 
 import numpy as np
-from sqlmodel import Session
 
-from app.analysis.indicators import latest_atr
-from app.analysis.trend import analyze_chart
 from app.backtest import runner
-from app.backtest.data_provider import BacktestDataProvider, PriceBook
+from app.backtest.data_provider import PriceBook
 from app.backtest.metrics import compute_metrics, equity_rows, headline, trade_rows
 from app.backtest.params import BacktestParams
 from app.config import AppSettings
-from app.portfolio.engine import (
-    DuplicatePositionError,
-    InsufficientCashError,
-    MarketClosedError,
-    MaxPositionsExceededError,
-    SectorConcentrationError,
-    StalePlanError,
-)
-from app.portfolio.models import TradePlanRecord
-from app.risk.position_sizing import calculate_position_size, derive_targets
-from app.schemas.trade_plan_schemas import TradePlanResponse
-from app.services.trade_plan_service import (
-    ATR_PERIOD,
-    MAX_SCORE_FOR_CONFIDENCE,
-    _derive_entry_and_stop,
-)
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_BASELINE_RUNS = 20
 MAX_BASELINE_RUNS = 50
 # Seeds are 1..K offset by this, so the numbers read as "seed 1, seed 2" yet a
 # change of the constant reshuffles every draw.
 SEED_SALT = 20261001
-LONG_PROBABILITY = 0.5
 # Below this many seeds no percentile is reported as a verdict input (the
 # scorecard marks it "not enough data"); the numbers are still shown.
 MIN_SEEDS_FOR_READING = 10
-RANDOM_REASON = "Random-entry baseline: direction and day drawn at random, levels derived as the live plan does."
-NOT_DRAWN_REASON = "Random-entry baseline: no entry drawn for this day."
-
-# What stops an entry here is exactly what stops one in generate_trade_plan.
-_OPEN_REFUSALS = (
-    InsufficientCashError,
-    DuplicatePositionError,
-    MaxPositionsExceededError,
-    SectorConcentrationError,
-    StalePlanError,
-)
 
 
 def _uniform(seed: int, symbol: str, day: date, purpose: str) -> float:
@@ -100,72 +58,18 @@ def _uniform(seed: int, symbol: str, day: date, purpose: str) -> float:
     return int.from_bytes(digest, "big") / 2**64
 
 
-class RandomEntryPolicy:
-    """The `entry_policy` the runner takes: random days and directions, live levels."""
+class RandomHoldEntry:
+    """The pick the runner takes in place of the quality gate: random days, live hold buy."""
 
-    def __init__(self, seed: int, entry_probability: float, long_probability: float = LONG_PROBABILITY):
+    def __init__(self, seed: int, entry_probability: float):
         if not 0.0 <= entry_probability <= 1.0:
             raise ValueError("entry_probability must be between 0 and 1")
         self.seed = seed
         self.entry_probability = entry_probability
-        self.long_probability = long_probability
 
-    def draw(self, symbol: str, day: date) -> str | None:
-        """'long', 'short' or None (no entry), a pure function of seed, symbol and day."""
-        if _uniform(self.seed, symbol, day, "enter") >= self.entry_probability:
-            return None
-        return "long" if _uniform(self.seed, symbol, day, "side") < self.long_probability else "short"
-
-    def __call__(
-        self,
-        symbol: str,
-        day: date,
-        provider: BacktestDataProvider,
-        session: Session,
-        settings: AppSettings,
-        *,
-        allow_auto_execute: bool = True,
-    ) -> TradePlanResponse:
-        direction = self.draw(symbol, day)
-        if direction is None:
-            return TradePlanResponse(symbol=symbol, direction=None, reason=NOT_DRAWN_REASON, status="no_trade")
-
-        ohlcv = provider.get_ohlcv(symbol, period="1y", interval="1d")
-        chart = analyze_chart(ohlcv)
-        atr = latest_atr(ohlcv, ATR_PERIOD)
-        engine = runner._build_engine(session, provider, settings)
-        # The same three calls, in the same order, as generate_trade_plan.
-        entry, stop = _derive_entry_and_stop(direction, chart.price, chart.support, chart.resistance, atr)
-        sizing = calculate_position_size(
-            settings.paper_starting_cash, settings.default_risk_pct, entry, stop, engine.available_cash()
-        )
-        targets = derive_targets(entry, stop, direction, chart.support, chart.resistance)
-
-        record = TradePlanRecord(
-            symbol=symbol, direction=direction, entry=entry, stop=stop, tp1=targets.tp1, tp2=targets.tp2,
-            rr1=targets.rr1, rr2=targets.rr2, suggested_shares=sizing.shares,
-            account_risk_dollars=sizing.account_risk_dollars, confidence_score=0, confidence_points=0,
-            confidence_points_max=MAX_SCORE_FOR_CONFIDENCE, signal_reasons=RANDOM_REASON, status="pending",
-        )
-        session.add(record)
-        session.commit()
-        session.refresh(record)
-        note = None
-        if allow_auto_execute:
-            try:
-                engine.open_position(record)
-                session.refresh(record)
-            except MarketClosedError as exc:  # a trading day's 09:45 is open; kept for the same reason the live path has it
-                note = str(exc)
-            except _OPEN_REFUSALS as exc:
-                note = f"Auto-execute skipped: {exc}"
-        return TradePlanResponse(
-            id=record.id, symbol=symbol, direction=direction, entry=entry, stop=stop, tp1=targets.tp1, tp2=targets.tp2,
-            rr1=targets.rr1, rr2=targets.rr2, suggested_shares=sizing.shares,
-            account_risk_dollars=sizing.account_risk_dollars, confidence_score=0, confidence_points=0,
-            confidence_points_max=MAX_SCORE_FOR_CONFIDENCE, status=record.status, auto_execute_note=note,
-            signal_reasons=RANDOM_REASON,
-        )
+    def draw(self, symbol: str, day: date) -> bool:
+        """True = buy this symbol today, a pure function of seed, symbol and day."""
+        return _uniform(self.seed, symbol, day, "enter") < self.entry_probability
 
 
 # ---------------------------------------------------------------- reading the distribution
@@ -202,7 +106,7 @@ def place_in_distribution(real: float | None, seeds: Sequence[float | None]) -> 
     }
 
 
-PLACED_STATISTICS = ("total_return_pct", "average_r", "sharpe")
+PLACED_STATISTICS = ("total_return_pct", "average_return_pct", "sharpe")
 
 
 def read_baseline(baseline: dict[str, Any] | None, real: dict[str, Any] | None) -> dict[str, Any]:
@@ -225,8 +129,7 @@ def read_baseline(baseline: dict[str, Any] | None, real: dict[str, Any] | None) 
         else "No random run has finished yet."
     )
     out["notes"] = [
-        "Random direction is 50/50. In a rising market the random shorts lose, which makes the baseline easier to beat than a long-only one would be.",
-        "Each random run takes the same number of trade plans per opportunity as the real run, then meets the same position caps.",
+        "Each random run buys at the same rate per opportunity as the real run, long only, with the quality gate off, then meets the same position caps.",
     ]
     return out
 
@@ -235,13 +138,13 @@ def read_baseline(baseline: dict[str, Any] | None, real: dict[str, Any] | None) 
 
 
 def entry_probability_of(summary: dict[str, Any]) -> float | None:
-    """The real run's trade plans per evaluated (symbol, day), or None when it
-    evaluated nothing or never made a plan (there is no rate to match)."""
+    """The real run's buys per evaluated (symbol, day), or None when it evaluated
+    nothing or never bought (there is no rate to match)."""
     evaluations = summary.get("evaluations") or 0
-    plans = summary.get("plans") or 0
-    if evaluations <= 0 or plans <= 0:
+    buys = summary.get("executed") or 0
+    if evaluations <= 0 or buys <= 0:
         return None
-    return min(1.0, plans / evaluations)
+    return min(1.0, buys / evaluations)
 
 
 def seed_record(seed: int, result: runner.BacktestResult, starting_cash: float) -> dict[str, Any]:
@@ -271,28 +174,27 @@ def run_baseline(
     record: dict[str, Any] = {
         "requested_runs": runs,
         "entry_probability": probability,
-        "real_plans": real_summary.get("plans"),
+        "real_plans": real_summary.get("executed"),
         "real_evaluations": real_summary.get("evaluations"),
-        "long_probability": LONG_PROBABILITY,
         "seeds": [],
         "status": "done",
         "note": None,
     }
     if probability is None:
         record["status"] = "skipped"
-        record["note"] = "The real run made no trade plans, so there is no entry rate to match and nothing to compare."
+        record["note"] = "The real run bought nothing, so there is no entry rate to match and nothing to compare."
         return record
     starting_cash = settings.paper_starting_cash
     for number in range(1, runs + 1):
         if should_cancel is not None and should_cancel():
             record["status"] = "cancelled"
             break
-        policy = RandomEntryPolicy(SEED_SALT + number, probability)
+        pick = RandomHoldEntry(SEED_SALT + number, probability)
         result = runner.run_backtest(
             params, settings, book,
             progress=(lambda done, total, _day, n=number: progress(n, runs, done, total)) if progress else None,
             should_cancel=should_cancel,
-            entry_policy=policy,
+            random_entry=pick,
         )
         if result.status == "cancelled":
             record["status"] = "cancelled"

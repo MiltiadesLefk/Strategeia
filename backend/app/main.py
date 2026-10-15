@@ -26,7 +26,6 @@ from app.api.routers import macro_series as macro_series_router
 from app.api.routers import backtest_validations as backtest_validations_router
 from app.api.routers import backtests as backtests_router
 from app.api.routers import missed_trades as missed_trades_router
-from app.api.routers import replay as replay_router
 from app.api.routers import calendar as calendar_router
 from app.api.routers import screen_presets as screen_presets_router
 from app.api.routers import thesis as thesis_router
@@ -145,7 +144,6 @@ app.include_router(strategy_router.router)
 app.include_router(backtest_validations_router.router)
 app.include_router(backtests_router.router)
 app.include_router(missed_trades_router.router)
-app.include_router(replay_router.router)
 app.include_router(smart_money_router.router)
 app.include_router(smart_money_candidates_router.router)
 app.include_router(smart_money_review_router.router)

@@ -1,7 +1,7 @@
 """Walk-forward validation: does the strategy still work on days it was not tuned on?
 
-The strategy itself has no fitted parameters, but its settings (the confidence bar,
-the risk per trade, the holding limit, slippage) are things a person tunes by looking
+The strategy itself has no fitted parameters, but its settings (the disaster stop, the target
+weight, the dips-only rule, slippage) are things a person tunes by looking
 at backtests, and tuning on the same days you then judge on flatters any result. This
 module tests that honestly:
 
@@ -43,7 +43,7 @@ import numpy as np
 from pydantic import field_validator, model_validator
 
 from app.backtest.calendar import trading_days
-from app.backtest.coverage import describe_coverage
+from app.backtest.coverage import describe_hold_coverage
 from app.backtest.data_provider import PriceBook
 from app.backtest.deflated_sharpe import (
     DEFAULT_CONFIDENCE,
@@ -106,9 +106,9 @@ class Knob:
 KNOBS: dict[str, Knob] = {
     k.name: k
     for k in (
-        Knob("min_confidence_for_trade", "Confidence bar (%)", "int", 0, 100, "Plans scoring below this are not traded."),
-        Knob("default_risk_pct", "Risk per trade (%)", "float", 0.1, 5.0, "Share of the account risked between entry and stop."),
-        Knob("max_holding_days", "Holding limit (trading days)", "int", 0, 60, "A position is closed after this many days; 0 means no limit."),
+        Knob("hold_stop_pct", "Disaster stop (%)", "float", 5, 90, "A hold position is sold when it closes this far below entry."),
+        Knob("hold_target_weight_pct", "Target weight (%)", "float", 0.5, 20, "Share of the account one new position is sized to."),
+        Knob("hold_buy_only_dips", "Buy only dips (0 or 1)", "bool", 0, 1, "1 = buy only stocks in a dip, 0 = any stock that passes the trend check."),
         Knob("slippage_bps", "Slippage (basis points)", "float", 0, 100, "Cost added to market fills; higher is more pessimistic."),
     )
 }
@@ -166,7 +166,7 @@ class ValidationParams(BacktestParams):
             for raw in values:
                 if not math.isfinite(raw) or not knob.low <= raw <= knob.high:
                     raise ValueError(f"{name} must be between {knob.low:g} and {knob.high:g}")
-                if knob.kind == "int":
+                if knob.kind in ("int", "bool"):
                     if raw != int(raw):
                         raise ValueError(f"{name} takes whole numbers")
                     raw = int(raw)
@@ -355,7 +355,10 @@ def run_validation(
     fixed = params.overrides.model_dump(exclude_none=True)
 
     def overrides_for(variant: dict[str, float]) -> dict[str, Any]:
-        return {**fixed, **variant}
+        merged = {**fixed, **variant}
+        if "hold_buy_only_dips" in variant:
+            merged["hold_buy_only_dips"] = bool(variant["hold_buy_only_dips"])
+        return merged
 
     base_effective = effective_settings(base_settings, params.overrides)
     record: dict[str, Any] = {
@@ -370,7 +373,7 @@ def run_validation(
         "n_trials": n_trials,
         "runs_total": runs_total,
         "period": {"first_day": days[0].isoformat(), "last_day": days[-1].isoformat(), "trading_days": len(days)},
-        "coverage": describe_coverage(base_effective.min_confidence_for_trade, base_settings.min_confidence_for_trade),
+        "coverage": describe_hold_coverage(base_effective.hold_buy_only_dips),
         "folds": [],
         "aggregate": None,
         "dsr": None,
@@ -599,7 +602,7 @@ def _banners(result: dict[str, Any]) -> list[dict[str, Any]]:
         },
         {
             "key": "price_only", "level": "warning",
-            "text": "Price-only core: only the chart-based part of the score is tested; news, options, insiders, fundamentals and the AI are not included.",
+            "text": "Trend check only: the quality gate's growth, profit and valuation tests cannot be rebuilt for a past date, so only the price trend decides each buy.",
         },
         {
             "key": "deflation", "level": "info",

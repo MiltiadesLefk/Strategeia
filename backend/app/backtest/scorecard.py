@@ -58,7 +58,7 @@ def _trades_check(metrics: Mapping[str, Any], criteria: Criteria) -> dict[str, A
     return _check(
         "trades", "Enough trades to read a pattern", f"at least {criteria.min_trades} closed trades",
         PASS if n >= criteria.min_trades else FAIL, f"{n} closed trades",
-        "Win rate and average R from fewer trades than this move a lot with a few results.",
+        "Win rate and average return from fewer trades than this move a lot with a few results.",
     )
 
 
@@ -162,7 +162,6 @@ def _banners(
     ]
     if coverage:
         achievable, live = coverage.get("achievable_points"), coverage.get("live_points_max")
-        # shortcut: the scorecard's R-based criteria are not re-aimed at hold trades yet (separate chunk)
         left_out = ", ".join(part["label"].lower() for part in coverage.get("inactive_parts", []))
         text = (
             f"Price-only core: only the chart-based part of the score was tested ({achievable} of the live {live} points were reachable). "
@@ -176,8 +175,14 @@ def _banners(
         text = "Price-only core: only the chart-based part of the score is tested; news, options, insiders, fundamentals and the AI are not included."
     banners.append({"key": "price_only", "level": "warning", "text": text})
     n = metrics["trades"]["closed_trades"]
-    low, high = metrics["trades"]["average_r_low"], metrics["trades"]["average_r_high"]
-    interval = f" The 95% interval on the average R is {low:+.2f} to {high:+.2f}." if low is not None and high is not None else ""
+    t = metrics["trades"]
+    if t["average_r"] is not None:  # a run stored before hold mode: R is still its measure
+        low, high, unit = t["average_r_low"], t["average_r_high"], "R"
+        fmt = "{:+.2f}"
+    else:
+        low, high, unit = t["average_return_pct_low"], t["average_return_pct_high"], "return per trade"
+        fmt = "{:+.1f}%"
+    interval = f" The 95% interval on the average {unit} is {fmt.format(low)} to {fmt.format(high)}." if low is not None and high is not None else ""
     relation = "under" if n < criteria.min_trades else "at or over"
     banners.append(
         {

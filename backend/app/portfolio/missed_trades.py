@@ -3,7 +3,7 @@
 Hold mode writes no declined plans, so nothing computes new counterfactual
 outcomes any more (the simulator, the POST and the daily job are gone). What stays:
 `classify_plan` and the category constants, which the report
-(missed_trade_report.py), the What-if replay and the smart-money review still use,
+(missed_trade_report.py) and the smart-money review still use,
 and the stored `MissedTradeOutcome` rows, which keep displaying the old results.
 """
 
