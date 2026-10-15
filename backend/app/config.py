@@ -752,6 +752,11 @@ class AppSettings(BaseModel):
     # A smart-money buy that fails the quality gate still buys, at this % of the normal slice.
     hold_failed_gate_size_pct: float = Field(default=50.0, gt=0, le=100)
 
+    # F2: the daily hold scan also looks at tickers named in the morning's headlines that are outside
+    # the universe (off by default). They get the same gate, caps and buy path; this caps how many are tried.
+    news_discovery_enabled: bool = False
+    news_discovery_max_per_run: int = Field(default=5, ge=0, le=20)
+
     # Liquidity-aware slippage (opt-in, off = the flat slippage_bps only, results
     # unchanged): market fills pay extra bps that grow with the order's size
     # relative to the symbol's 20-day average daily volume. The coefficient is the

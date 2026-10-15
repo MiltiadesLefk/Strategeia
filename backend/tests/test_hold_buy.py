@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.config import AppSettings
 from app.data_providers.base import QuoteData
@@ -104,3 +104,29 @@ def test_add_averages_the_cost_and_stops_at_target(session):
     assert p.stop_loss == pytest.approx(75.0)
     with pytest.raises(InsufficientCashError):  # now at target
         hold_add(session, engine, provider, settings, p)
+
+
+def test_hold_scan_buys_a_news_discovered_ticker_outside_the_universe(session, monkeypatch):
+    from app.analysis.quality_gate import GateResult
+    from app.data_providers.base import NewsItem
+    from app.portfolio.models import TradePlanRecord
+    from app.services import automation_service, hold_buy_service
+
+    class NewsProvider(Provider):
+        def get_news(self, symbol, limit=5):
+            return [NewsItem("Vistra (NYSE: VST) and $FAKE and $AAA rally", "x", "u", "now")]
+
+        def get_quote(self, symbol):
+            if symbol == "FAKE":
+                raise ValueError("no such symbol")
+            return super().get_quote(symbol)
+
+    monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: ["AAA"])
+    monkeypatch.setattr("app.services.news_discovery_service.get_default_watchlist", lambda n: ["AAA"])
+    monkeypatch.setattr("app.services.news_discovery_service.load_universe", lambda: [type("E", (), {"symbol": "AAA"})()])
+    monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(hold_buy_service, "check_quality", lambda dp, symbol: GateResult(True, []))
+    bought = automation_service.run_hold_scan(AppSettings(news_discovery_enabled=True), NewsProvider(), session)
+    assert bought == ["AAA", "VST"]  # FAKE has no quote, AAA is already in the universe
+    plan = session.exec(select(TradePlanRecord).where(TradePlanRecord.symbol == "VST")).one()
+    assert "NYSE: VST" in plan.reason

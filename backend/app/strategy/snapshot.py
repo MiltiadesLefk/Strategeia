@@ -74,6 +74,10 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_max_per_sector": "hold max per sector",
     "hold_max_new_per_scan": "hold max new per scan",
     "hold_failed_gate_size_pct": "hold failed-gate size %",
+
+    "news_discovery_enabled": "news discovery",
+    "news_discovery_max_per_run": "news discovery max per run",
+
     "auto_execute_trade_plans": "auto-execute",
     "ai_trading_overlay_enabled": "AI overlay",
     "smart_money_followed_member_multiplier": "smart-money followed-member multiplier",

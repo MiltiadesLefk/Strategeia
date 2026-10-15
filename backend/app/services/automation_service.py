@@ -110,7 +110,14 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
     held = {p.symbol for p in session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()}
     engine = build_sleeve_engine(session, data_provider, settings, hold=True)
     bought: list[str] = []
-    for symbol in [s for s in get_default_watchlist(settings.scan_universe_size) if s not in held]:
+    candidates = {s: "hold scan: passed the quality gate" for s in get_default_watchlist(settings.scan_universe_size) if s not in held}
+    if settings.news_discovery_enabled:
+        from app.services.news_discovery_service import discover_from_news
+
+        for symbol, headline in discover_from_news(settings, data_provider).items():
+            if symbol not in held and symbol not in candidates:
+                candidates[symbol] = f'hold scan (news discovery, headline: "{headline}"): passed the quality gate'
+    for symbol, reason in candidates.items():
         if len(bought) >= settings.hold_max_new_per_scan:
             break
         try:
@@ -118,7 +125,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
             if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
                 continue
             hold_buy(session, engine, data_provider, settings, symbol,
-                     reason="hold scan: passed the quality gate" + (" and is in a dip" if gate.dip else ""))
+                     reason=reason + (" and is in a dip" if gate.dip else ""))
             bought.append(symbol)
         except MarketClosedError:
             logger.info("Hold scan stopped: the market is closed")
