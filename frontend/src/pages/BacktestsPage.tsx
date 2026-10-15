@@ -429,7 +429,7 @@ function Cards({ m }: { m: BacktestMetrics }) {
       {t.average_r !== null && (
         <StatCard label="Average R" value={formatR(t.average_r)} positive={t.average_r > 0} note={t.average_r_low === null ? sample : `95% range ${signed(t.average_r_low)} to ${signed(t.average_r_high)}`} />
       )}
-      <StatCard label="Average return per trade" value={t.average_return_pct === null ? '—' : `${signed(t.average_return_pct)}%`} positive={t.average_return_pct === null ? null : t.average_return_pct > 0} note={t.average_return_pct_low === null ? sample : `95% range ${signed(t.average_return_pct_low)}% to ${signed(t.average_return_pct_high)}%`} />
+      <StatCard label="Average return per trade" value={t.average_return_pct === null ? '—' : `${signed(t.average_return_pct)}%`} positive={t.average_return_pct === null ? null : t.average_return_pct > 0} note={t.closed_trades === 0 ? `no closed trades yet (${t.open_at_end} open)` : t.average_return_pct_low === null ? sample : `95% range ${signed(t.average_return_pct_low)}% to ${signed(t.average_return_pct_high)}%`} />
       <StatCard label="Profit factor" value={t.profit_factor === null ? (t.closed_trades ? 'no losses' : '—') : plain(t.profit_factor)} note="gross profit / gross loss" />
       <StatCard label="Avg win / avg loss" value={`${formatMoney(t.average_win)} / ${formatMoney(t.average_loss)}`} note={`payoff ${plain(t.payoff_ratio)}`} />
       <StatCard label="Trades per year" value={t.trades_per_year === null ? '—' : t.trades_per_year.toFixed(1)} note={`avg hold ${t.average_holding_days === null ? '—' : `${t.average_holding_days.toFixed(1)} days`}`} />
@@ -754,6 +754,10 @@ function BaselinePanel({ baseline, running }: { baseline: BacktestBaseline | und
           {baseline.status === 'failed' && ` ${baseline.note ?? ''}`}
         </div>
       </div>
+      {baseline.no_spread ? (
+        <div role="note" style={{ fontSize: 13 }}>Not meaningful: every random run did the same as the real run (too few symbols to tell luck from skill).</div>
+      ) : (
+        <>
       {baseline.caveat && <div className="text-muted" style={{ fontSize: 12 }}>{baseline.caveat}</div>}
       <BaselineHistogram baseline={baseline} />
       <div style={{ overflowX: 'auto' }}>
@@ -786,6 +790,8 @@ function BaselinePanel({ baseline, running }: { baseline: BacktestBaseline | und
           </tbody>
         </table>
       </div>
+        </>
+      )}
       {baseline.notes?.map((n) => (
         <div key={n} className="text-muted" style={{ fontSize: 12 }}>{n}</div>
       ))}

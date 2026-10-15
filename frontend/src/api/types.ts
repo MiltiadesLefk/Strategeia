@@ -1242,6 +1242,8 @@ export interface BacktestBaseline {
   real?: { total_return_pct: number | null; sharpe: number | null; average_r: number | null; average_return_pct?: number | null } | null;
   placement?: Record<string, BacktestPlacement | null>;
   enough_seeds?: boolean;
+  /** Every random run matched the real run: no spread, so no percentile is meaningful. */
+  no_spread?: boolean;
   caveat?: string;
   notes?: string[];
 }

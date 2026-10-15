@@ -262,6 +262,13 @@ def test_reading_a_stored_baseline_places_the_real_run_and_states_the_small_k_ca
     assert any("long only" in note for note in out["notes"])
 
 
+def test_no_spread_when_every_random_run_matches_the_real_run():
+    same = {"requested_runs": 3, "status": "done", "seeds": [seed_row(i, 4.0) for i in range(3)]}
+    assert read_baseline(same, {"total_return_pct": 4.0})["no_spread"] is True
+    varied = {"requested_runs": 3, "status": "done", "seeds": [seed_row(i, float(i)) for i in range(3)]}
+    assert read_baseline(varied, {"total_return_pct": 4.0})["no_spread"] is False
+
+
 def test_no_baseline_is_reported_as_unavailable_not_as_zero():
     assert read_baseline(None, {"total_return_pct": 1.0})["available"] is False
     empty = read_baseline({"requested_runs": 5, "status": "skipped", "seeds": [], "note": "no plans"}, None)

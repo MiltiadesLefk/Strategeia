@@ -121,6 +121,14 @@ def read_baseline(baseline: dict[str, Any] | None, real: dict[str, Any] | None) 
         for name in PLACED_STATISTICS:
             out["placement"][name] = place_in_distribution(real.get(name), [s.get(name) for s in seeds])
     out["enough_seeds"] = k >= MIN_SEEDS_FOR_READING
+    # Every random run did what the real run did: no spread, so a percentile means nothing.
+    # Computed from the seeds on every read, so old stored baselines get it too.
+    real_ret = (real or {}).get("total_return_pct")
+    out["no_spread"] = bool(
+        real_ret is not None
+        and k
+        and all(s.get("total_return_pct") is not None and abs(s["total_return_pct"] - real_ret) < 1e-6 for s in seeds)
+    )
     out["caveat"] = (
         f"Only {k} random run{'s' if k != 1 else ''}: the real run's percentile moves in steps of "
         f"{100 / k:.0f} points and the smallest chance-of-luck figure it can show is {1 / (k + 1):.2f}. "

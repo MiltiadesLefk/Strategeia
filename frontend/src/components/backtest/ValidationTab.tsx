@@ -461,8 +461,8 @@ function ValidationDetail({ id }: { id: number }) {
       {agg && (
         <div className="stat-grid">
           <StatCard label="Out-of-sample return" value={pct(agg.total_return_pct)} note={`${agg.trading_days} test days stitched`} />
-          <StatCard label="Out-of-sample Sharpe" value={num(agg.sharpe)} note={`in-sample avg ${num(agg.in_sample_sharpe_mean)}`} />
-          <StatCard label="Folds positive" value={`${agg.folds_positive} of ${agg.folds}`} note="out-of-sample return above 0" />
+          <StatCard label="Out-of-sample Sharpe" value={agg.trade_count === 0 ? 'n/a' : num(agg.sharpe)} note={agg.trade_count === 0 ? 'no closed out-of-sample trades' : `in-sample avg ${num(agg.in_sample_sharpe_mean)}`} />
+          <StatCard label="Folds positive" value={agg.trade_count === 0 ? 'n/a' : `${agg.folds_positive} of ${agg.folds}`} note={agg.trade_count === 0 ? 'no closed out-of-sample trades' : 'out-of-sample return above 0'} />
           <StatCard label="Trades" value={String(agg.trade_count)} note={`max drawdown ${num(agg.max_drawdown_pct, 1)}%`} />
         </div>
       )}
