@@ -52,10 +52,6 @@ def get_status() -> StatusResponse:
     settings = load_app_settings()
     provider = get_llm_provider(settings)
     ai_online = provider.name != "none" and provider.is_configured()
-    # Matches _maybe_get_ai_opinion's own gate in trade_plan_service.py: the
-    # overlay only ever actually calls out when the toggle is on AND a real,
-    # configured provider is selected — not just whether the checkbox is on.
-    ai_overlay_online = settings.ai_trading_overlay_enabled and ai_online
     finnhub_online = bool(settings.finnhub_enabled and settings.finnhub_api_key)
     telegram_online = bool(settings.telegram_bot_token and settings.telegram_chat_id)
     return StatusResponse(
@@ -64,7 +60,6 @@ def get_status() -> StatusResponse:
         # Only providers with a public `model` pin (the Claude CLI) report one.
         ai_model=getattr(provider, "model", "") or "" if ai_online else "",
         ai_decision_model=_distinct_decision_model(provider) if ai_online else "",
-        ai_overlay_online=ai_overlay_online,
         finnhub_online=finnhub_online,
         telegram_online=telegram_online,
     )

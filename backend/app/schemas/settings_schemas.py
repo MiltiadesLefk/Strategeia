@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.config import AiOverlayObjectionAction, ResearchMode, WatchersAction, normalize_api_model, normalize_claude_cli_model, normalize_clock_time
+from app.config import ResearchMode, WatchersAction, normalize_api_model, normalize_claude_cli_model, normalize_clock_time
 from app.llm_providers.base import LLMTier
 
 # Longest member name accepted in the Congress follow list (real names are well under 60).
@@ -32,14 +32,7 @@ class SettingsUpdateRequest(BaseModel):
     gemini_decision_model: str | None = None
     finnhub_enabled: bool | None = None
     finnhub_api_key: str | None = None
-    ai_trading_overlay_enabled: bool | None = None
-    ai_plan_take_enabled: bool | None = None
     ai_chart_insight_enabled: bool | None = None
-    # How much the overlay's opinion counts (see AppSettings): whether an
-    # objection costs confidence points, and what it does to the trade.
-    # Both were previously settable only by hand-editing settings.json.
-    ai_overlay_scores_confidence: bool | None = None
-    ai_overlay_objection_action: AiOverlayObjectionAction | None = None
     min_confidence_for_trade: int | None = Field(default=None, ge=0, le=100)
     research_mode: ResearchMode | None = None
     telegram_bot_token: str | None = None
@@ -48,9 +41,6 @@ class SettingsUpdateRequest(BaseModel):
     committee_max_llm_calls: int | None = Field(default=None, ge=6, le=40)
     committee_debate_rounds: int | None = Field(default=None, ge=1, le=3)
     committee_risk_rounds: int | None = Field(default=None, ge=1, le=3)
-    committee_gate_enabled: bool | None = None
-    committee_gate_action: Literal["cancel", "hold"] | None = None
-    committee_gate_max_per_scan: int | None = Field(default=None, ge=1, le=20)
     scan_universe_size: int | None = Field(default=None, gt=0)
     news_cards_enabled: bool | None = None
     news_card_batch_limit: int | None = Field(default=None, ge=1, le=30)
@@ -72,14 +62,9 @@ class SettingsUpdateRequest(BaseModel):
     smart_money_min_score: float | None = Field(default=None, ge=0, le=30)
     smart_money_max_open_positions: int | None = Field(default=None, ge=1, le=50)
     smart_money_max_new_per_week: int | None = Field(default=None, ge=0, le=20)
-    smart_money_max_holding_days: int | None = Field(default=None, ge=0, le=200)
     smart_money_max_companies_per_poll: int | None = Field(default=None, ge=10, le=2000)
     smart_money_max_evaluations_per_run: int | None = Field(default=None, ge=1, le=100)
     max_concurrent_positions: int | None = Field(default=None, gt=0)
-    # Trading days before a stalled position is closed at the close; 0 = no limit.
-    # Capped at 60 (about three months): the exit scan reads 3 months of bars
-    # and has to see the entry bar to count days from it.
-    max_holding_days: int | None = Field(default=None, ge=0, le=60)
     hold_stop_pct: float | None = Field(default=None, ge=0, le=60)
     hold_alert_drawdown_pct: float | None = Field(default=None, ge=0, le=60)
     hold_target_weight_pct: float | None = Field(default=None, gt=0, le=25)
@@ -99,10 +84,6 @@ class SettingsUpdateRequest(BaseModel):
 
     liquidity_slippage_enabled: bool | None = None
     liquidity_slippage_coefficient: float | None = Field(default=None, ge=0, le=1000)
-    scale_out_enabled: bool | None = None
-    scale_out_fraction: float | None = Field(default=None, ge=0.1, le=0.9)
-    scale_out_stop_mode: Literal["breakeven", "trail"] | None = None
-    scale_out_trail_r: float | None = Field(default=None, ge=0.25, le=5)
     kill_switch_enabled: bool | None = None
     kill_switch_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
     kill_switch_drift_psi: float | None = Field(default=None, ge=0, le=5)
@@ -260,10 +241,7 @@ class TestConnectionResponse(BaseModel):
 class StatusResponse(BaseModel):
     """Mirrors the sidebar's 'Trading Bot Online' indicator shape for four more
     signals: whether the configured LLM provider is real (not just the
-    NullLLMProvider echo fallback), whether the AI Trading Overlay will
-    actually produce a second opinion right now (enabled AND a real provider
-    is configured — matches _maybe_get_ai_opinion's own gate in
-    trade_plan_service.py, not just whether the checkbox is on), whether
+    NullLLMProvider echo fallback), whether
     Finnhub is configured, and whether Telegram notifications are configured."""
 
     ai_online: bool
@@ -277,6 +255,5 @@ class StatusResponse(BaseModel):
     # decision model is set (both tiers use the routine model) or there is no
     # AI provider.
     ai_decision_model: str = ""
-    ai_overlay_online: bool
     finnhub_online: bool
     telegram_online: bool
