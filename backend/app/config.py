@@ -751,6 +751,12 @@ class AppSettings(BaseModel):
     hold_max_new_per_scan: int = Field(default=3, ge=0, le=50)
     # A smart-money buy that fails the quality gate still buys, at this % of the normal slice.
     hold_failed_gate_size_pct: float = Field(default=50.0, gt=0, le=100)
+    # Sell plan (F4): consecutive closes under the 200-day that count as a bad signal; the trail
+    # (% under the high since entry) a profitable position's stop is raised to on one signal, 0 =
+    # breakeven; days a stopped-out or sold stock waits before it may be bought again.
+    sell_ma200_days: int = Field(default=5, ge=1, le=60)
+    sell_trail_pct: float = Field(default=10.0, ge=0, le=50)
+    rebuy_cooldown_days: int = Field(default=30, ge=0, le=365)
 
     # F2: the daily hold scan also looks at tickers named in the morning's headlines that are outside
     # the universe (off by default). They get the same gate, caps and buy path; this caps how many are tried.

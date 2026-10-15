@@ -166,6 +166,10 @@ class PaperPosition(SQLModel, table=True):
     mode: str = "swing"
     alerted_drawdown_at: Optional[datetime] = None
     alerted_ma200_at: Optional[datetime] = None
+    # Sell plan (F4): the bad signals last seen on this hold position (the review list), and when the
+    # sell plan raised its stop (the hold exit scan only looks at bars after that day).
+    sell_signals: Optional[str] = None
+    stop_raised_at: Optional[datetime] = None
     status: str = "open"
     closed_at: Optional[datetime] = None
     close_price: Optional[float] = None
@@ -327,3 +331,17 @@ class Sleeve(SQLModel, table=True):
     color: Optional[str] = None  # chip colour (hex), shown wherever the sleeve is named
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow_naive)
+
+
+class RebuyWatch(SQLModel, table=True):
+    """A hold position closed by its stop or the sell plan: may be bought again after a cooldown (F4)."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True)
+    sold_position_id: int = Field(foreign_key="paperposition.id", unique=True)
+    sold_at: datetime
+    sold_price: float
+    sold_reason: str
+    # watching -> rebought (rebuy_position_id set) or dropped (the rebuy was stopped again, for good).
+    status: str = "watching"
+    rebuy_position_id: Optional[int] = Field(default=None, foreign_key="paperposition.id")

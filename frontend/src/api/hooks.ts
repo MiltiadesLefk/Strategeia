@@ -32,6 +32,7 @@ import type {
   WatchlistSymbolCheck,
 } from './types';
 import type { CalibrationReport } from './types';
+import type { RebuyWatchItem } from './types';
 import type { CalendarResponse, EarningsPreview } from './types';
 import type { MissedTradeRefresh, MissedTradeReport } from './types';
 import type { ReviewBuyResponse, ReviewItem, ReviewList, SleeveReport } from './types';
@@ -1365,3 +1366,10 @@ export function useRefreshFinra() {
   });
 }
 
+
+export function useRebuyWatch() {
+  return useQuery({
+    queryKey: ['rebuy-watch'],
+    queryFn: () => api.get<RebuyWatchItem[]>('/api/portfolio/rebuy-watch'),
+  });
+}

@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { getDisplayTimeZone } from '../lib/timezone';
-import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useSettings, useSettingsStatus } from '../api/hooks';
+import { useAnalysis, useEquityCurve, useClosePosition, useResetPortfolio, usePortfolioStats, usePositions, useRebuyWatch, useSettings, useSettingsStatus } from '../api/hooks';
 import { PauseHistoryCard, SleeveSwitcher, SleevesOverview, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { LessonCell, LessonDetailRow } from '../components/TradeLesson';
 import { ThesisBrokenBadge, ThesisPanel } from '../components/ThesisPanel';
@@ -31,6 +31,24 @@ const CLOSE_REASON_LABELS: Record<string, string> = {
   disaster_stop: 'Disaster stop',
   manual: 'Manual',
 };
+function RebuyWatchList() {
+  const { data } = useRebuyWatch();
+  if (!data?.length) return null;
+  return (
+    <div className="card">
+      <h3>Rebuy watch</h3>
+      <ul>
+        {data.map((r) => (
+          <li key={r.id}>
+            {r.symbol}: sold {r.sold_at.slice(0, 10)} at {formatMoney(r.sold_price)} ({r.sold_reason}), {r.status}
+            {r.status === 'watching' ? `, can be bought again from ${r.eligible_from.slice(0, 10)} if it passes the gate and dips` : ''}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function closeReasonLabel(reason: string | null): string {
   return reason ? (CLOSE_REASON_LABELS[reason] ?? reason) : '—';
 }
@@ -264,6 +282,7 @@ export function PortfolioPage() {
       {resetError && <ErrorBanner message={(resetError as ApiError).message} />}
 
       <HoldingsCard sleeve={sleeve} />
+      <RebuyWatchList />
 
       {statsLoading && <LoadingSpinner label="Loading portfolio…" />}
       {stats && (
