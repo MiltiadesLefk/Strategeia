@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSettings, useUpdateSettings } from '../api/hooks';
+import { useAutoSave } from '../api/useAutoSave';
 import { ToggleSwitch } from './common';
 import type { AppSettings } from '../api/types';
 
@@ -37,26 +38,32 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_review_days', label: 'Review each holding every (days)', hint: 'A message with a fresh quality check; never sells. 0 = off.' },
 ];
 
-/** Portfolio builder controls. Saved on their own button. */
+function fromSettings(data: AppSettings): Draft {
+  return {
+    hold_buy_only_dips: data.hold_buy_only_dips,
+    hold_stop_pct: data.hold_stop_pct, hold_alert_drawdown_pct: data.hold_alert_drawdown_pct,
+    hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
+    hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
+    hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
+    hold_add_on_dips: data.hold_add_on_dips, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
+    sell_ma200_days: data.sell_ma200_days, sell_trail_pct: data.sell_trail_pct, rebuy_cooldown_days: data.rebuy_cooldown_days,
+    hold_review_days: data.hold_review_days,
+  };
+}
+
+/** Portfolio builder controls. Saved on their own, a moment after the last change. */
 export function HoldSettingsCard() {
   const { data } = useSettings();
-  const { mutate, isPending, isSuccess } = useUpdateSettings();
+  const { mutate, isPending } = useUpdateSettings();
   const [draft, setDraft] = useState<Draft | null>(null);
 
   useEffect(() => {
-    if (data) {
-      setDraft({
-        hold_buy_only_dips: data.hold_buy_only_dips,
-        hold_stop_pct: data.hold_stop_pct, hold_alert_drawdown_pct: data.hold_alert_drawdown_pct,
-        hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
-        hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
-        hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
-        hold_add_on_dips: data.hold_add_on_dips, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
-        sell_ma200_days: data.sell_ma200_days, sell_trail_pct: data.sell_trail_pct, rebuy_cooldown_days: data.rebuy_cooldown_days,
-        hold_review_days: data.hold_review_days,
-      });
-    }
+    if (data) setDraft(fromSettings(data));
   }, [data]);
+  const saved = data ? JSON.stringify(fromSettings(data)) : '';
+  const current = draft ? JSON.stringify(draft) : '';
+  const valid = !!draft && NUMBER_FIELDS.every((f) => Number.isFinite(draft[f.key] as number) && (draft[f.key] as number) >= 0);
+  useAutoSave(current, !!draft && current !== saved, valid, () => draft && mutate(draft));
   if (!draft) return null;
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft({ ...draft, [key]: value });
 
@@ -88,12 +95,7 @@ export function HoldSettingsCard() {
           <div className="text-muted" style={{ fontSize: 12 }}>{f.hint}</div>
         </div>
       ))}
-      <div>
-        <button className="btn btn-primary" disabled={isPending} onClick={() => mutate(draft)}>
-          {isPending ? 'Saving…' : 'Save portfolio builder settings'}
-        </button>
-        {isSuccess && <span className="text-muted" style={{ marginLeft: 10, fontSize: 13 }}>Saved.</span>}
-      </div>
+      {isPending && <div className="text-muted" style={{ fontSize: 13 }}>Saving…</div>}
     </div>
   );
 }

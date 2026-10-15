@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Tabs } from '../components/Tabs';
 import { TimeZoneCard } from '../components/TimeZoneCard';
 import { useSettings, useTestConnection, useUpdateSettings, useWatchlist } from '../api/hooks';
+import { useAutoSave } from '../api/useAutoSave';
 import { LoadingSpinner, ToggleSwitch } from '../components/common';
 import { SecretField } from '../components/SecretField';
 import { DecisionModelField } from '../components/DecisionModelField';
@@ -356,7 +357,6 @@ export function SettingsPage() {
         liquidity_slippage_enabled: liquiditySlippage,
         liquidity_slippage_coefficient: liquidityCoefficient,
       },
-      { onSuccess: () => flashSaved('account') },
     );
   }
 
@@ -366,7 +366,6 @@ export function SettingsPage() {
         auto_scan_enabled: autoScanEnabled,
         max_concurrent_positions: maxConcurrentPositions,
       },
-      { onSuccess: () => flashSaved('automation') },
     );
   }
 
@@ -408,23 +407,23 @@ export function SettingsPage() {
     resetTelegramTest();
   }
 
-  function resetAccount() {
-    if (!settings) return;
-    setStartingCash(settings.paper_starting_cash);
-    setDefaultRiskPct(settings.default_risk_pct);
-    setScanSize(settings.scan_universe_size);
-    setAutoExecute(settings.auto_execute_trade_plans);
-    setMinConfidence(settings.min_confidence_for_trade);
-    setMarkToMarketMinutes(settings.mark_to_market_interval_minutes);
-    setLiquiditySlippage(settings.liquidity_slippage_enabled ?? false);
-    setLiquidityCoefficient(settings.liquidity_slippage_coefficient ?? 100);
-  }
-
-  function resetAutomation() {
-    if (!settings) return;
-    setAutoScanEnabled(settings.auto_scan_enabled);
-    setMaxConcurrentPositions(settings.max_concurrent_positions);
-  }
+  const accountDirty = !!settings && (
+    startingCash !== settings.paper_starting_cash || defaultRiskPct !== settings.default_risk_pct ||
+    scanSize !== settings.scan_universe_size || autoExecute !== settings.auto_execute_trade_plans ||
+    minConfidence !== settings.min_confidence_for_trade || markToMarketMinutes !== settings.mark_to_market_interval_minutes ||
+    liquiditySlippage !== (settings.liquidity_slippage_enabled ?? false) ||
+    liquidityCoefficient !== (settings.liquidity_slippage_coefficient ?? 100)
+  );
+  const accountValid = startingCash > 0 && defaultRiskPct > 0 && markToMarketMinutes >= 1 &&
+    minConfidence >= 0 && minConfidence <= 100 && liquidityCoefficient >= 0 && liquidityCoefficient <= 1000;
+  useAutoSave(
+    [startingCash, defaultRiskPct, scanSize, autoExecute, minConfidence, markToMarketMinutes, liquiditySlippage, liquidityCoefficient].join('|'),
+    accountDirty, accountValid, saveAccount,
+  );
+  const automationDirty = !!settings && (
+    autoScanEnabled !== settings.auto_scan_enabled || maxConcurrentPositions !== settings.max_concurrent_positions
+  );
+  useAutoSave(`${autoScanEnabled}|${maxConcurrentPositions}`, automationDirty, true, saveAutomation);
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
 
@@ -806,10 +805,7 @@ export function SettingsPage() {
             to plans you generate by hand as well as ones from Auto-Scan.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'account'} onClick={saveAccount} />
-          <ResetButton onClick={resetAccount} />
-        </div>
+        {saving && <div className="text-muted" style={{ fontSize: 13 }}>Saving…</div>}
         <div className="text-muted" style={{ fontSize: 12 }}>
           Starting cash only takes effect for a fresh paper account — use "Reset Paper Account" on the Portfolio page
           to apply a changed value to an account that already has history.
@@ -856,10 +852,7 @@ export function SettingsPage() {
             risk. Applies to auto-scan only, not manual "Execute Trade Plan" clicks.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'automation'} onClick={saveAutomation} />
-          <ResetButton onClick={resetAutomation} />
-        </div>
+        {saving && <div className="text-muted" style={{ fontSize: 13 }}>Saving…</div>}
       </div>
 
           <KillSwitchSettingsCard />

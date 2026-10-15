@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSettings, useUpdateSettings } from '../api/hooks';
+import { useAutoSave } from '../api/useAutoSave';
 import { ToggleSwitch } from './common';
 
 /** Kill switches on the Settings page: pause a sleeve's new positions after a drawdown or when live results drift. */
@@ -19,6 +20,8 @@ export function KillSwitchSettingsCard() {
   const ps = Number(psi);
   const valid = drawdown !== '' && psi !== '' && dd >= 0 && dd <= 100 && ps >= 0 && ps <= 5;
   const dirty = !!settings && (dd !== settings.kill_switch_drawdown_pct || ps !== settings.kill_switch_drift_psi);
+
+  useAutoSave(`${drawdown}|${psi}`, dirty, valid, () => update.mutate({ kill_switch_drawdown_pct: dd, kill_switch_drift_psi: ps }));
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="kill-switch-settings">
@@ -46,14 +49,6 @@ export function KillSwitchSettingsCard() {
           Drift limit (PSI, 0.25 is a large shift)
           <input type="number" min={0} max={5} step={0.05} value={psi} onChange={(e) => setPsi(e.target.value)} />
         </label>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!valid || !dirty || update.isPending}
-          onClick={() => update.mutate({ kill_switch_drawdown_pct: dd, kill_switch_drift_psi: ps })}
-        >
-          Save limits
-        </button>
       </div>
       {update.error && (
         <span className="text-red" style={{ fontSize: 13 }}>
