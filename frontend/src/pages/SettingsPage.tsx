@@ -370,15 +370,6 @@ export function SettingsPage() {
     );
   }
 
-  function saveAiChart(card = 'ai-overlay') {
-    update(
-      {
-        ai_chart_insight_enabled: aiChartInsight,
-      },
-      { onSuccess: () => flashSaved(card) },
-    );
-  }
-
   function resetLlm() {
     if (!settings) return;
     setLlmProvider(settings.llm_provider);
@@ -433,11 +424,6 @@ export function SettingsPage() {
     if (!settings) return;
     setAutoScanEnabled(settings.auto_scan_enabled);
     setMaxConcurrentPositions(settings.max_concurrent_positions);
-  }
-
-  function resetAiChart() {
-    if (!settings) return;
-    setAiChartInsight(settings.ai_chart_insight_enabled);
   }
 
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
@@ -648,7 +634,10 @@ export function SettingsPage() {
                 name="research-mode"
                 value={opt.value}
                 checked={researchMode === opt.value}
-                onChange={() => setResearchMode(opt.value)}
+                onChange={() => {
+                  setResearchMode(opt.value);
+                  update({ research_mode: opt.value }); // a radio saves on its own
+                }}
                 style={{ width: 'auto', marginTop: 3 }}
               />
               <span>
@@ -667,10 +656,6 @@ export function SettingsPage() {
                 : 'The selected provider has no web search, so research answers will use our data only.'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'research'} onClick={() => saveLlm('research')} disabled={llmMissingKey || claudeModelInvalid || decisionModelBad} />
-          <ResetButton onClick={resetLlm} />
-        </div>
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -681,13 +666,17 @@ export function SettingsPage() {
           and no AI call is made for it. One call per chart load while on.
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <ToggleSwitch checked={aiChartInsight} onChange={setAiChartInsight} label="Write the AI insight on each chart" />
+          <ToggleSwitch
+            checked={aiChartInsight}
+            onChange={(v) => {
+              setAiChartInsight(v);
+              update({ ai_chart_insight_enabled: v }); // a switch saves on its own
+            }}
+            disabled={saving}
+            label="Write the AI insight on each chart"
+          />
           <span>Write the AI insight on each chart</span>
           <OnOffBadge on={aiChartInsight} />
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <SaveButton pending={saving} justSaved={justSavedKey === 'ai-chart'} onClick={() => saveAiChart('ai-chart')} />
-          <ResetButton onClick={resetAiChart} />
         </div>
       </div>
 
