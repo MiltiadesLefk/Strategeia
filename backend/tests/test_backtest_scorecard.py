@@ -179,3 +179,8 @@ def test_the_price_only_banner_still_appears_when_a_run_stored_no_coverage_and_f
 def test_a_run_with_no_equity_still_builds_a_scorecard():
     card = build_scorecard(compute_metrics([], [], CASH), None, None, None, {})
     assert card["counts"]["total"] == 7 and len(card["banners"]) == 4
+
+
+def test_a_baseline_with_no_spread_is_insufficient_not_a_pass():
+    card = build_scorecard(metrics_for(), None, {**baseline_with(100.0, 20), "no_spread": True}, None, COSTS)
+    assert statuses(card)["beats_baseline"] == INSUFFICIENT

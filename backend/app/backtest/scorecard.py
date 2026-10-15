@@ -137,6 +137,8 @@ def _baseline_check(baseline: Mapping[str, Any] | None, criteria: Criteria) -> d
     if not baseline or not baseline.get("available"):
         reason = (baseline or {}).get("note") or (baseline or {}).get("reason") or "no random-entry baseline was run"
         return _check("beats_baseline", label, criterion, INSUFFICIENT, "n/a", reason)
+    if baseline.get("no_spread"):  # every random run equals the real run: a percentile of that is not evidence
+        return _check("beats_baseline", label, criterion, INSUFFICIENT, "n/a", "Every random run did the same as the real run (too few symbols to tell luck from skill).")
     placement = (baseline.get("placement") or {}).get("total_return_pct")
     seeds = len(baseline.get("seeds", []))
     if not placement:
