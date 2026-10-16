@@ -33,11 +33,11 @@ def market_8k_symbols(session: Session, settings: AppSettings, now: datetime | N
     return list(dict.fromkeys(f.symbol.upper() for f in fresh))[:MAX_MARKET_8K_PER_RUN]
 
 
-MAX_WIRE_PER_RUN = 20  # wire-feed tickers looked at per scan
+MAX_WIRE_PER_RUN = 30  # wire-feed tickers looked at per scan
 
 
 def wire_news_headlines(settings: AppSettings, now: datetime | None = None) -> dict[str, str]:
-    """{ticker: headline} for market-wide press releases (PR Newswire / Business Wire RSS) that carry an exchange tag, sit inside
+    """{ticker: headline} for market-wide press releases (wire RSS feeds, plus a Google News search of the four big wires) that carry an exchange tag, sit inside
     the lookback window and match a big-news pattern with no negative one. Any ticker, universe or not. A feed that fails is
     skipped; `find_big_news` still re-checks each headline and the live quote is proved by `check_quality`."""
     from app.analysis.big_news import classify_headline, is_negative
@@ -59,6 +59,14 @@ def wire_news_headlines(settings: AppSettings, now: datetime | None = None) -> d
                 continue
             for ticker in tickers_in_text(f"{r.title} {r.summary}"):
                 found.setdefault(ticker, r.title)
+    try:  # whole market: GlobeNewswire / Business Wire / PR Newswire / ACCESS Newswire releases via Google News RSS
+        from app.data_providers.wire_search import wire_ticker_headlines
+
+        for ticker, title in wire_ticker_headlines(settings.big_news_lookback_hours, now).items():
+            if classify_headline(title) is not None and not is_negative(title):
+                found.setdefault(ticker, title)
+    except Exception:  # noqa: BLE001 - the SEC map or Google may be down; the other sources still count
+        logger.info("Big news: whole-market wire search skipped", exc_info=True)
     return dict(list(found.items())[:MAX_WIRE_PER_RUN])
 
 
