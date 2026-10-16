@@ -103,7 +103,7 @@ export function HoldSettingsCard() {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.big_news_buy_enabled} onChange={(v) => set('big_news_buy_enabled', v)} label="Big-news buys" />
-        <span>Buy a watched stock on a big headline (FDA approval, contract, takeover offer, guidance raise...) without the quality check, at a smaller size (off by default)</span>
+        <span>Buy a stock on a big headline or 8-K filing, from the watchlist or the whole market (wire releases, SEC filings) (FDA approval, contract, takeover offer, guidance raise...) without the quality check, at a smaller size (off by default)</span>
       </div>
       <div>
         <label>Disaster stop trigger</label>

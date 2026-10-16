@@ -33,6 +33,35 @@ def market_8k_symbols(session: Session, settings: AppSettings, now: datetime | N
     return list(dict.fromkeys(f.symbol.upper() for f in fresh))[:MAX_MARKET_8K_PER_RUN]
 
 
+MAX_WIRE_PER_RUN = 20  # wire-feed tickers looked at per scan
+
+
+def wire_news_headlines(settings: AppSettings, now: datetime | None = None) -> dict[str, str]:
+    """{ticker: headline} for market-wide press releases (PR Newswire / Business Wire RSS) that carry an exchange tag, sit inside
+    the lookback window and match a big-news pattern with no negative one. Any ticker, universe or not. A feed that fails is
+    skipped; `find_big_news` still re-checks each headline and the live quote is proved by `check_quality`."""
+    from app.analysis.big_news import classify_headline, is_negative
+    from app.data_providers.base import DataProviderError
+    from app.data_providers.pr_newswire import FEED_URLS, fetch_feed_text, parse_feed, tickers_in_text
+
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    found: dict[str, str] = {}
+    for url in FEED_URLS:
+        try:
+            releases = parse_feed(fetch_feed_text(url))
+        except (DataProviderError, ValueError):
+            logger.info("Big news: wire feed %s skipped", url)
+            continue
+        for r in releases:
+            if r.published_at is None or (now - r.published_at).total_seconds() > settings.big_news_lookback_hours * 3600:
+                continue
+            if classify_headline(r.title) is None or is_negative(r.title):
+                continue
+            for ticker in tickers_in_text(f"{r.title} {r.summary}"):
+                found.setdefault(ticker, r.title)
+    return dict(list(found.items())[:MAX_WIRE_PER_RUN])
+
+
 def find_big_news(
     settings: AppSettings, data_provider: DataProvider, session: Session, symbol: str, now: datetime | None = None,
     extra_headline: str | None = None,

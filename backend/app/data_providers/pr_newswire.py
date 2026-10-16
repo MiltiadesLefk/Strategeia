@@ -59,12 +59,22 @@ logger = logging.getLogger(__name__)
 
 SOURCE_LABEL = "PR Newswire"
 PRN_HOST_PREFIX = "https://www.prnewswire.com/"
+# Release links must sit on one of the wires we read (Business Wire links are plain http).
+ALLOWED_LINK_PREFIXES: tuple[str, ...] = (PRN_HOST_PREFIX, "https://www.businesswire.com/", "http://www.businesswire.com/")
 # The all-releases feed plus the financial-services one (where public-company
 # earnings and deal announcements concentrate). Each carries only the newest
 # ~20 releases, so a run is a few minutes of coverage, not a backfill.
 FEED_URLS: tuple[str, ...] = (
     "https://www.prnewswire.com/rss/news-releases-list.rss",
     "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss",
+    "https://www.prnewswire.com/rss/health-latest-news/health-latest-news-list.rss",
+    "https://www.prnewswire.com/rss/technology-latest-news/technology-latest-news-list.rss",
+    "https://www.prnewswire.com/rss/energy-latest-news/energy-latest-news-list.rss",
+    "https://www.prnewswire.com/rss/consumer-products-retail-latest-news/consumer-products-retail-latest-news-list.rss",
+    # Business Wire (verified to answer scripted reads; GlobeNewswire answers 403 Access Denied, so it is not read).
+    # This one is the Technology: Satellite News category; Business Wire gives no public all-news URL, so add
+    # broader category feed URLs here (from businesswire.com's RSS page) to widen coverage.
+    "https://feed.businesswire.com/rss/home/?rss=G1QFDERJXkJeGVtRVA==",
 )
 USER_AGENT = "Strategeia/1.0 (personal research dashboard; reads public PR Newswire RSS feeds)"
 
@@ -211,7 +221,7 @@ def _parse_pub_date(raw: str) -> datetime | None:
 
 def parse_feed(xml_text: str) -> list[PressRelease]:
     """Every usable <item> in an RSS document. An item with no title, or a link
-    that is not on prnewswire.com, is skipped; a broken document raises ValueError.
+    that is not on prnewswire.com or businesswire.com, is skipped; a broken document raises ValueError.
 
     A DOCTYPE or entity declaration is refused outright: a plain RSS feed has
     neither, and refusing them rules out entity-expansion tricks."""
@@ -229,7 +239,7 @@ def parse_feed(xml_text: str) -> list[PressRelease]:
     for item in root.iter("item"):
         title = _plain_text(item.findtext("title") or "")[:MAX_HEADLINE_LENGTH]
         link = (item.findtext("link") or item.findtext("guid") or "").strip()
-        if not title or not link.startswith(PRN_HOST_PREFIX):
+        if not title or not link.startswith(ALLOWED_LINK_PREFIXES):
             continue
         raw_date = (item.findtext("pubDate") or "").strip()
         releases.append(

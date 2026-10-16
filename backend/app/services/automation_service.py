@@ -97,7 +97,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         except Exception:
             logger.exception("Hold scan: failed to evaluate %s", symbol)
     if settings.big_news_buy_enabled and not market_closed:
-        from app.services.big_news_service import big_news_scan_symbol, market_8k_symbols
+        from app.services.big_news_service import big_news_scan_symbol, market_8k_symbols, wire_news_headlines
         from app.services.news_discovery_service import discover_from_news
 
         # Big-news lane, whole market: the watchlist, tickers named in watched stocks' headlines, and companies with a
@@ -108,6 +108,9 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
                 extras.setdefault(ticker, headline)
             for ticker in market_8k_symbols(session, settings):
                 extras.setdefault(ticker, None)
+            for ticker, headline in wire_news_headlines(settings).items():
+                if extras.get(ticker) is None:
+                    extras[ticker] = headline
         except Exception:
             logger.exception("Big-news lane: could not gather market-wide candidates")
         for symbol, headline in extras.items():
