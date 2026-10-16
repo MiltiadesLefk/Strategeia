@@ -37,6 +37,7 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof 
   { to: '/screener', label: 'Screener', icon: 'screener' },
   { to: '/analysis', label: 'Analysis', icon: 'analysis' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
+  { to: '/ratings', label: 'Ratings', icon: 'plans' },
   { to: '/portfolio', label: 'Portfolio', icon: 'portfolio' },
   { to: '/terminal', label: 'Market Terminal', icon: 'terminal' },
   { to: '/smart-money', label: 'Smart Money', icon: 'smartMoney' },

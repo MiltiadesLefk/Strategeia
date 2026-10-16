@@ -42,6 +42,7 @@ class GateResult:
     passed: bool
     checks: list[GateCheck]
     dip: bool = False  # price-only: see is_dip
+    detail: dict | None = None  # the evidence rating's per-part points and reasons (services/rating_service)
 
     @property
     def failed_reasons(self) -> list[str]:

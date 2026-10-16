@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 def hold_scan_symbol(
     settings: AppSettings, data_provider: DataProvider, session: Session, engine, symbol: str, reason: str,
     *, price_only: bool = False, skip_gate: bool = False, evidence=None, rate: bool = False,
+    run_id: str | None = None,
 ) -> bool:
     """One symbol of the hold scan: gate, dip rule, hold buy. True = bought. Shared by the live scan and the
     backtest (`price_only` = the trend check alone, the only part of the gate knowable at a past date;
@@ -35,13 +37,15 @@ def hold_scan_symbol(
     )
     from app.services.hold_buy_service import check_quality, hold_buy
 
+    rating_row = None
     try:
         dip = False
         if not skip_gate:
             if rate:
-                from app.services.rating_service import rate_stock
+                from app.services.rating_service import rate_stock, record_rating
 
                 gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
+                rating_row = record_rating(session, run_id, "scan", symbol, "quality", gate) if run_id else None
             else:
                 gate = check_quality(data_provider, symbol, price_only=price_only, session=session)
             if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
@@ -56,6 +60,10 @@ def hold_scan_symbol(
             if evidence.points:
                 reason += f" ({evidence.describe()})"
         hold_buy(session, engine, data_provider, settings, symbol, reason=reason + (" and is in a dip" if dip else ""))
+        if rating_row is not None:
+            rating_row.bought = True
+            session.add(rating_row)
+            session.commit()
         return True
     except (InsufficientCashError, DuplicatePositionError, MaxPositionsExceededError, SectorConcentrationError,
             SleeveDisabledError, StalePlanError) as exc:
@@ -76,6 +84,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
     if not settings.auto_execute_trade_plans:
         return []  # buying on its own is exactly what that switch turns off
     held = {p.symbol for p in session.exec(select(PaperPosition).where(PaperPosition.status == "open")).all()}
+    run_id = uuid.uuid4().hex  # groups this scan's ratings for the Ratings page
     engine = build_sleeve_engine(session, data_provider, settings, hold=True)
     bought: list[str] = []
     candidates = {s: "hold scan [quality lane]: passed the quality gate" for s in get_default_watchlist(settings.scan_universe_size) if s not in held}
@@ -96,7 +105,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         if len(bought) >= settings.hold_max_new_per_scan:
             break
         try:
-            if hold_scan_symbol(settings, data_provider, session, engine, symbol, reason, evidence=evidence.get(symbol), rate=True):
+            if hold_scan_symbol(settings, data_provider, session, engine, symbol, reason, evidence=evidence.get(symbol), rate=True, run_id=run_id):
                 bought.append(symbol)
         except MarketClosedError:
             logger.info("Hold scan stopped: the market is closed")

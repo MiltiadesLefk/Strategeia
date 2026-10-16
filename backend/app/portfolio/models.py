@@ -346,3 +346,22 @@ class RebuyWatch(SQLModel, table=True):
     # watching -> rebought (rebuy_position_id set) or dropped (the rebuy was stopped again, for good).
     status: str = "watching"
     rebuy_position_id: Optional[int] = Field(default=None, foreign_key="paperposition.id")
+
+
+class RatingRecord(SQLModel, table=True):
+    """One stock's evidence rating in one run (the morning hold scan or a manual run): the history page reads these."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: str = Field(index=True)
+    run_at: datetime = Field(default_factory=utcnow_naive, index=True)
+    source: str  # "scan" | "manual"
+    symbol: str = Field(index=True)
+    lane: str = "quality"
+    points: int = 0
+    max_points: int = 32
+    percent: int = 0
+    passed: bool = False
+    dip: bool = False
+    bought: bool = False
+    note: str = ""
+    detail_json: str = "{}"  # per-part points and the reason each part scored what it did

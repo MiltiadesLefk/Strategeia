@@ -8,6 +8,7 @@ so `hold_scan_symbol` treats it like the quality gate (and keeps the price-only 
 
 from __future__ import annotations
 
+import json
 import logging
 
 from sqlmodel import Session
@@ -32,6 +33,7 @@ from app.analysis.trend import analyze_chart
 from app.data_providers.base import DataProvider
 from app.data_providers.cache import fresh_data_only
 from app.knowledge.point_in_time import is_simulated
+from app.portfolio.models import RatingRecord
 
 logger = logging.getLogger(__name__)
 DIRECTION = "long"  # hold mode only buys
@@ -104,4 +106,42 @@ def rate_stock(data_provider: DataProvider, symbol: str, bar_pct: int, session: 
     passed = percent >= bar_pct
     note = f"{total}/{MAX_SCORE_FOR_CONFIDENCE} points = {percent}% (bar {bar_pct}%)" + (f": {shown}" if shown else "")
     closes = [float(c) for c in ohlcv["close"]]
-    return GateResult(passed, [GateCheck("rating", passed, note)], dip=is_dip(closes))
+    why = {k: "; ".join(v) for k, v in reasons.items() if k != "extra" and v}
+    why.update({k: n for k, n in extra.notes.items() if n})
+    detail = {"points": total, "max": MAX_SCORE_FOR_CONFIDENCE, "percent": percent, "bar_pct": bar_pct,
+              "parts": {labels.get(k, k): v for k, v in parts.items()},
+              "why": {labels.get(k, k): w for k, w in why.items()}}
+    return GateResult(passed, [GateCheck("rating", passed, note)], dip=is_dip(closes), detail=detail)
+
+
+def record_rating(session: Session, run_id: str, source: str, symbol: str, lane: str, gate: GateResult) -> RatingRecord | None:
+    """Save one rating for the history page. Best-effort: a database problem never changes a buy decision."""
+    d = gate.detail or {}
+    try:
+        row = RatingRecord(run_id=run_id, source=source, symbol=symbol, lane=lane, points=d.get("points", 0),
+                           max_points=d.get("max", MAX_SCORE_FOR_CONFIDENCE), percent=d.get("percent", 0), passed=gate.passed,
+                           dip=gate.dip, note=gate.checks[0].note if gate.checks else "", detail_json=json.dumps(d))
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return row
+    except Exception:  # noqa: BLE001
+        logger.warning("could not save the rating of %s", symbol, exc_info=True)
+        session.rollback()
+        return None
+
+
+def rate_universe(settings, data_provider: DataProvider, session: Session, run_id: str, source: str = "manual") -> int:
+    """Rate every watchlist stock and save the results; buys nothing. Returns how many were rated."""
+    from app.data_providers.universe import get_default_watchlist
+
+    done = 0
+    for symbol in get_default_watchlist(settings.scan_universe_size):
+        try:
+            gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
+        except Exception:  # noqa: BLE001 - one stock with no data must not stop the run
+            logger.info("Rating run: %s could not be rated", symbol, exc_info=True)
+            continue
+        record_rating(session, run_id, source, symbol, "quality", gate)
+        done += 1
+    return done

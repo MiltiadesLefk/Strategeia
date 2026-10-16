@@ -20,6 +20,7 @@ const loaders = {
   '/screener': () => import('./pages/ScreenerPage').then((m) => ({ default: m.ScreenerPage })),
   '/analysis': () => import('./pages/AnalysisPage').then((m) => ({ default: m.AnalysisPage })),
   '/calendar': () => import('./pages/CalendarPage').then((m) => ({ default: m.CalendarPage })),
+  '/ratings': () => import('./pages/RatingsPage').then((m) => ({ default: m.RatingsPage })),
   '/portfolio': () => import('./pages/PortfolioPage').then((m) => ({ default: m.PortfolioPage })),
   '/smart-money': () => import('./pages/SmartMoneyPage').then((m) => ({ default: m.SmartMoneyPage })),
   '/terminal': () => import('./pages/MarketTerminalPage').then((m) => ({ default: m.MarketTerminalPage })),
@@ -36,6 +37,7 @@ export const MarketScanPage = lazy(loaders['/scan']);
 export const ScreenerPage = lazy(loaders['/screener']);
 export const AnalysisPage = lazy(loaders['/analysis']);
 export const CalendarPage = lazy(loaders['/calendar']);
+export const RatingsPage = lazy(loaders['/ratings']);
 export const PortfolioPage = lazy(loaders['/portfolio']);
 export const SmartMoneyPage = lazy(loaders['/smart-money']);
 export const MarketTerminalPage = lazy(loaders['/terminal']);

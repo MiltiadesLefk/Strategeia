@@ -57,6 +57,8 @@ import type {
   BacktestScorecard,
   BacktestStartRequest,
   BacktestTrade,
+  RatingRunDetail,
+  RatingRunSummary,
 } from './types';
 
 export const qk = {
@@ -1322,5 +1324,32 @@ export function useRebuyWatch() {
   return useQuery({
     queryKey: ['rebuy-watch'],
     queryFn: () => api.get<RebuyWatchItem[]>('/api/portfolio/rebuy-watch'),
+  });
+}
+
+/** History of the evidence ratings: every morning scan and manual run. Polls while a run is going. */
+export function useRatingRuns() {
+  return useQuery({
+    queryKey: ['rating-runs'] as const,
+    queryFn: () => api.get<RatingRunSummary[]>('/api/ratings/runs'),
+    refetchInterval: (q) => (q.state.data?.some((r) => r.running) ? 4000 : false),
+  });
+}
+
+export function useRatingRun(runId: string | null) {
+  return useQuery({
+    queryKey: ['rating-run', runId] as const,
+    queryFn: () => api.get<RatingRunDetail>(`/api/ratings/runs/${runId}`),
+    enabled: !!runId,
+    refetchInterval: (q) => (q.state.data?.running ? 4000 : false),
+  });
+}
+
+/** Rates the whole watchlist now and saves it as a run; buys nothing. */
+export function useStartRatingRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ run_id: string }>('/api/ratings/run'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rating-runs'] }),
   });
 }

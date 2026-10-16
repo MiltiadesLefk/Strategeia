@@ -2685,3 +2685,42 @@ export interface RebuyWatchItem {
   rebuy_position_id: number | null;
   eligible_from: string;
 }
+
+export interface RatingRunSummary {
+  run_id: string;
+  run_at: string;
+  source: 'scan' | 'manual';
+  rated: number;
+  passed: number;
+  bought: number;
+  running: boolean;
+}
+
+export interface RatingDetail {
+  points: number;
+  max: number;
+  percent: number;
+  bar_pct: number;
+  parts: Record<string, number>;
+  why: Record<string, string>;
+}
+
+export interface RatingRow {
+  symbol: string;
+  lane: string;
+  points: number;
+  max_points: number;
+  percent: number;
+  passed: boolean;
+  bought: boolean;
+  dip: boolean;
+  note: string;
+  run_at: string;
+  detail: Partial<RatingDetail>;
+}
+
+export interface RatingRunDetail {
+  run_id: string;
+  running: boolean;
+  ratings: RatingRow[];
+}

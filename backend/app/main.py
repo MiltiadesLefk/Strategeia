@@ -13,7 +13,7 @@ from app.api.routers import valuation as valuation_router
 from app.api.routers import screener as screener_router
 from app.api.routers import alerts as price_alerts_router
 from app.api.routers import notes as notes_router
-from app.api.routers import analysis, archive, auth, dashboard, market, portfolio, research, risk, scanner, settings
+from app.api.routers import analysis, archive, auth, dashboard, market, portfolio, ratings, research, risk, scanner, settings
 from app.api.routers import signals as signals_router
 from app.api.routers import sleeves as sleeves_router
 from app.api.routers import forecast_lab as forecast_lab_router
@@ -116,6 +116,7 @@ def all_providers_failed_handler(request: Request, exc: AllProvidersFailedError)
 
 app.include_router(auth.router)
 app.include_router(scanner.router)
+app.include_router(ratings.router)
 app.include_router(screen_presets_router.router)
 app.include_router(analysis.router)
 app.include_router(research.router)
