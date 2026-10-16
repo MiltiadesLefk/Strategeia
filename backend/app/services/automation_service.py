@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 
 def hold_scan_symbol(
     settings: AppSettings, data_provider: DataProvider, session: Session, engine, symbol: str, reason: str,
-    *, price_only: bool = False, skip_gate: bool = False, evidence=None,
+    *, price_only: bool = False, skip_gate: bool = False, evidence=None, rate: bool = False,
 ) -> bool:
     """One symbol of the hold scan: gate, dip rule, hold buy. True = bought. Shared by the live scan and the
     backtest (`price_only` = the trend check alone, the only part of the gate knowable at a past date;
+    `rate` = the universe lane's pass rule is the 32-point evidence rating (services/rating_service) instead of the quality gate (live only);
     `skip_gate` = no gate and no dip rule, only the random-entry baseline passes it; `evidence` = a live-only
     EvidenceBonus: negative means not bought, otherwise it is named in the buy reason).
     The engine's refusals are logged and mean "not bought"; MarketClosedError and anything unexpected propagate."""
@@ -37,10 +38,17 @@ def hold_scan_symbol(
     try:
         dip = False
         if not skip_gate:
-            gate = check_quality(data_provider, symbol, price_only=price_only, session=session)
+            if rate:
+                from app.services.rating_service import rate_stock
+
+                gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
+            else:
+                gate = check_quality(data_provider, symbol, price_only=price_only, session=session)
             if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
                 return False
             dip = gate.dip
+            if rate:
+                reason = reason.replace("passed the quality gate", f"passed the evidence rating ({gate.checks[0].note})")
         if evidence is not None:
             if evidence.points < 0:
                 logger.info("Hold scan: %s not bought: negative evidence (%s)", symbol, evidence.describe())
@@ -88,7 +96,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         if len(bought) >= settings.hold_max_new_per_scan:
             break
         try:
-            if hold_scan_symbol(settings, data_provider, session, engine, symbol, reason, evidence=evidence.get(symbol)):
+            if hold_scan_symbol(settings, data_provider, session, engine, symbol, reason, evidence=evidence.get(symbol), rate=True):
                 bought.append(symbol)
         except MarketClosedError:
             logger.info("Hold scan stopped: the market is closed")

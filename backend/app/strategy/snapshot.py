@@ -44,7 +44,7 @@ from app.config import AppSettings
 
 # Bump when rule LOGIC changes in a way no named constant reflects (a new
 # condition in a scorer, a changed formula). Part of every fingerprint.
-RULES_REVISION = 4
+RULES_REVISION = 5
 
 # Settings that always shape a decision, in snapshot order, with the label the
 # change list uses. Everything else in AppSettings is excluded (see above).

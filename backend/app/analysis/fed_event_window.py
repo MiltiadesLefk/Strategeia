@@ -1,4 +1,4 @@
-"""Fed event window as a silent signal (a ShadowSignal reading).
+"""Fed event window as a silent signal (see analysis/shadow_signals.py).
 
 What it reads: whether a Fed policy statement or a Chair speech or testimony was
 published within one day of the moment of the plan. Days like that move the whole
@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session
 
-from app.analysis.shadow_signals import ShadowSignal
+from app.analysis.shadow_signals import ShadowContext, ShadowSignal, shadow_signal
 from app.data_providers.fed_feed import TYPE_POLICY_STATEMENT
 from app.knowledge import FactKind, KnownFact, current_as_of, facts_known_as_of
 
@@ -76,3 +76,7 @@ def build_fed_window_signal(session: Session | None, moment: datetime | None = N
         available=True,
     )
 
+
+@shadow_signal(SIGNAL_NAME)
+def _fed_window_shadow_scorer(context: ShadowContext) -> ShadowSignal:
+    return build_fed_window_signal(context.session)

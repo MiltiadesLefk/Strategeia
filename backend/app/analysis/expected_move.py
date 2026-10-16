@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from app.data_providers.base import OptionsSummary
 
 # Same shape as every other confluence dimension: small, named, capped, and
 # — unlike most of the others — deliberately ONE-DIRECTIONAL. This is a risk
@@ -53,3 +54,54 @@ def compute_expected_move_pct(atm_implied_volatility: float, days: int) -> float
         return None
     return atm_implied_volatility * (days / 365.0) ** 0.5 * 100
 
+
+def score_expected_move(
+    direction: str | None,
+    options: OptionsSummary | None,
+    atr_pct: float | None,
+) -> tuple[int, list[str]]:
+    """Compares the options market's implied expected move (over the time to
+    its nearest usable expiration) against the stock's own ATR-implied
+    "normal" move over that same horizon. When the options market is pricing
+    in materially more movement than the stock's recent realized behavior —
+    ELEVATED_RATIO_THRESHOLD or more — that is real information extracted
+    from current prices: something is being priced in, whether or not this
+    scan happens to know what.
+
+    Deliberately never a bonus: an ordinary/low implied move contributes 0,
+    same as a calm VIX reading contributes 0. Missing options coverage
+    (crypto, thin names), a missing ATR read, or a too-near expiration all
+    contribute 0 rather than being guessed at.
+    """
+    if options is None or options.atm_implied_volatility is None or not atr_pct:
+        return 0, []
+
+    days = days_to_expiration(options.expiration)
+    if days is None or days < MIN_DAYS_FOR_RELIABLE_READ:
+        return 0, []
+
+    expected_move_pct = compute_expected_move_pct(options.atm_implied_volatility, days)
+    if expected_move_pct is None:
+        return 0, []
+
+    # ATR is a DAILY figure; scale it to the same horizon the same way IV is
+    # scaled — sqrt(time) — so the two "expected move over N days" numbers are
+    # actually comparable rather than comparing a daily figure to a multi-week one.
+    realized_move_pct = atr_pct * (days ** 0.5)
+    if realized_move_pct <= 0:
+        return 0, []
+
+    ratio = expected_move_pct / realized_move_pct
+    if ratio < ELEVATED_RATIO_THRESHOLD:
+        return 0, []
+
+    # direction is accepted for signature consistency with every other scorer
+    # in this module family, but genuinely unused: this is a magnitude/risk
+    # read, not a directional opinion, so it penalizes a long and a short on
+    # the same setup identically — see the module docstring.
+    del direction
+    reason = (
+        f"options market pricing a {expected_move_pct:.1f}% move by {options.expiration} — "
+        f"{ratio:.1f}x this stock's own recent range for that horizon"
+    )
+    return -EXPECTED_MOVE_SCORE_CAP, [reason]

@@ -1,4 +1,4 @@
-"""FINRA short-sale volume as a silent signal (a ShadowSignal reading).
+"""FINRA short-sale volume as a silent signal (see analysis/shadow_signals.py).
 
 What it reads: the share of a stock's recent traded volume that was sold short,
 compared with that stock's own usual share. An unusually HIGH share is read as
@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from sqlmodel import Session
 
-from app.analysis.shadow_signals import ShadowSignal
-from app.signals.finra import ShortVolumeReading, short_volume_ratio_as_of
+from app.analysis.shadow_signals import ShadowContext, ShadowSignal, shadow_signal
+from app.signals.finra import ShortVolumeReading, reading_is_fresh, short_volume_ratio_as_of
 
 SIGNAL_NAME = "finra_short_volume"
 # Largest swing this signal would add in either direction.
@@ -75,3 +75,8 @@ def build_short_volume_signal(direction: str | None, reading: ShortVolumeReading
 def _read(session: Session | None, symbol: str):
     return short_volume_ratio_as_of(session, symbol) if session is not None else None
 
+
+@shadow_signal(SIGNAL_NAME)
+def _finra_shadow_scorer(context: ShadowContext) -> ShadowSignal:
+    reading = _read(context.session, context.symbol)
+    return build_short_volume_signal(context.direction, reading, fresh=reading is None or reading_is_fresh(reading))

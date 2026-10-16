@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from datetime import date
 
-from app.data_providers.base import NewsItem
+from app.data_providers.base import CompanyOverview, FinancialYear, NewsItem
 
 # Deliberately simple keyword matching, not sentiment ML/an LLM call — same
 # "non-ML, rule-based, named thresholds" spirit as analysis/trend.py and
@@ -61,3 +63,47 @@ def score_news_sentiment(news: list[NewsItem], direction: str | None = None) -> 
             reasons.append(f"negative headline: “{item.headline}”")
     return max(-NEWS_SCORE_CAP, min(NEWS_SCORE_CAP, score)), reasons
 
+
+def score_fundamentals(
+    overview: CompanyOverview,
+    financial_years: list[FinancialYear],
+    earnings_date: date | None,
+    price: float,
+    direction: str | None = None,
+) -> tuple[int, list[str]]:
+    """Fundamental confluence, signed for `direction` — see _direction_sign.
+
+    The earnings-imminent check is the one genuinely direction-neutral
+    factor here: an earnings print is a volatility event that can gap
+    through a stop either way, so it stays a penalty for longs and shorts
+    alike rather than being flipped."""
+    sign = _direction_sign(direction)
+    score = 0
+    reasons: list[str] = []
+
+    if len(financial_years) >= 2:
+        latest, prior = financial_years[-1], financial_years[-2]
+        if prior.revenue:
+            if latest.revenue > prior.revenue:
+                score += sign
+                growth_pct = (latest.revenue - prior.revenue) / prior.revenue * 100
+                reasons.append(f"revenue grew {growth_pct:.1f}% YoY")
+            elif latest.revenue < prior.revenue:
+                score -= sign
+                decline_pct = (prior.revenue - latest.revenue) / prior.revenue * 100
+                reasons.append(f"revenue declined {decline_pct:.1f}% YoY")
+
+    if overview.week52_high and price >= overview.week52_high * (1 - NEAR_52W_HIGH_PCT):
+        score += sign
+        reasons.append("trading within 5% of its 52-week high")
+    elif overview.week52_low and price <= overview.week52_low * (1 + NEAR_52W_LOW_PCT):
+        score -= sign
+        reasons.append("trading within 5% of its 52-week low")
+
+    if earnings_date:
+        days_until = (earnings_date - date.today()).days
+        if 0 <= days_until <= EARNINGS_IMMINENT_DAYS:
+            score -= 1  # direction-neutral: event risk cuts both ways
+            reasons.append(f"earnings in {days_until} day{'s' if days_until != 1 else ''} — elevated event risk")
+
+    return max(-FUNDAMENTAL_SCORE_CAP, min(FUNDAMENTAL_SCORE_CAP, score)), reasons

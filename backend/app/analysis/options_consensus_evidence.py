@@ -35,6 +35,25 @@ def open_interest_ratio(chain: OptionsChain | None) -> tuple[float, float, float
     return puts / calls, puts, calls
 
 
+def score_options_open_interest(direction: str | None, chain: OptionsChain | None) -> tuple[int, list[str]]:
+    reading = open_interest_ratio(chain)
+    if reading is None or direction not in ("long", "short"):
+        return 0, []
+    ratio, puts, calls = reading
+    if ratio < BULLISH_OI_RATIO:
+        bullish = True
+    elif ratio > BEARISH_OI_RATIO:
+        bullish = False
+    else:
+        return 0, []
+    supports = bullish == (direction == "long")
+    verb = "supports" if supports else "argues against"
+    lean = "call-heavy" if bullish else "put-heavy"
+    return (1 if supports else -1) * OPTIONS_OI_SCORE_CAP, [
+        f"options open interest is {lean} (put/call {ratio:.2f}, {puts:,.0f} puts vs {calls:,.0f} calls), which {verb} a {direction}"
+    ]
+
+
 def consensus_growth_pct(
     estimate: EarningsEstimate | None, history: list[EarningsHistoryEntry]
 ) -> tuple[float, float, float] | None:
@@ -50,3 +69,22 @@ def consensus_growth_pct(
         return None
     return (estimate.eps_estimate - last) / last * 100, estimate.eps_estimate, last
 
+
+def score_analyst_consensus(
+    direction: str | None, estimate: EarningsEstimate | None, history: list[EarningsHistoryEntry]
+) -> tuple[int, list[str]]:
+    reading = consensus_growth_pct(estimate, history)
+    if reading is None or direction not in ("long", "short"):
+        return 0, []
+    growth, expected, last = reading
+    if growth >= STRONG_GROWTH_PCT:
+        bullish = True
+    elif growth <= WEAK_FALL_PCT:
+        bullish = False
+    else:
+        return 0, []
+    supports = bullish == (direction == "long")
+    verb = "supports" if supports else "argues against"
+    return (1 if supports else -1) * CONSENSUS_SCORE_CAP, [
+        f"analyst consensus EPS ${expected:.2f} is {growth:+.1f}% against the last reported ${last:.2f}, which {verb} a {direction}"
+    ]
