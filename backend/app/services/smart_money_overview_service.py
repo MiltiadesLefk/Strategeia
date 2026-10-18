@@ -58,6 +58,8 @@ def overview(session: Session, settings: AppSettings, days: int = 30, limit: int
         ranked.append({"symbol": sym, "total": round(scored.result.total, 1), "parts": parts,
                        "reasons": [c.reason for c in scored.result.components][:4]})
     ranked.sort(key=lambda r: -r["total"])
+    scored_count = len(ranked)
+    ranked = [r for r in ranked if r["total"] != 0]  # evidence that earns no points is not a ranking
 
     counts = dict(session.exec(select(SmartMoneyCandidate.status, func.count(SmartMoneyCandidate.id)).group_by(SmartMoneyCandidate.status)).all())
     return {
@@ -73,6 +75,6 @@ def overview(session: Session, settings: AppSettings, days: int = 30, limit: int
             "candidates": {"new": counts.get(CANDIDATE_NEW, 0), "needs_review": counts.get(STATUS_NEEDS_REVIEW, 0), "all": sum(counts.values())},
         },
         "ranked": ranked[:limit],
-        "scored_stocks": len(ranked),
+        "scored_stocks": scored_count,
         "passing": sum(r["total"] >= settings.smart_money_min_score for r in ranked),
     }
