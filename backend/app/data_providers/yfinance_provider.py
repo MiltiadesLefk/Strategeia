@@ -158,7 +158,12 @@ class YFinanceProvider:
                 continue
             if pd.isna(revenue) or pd.isna(net_income):
                 continue  # yfinance sometimes reports a trailing year with no data yet
-            years.append(FinancialYear(year=pd.Timestamp(column).year, revenue=revenue, net_income=net_income))
+            try:
+                op = float(financials.at["Operating Income", column])
+            except (KeyError, TypeError, ValueError):
+                op = float("nan")
+            years.append(FinancialYear(year=pd.Timestamp(column).year, revenue=revenue, net_income=net_income,
+                                       operating_income=None if pd.isna(op) else op))
         years.sort(key=lambda fy: fy.year)
         if not years:
             raise DataProviderError(f"yfinance financials for {symbol} missing Revenue/Net Income rows")

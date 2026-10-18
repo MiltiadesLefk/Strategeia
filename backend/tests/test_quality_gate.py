@@ -40,6 +40,34 @@ def test_growth_bar_is_a_setting_and_acceleration_is_optional():
     assert verdict(require_acceleration=True).failed_reasons[0].startswith("acceleration")  # 2 years: missing data fails
 
 
+def _oi(o0, o1, r1=114e6):
+    return [FinancialYear(2024, 100e6, 10e6, o0), FinancialYear(2025, r1, 14e6, o1)]
+
+
+def test_operating_leverage_is_optional_and_never_guesses():
+    assert [c.name for c in verdict(financial_years=_oi(10e6, 20e6)).checks] == ["trend", "growth", "profit", "valuation"]
+    assert verdict(financial_years=_oi(10e6, 20e6), require_operating_leverage=True).passed  # +100% vs +14%
+    assert verdict(financial_years=_oi(10e6, 11e6), require_operating_leverage=True).failed_reasons[0].startswith("operating_leverage")
+    assert not verdict(financial_years=GOOD_YEARS, require_operating_leverage=True).passed  # None fails
+    assert not verdict(financial_years=_oi(10e6, None), require_operating_leverage=True).passed
+    assert not verdict(financial_years=_oi(10e6, 20e6, r1=90e6), min_growth_pct=-50, require_operating_leverage=True).passed  # shrinking revenue
+    assert not verdict(financial_years=GOOD_YEARS[:1], require_operating_leverage=True).passed
+    assert verdict(price_only=True, require_operating_leverage=True).passed
+
+
+def test_operating_leverage_zero_or_negative_prior_base():
+    for base in (0.0, -5e6):
+        assert verdict(financial_years=_oi(base, 3e6), require_operating_leverage=True).passed  # swung to profit
+        assert not verdict(financial_years=_oi(base, base), require_operating_leverage=True).passed
+        assert not verdict(financial_years=_oi(base, -1e6), require_operating_leverage=True).passed
+
+
+def test_financial_year_operating_income_round_trips():
+    from app.data_providers.cache_codec import decode_value, encode_value
+    fy = [FinancialYear(2024, 1.0, 2.0, 3.0), FinancialYear(2025, 1.0, 2.0)]
+    assert decode_value(encode_value(fy)) == fy
+
+
 def test_ma200_slope_and_extension_are_optional_and_fail_on_missing_data():
     assert [c.name for c in verdict().checks] == ["trend", "growth", "profit", "valuation"]  # defaults add no check
     assert verdict(price_only=True).checks == verdict(price_only=True, max_extension_above_ma200_pct=0.0, require_rising_ma200=False).checks

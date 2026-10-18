@@ -658,6 +658,8 @@ class AppSettings(BaseModel):
     # optionally it must also beat the year before's growth (needs 3 reported years; missing data fails).
     hold_min_revenue_growth_pct: float = Field(default=5.0, ge=0, le=100)
     require_growth_acceleration: bool = False
+    # Operating leverage: operating income must grow faster than revenue (missing operating income fails).
+    require_operating_leverage: bool = False
     # Volume checks (all off): the gate's "volume" check fails on distribution (up-day volume <= 1/1.3 of down-day
     # volume over 20 days); require_accumulation is stricter (must show accumulation). The sell plan counts
     # distribution while the price is under its 50-day average as one signal.

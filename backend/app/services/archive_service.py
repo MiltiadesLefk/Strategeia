@@ -193,6 +193,7 @@ def _snapshot_payloads(
     """
     years = [
         {"year": int(fy.year), "revenue": _finite(fy.revenue), "net_income": _finite(fy.net_income)}
+        | ({"operating_income": _finite(fy.operating_income)} if fy.operating_income is not None else {})  # key absent keeps old snapshots unchanged
         for fy in financial_years
     ]
     core = {
@@ -372,7 +373,8 @@ def fundamentals_from_fact(fact: KnownFact) -> tuple[CompanyOverview, list[Finan
         week52_high=p.get("week52_high"),
     )
     years = [
-        FinancialYear(year=int(y["year"]), revenue=float(y["revenue"]), net_income=float(y["net_income"]))
+        FinancialYear(year=int(y["year"]), revenue=float(y["revenue"]), net_income=float(y["net_income"]),
+                      operating_income=None if y.get("operating_income") is None else float(y["operating_income"]))
         for y in p.get("financial_years", [])
         if y.get("revenue") is not None and y.get("net_income") is not None
     ]

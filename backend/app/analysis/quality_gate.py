@@ -49,6 +49,19 @@ class GateResult:
         return [f"{c.name}: {c.note}" for c in self.checks if not c.ok]
 
 
+def _operating_leverage_check(latest: FinancialYear, prior: FinancialYear, revenue_growth: float) -> GateCheck:
+    """Operating income grew faster than revenue, and revenue grew. Unreported figures fail, never a guess."""
+    o1, o0 = latest.operating_income, prior.operating_income
+    if o1 is None or o0 is None:
+        return GateCheck("operating_leverage", False, "operating income not reported for both years")
+    if revenue_growth <= 0:
+        return GateCheck("operating_leverage", False, f"revenue {revenue_growth:+.1f}% (must be growing)")
+    if o0 <= 0:  # a percentage off a zero or negative base means nothing: only a swing to a profit counts
+        return GateCheck("operating_leverage", o1 > 0, f"operating income ${o0 / 1e6:,.0f}M -> ${o1 / 1e6:,.0f}M (no % off a base of zero or less; passes only by turning positive)")
+    og = (o1 - o0) / o0 * 100
+    return GateCheck("operating_leverage", og > revenue_growth, f"operating income {og:+.1f}% vs revenue {revenue_growth:+.1f}%")
+
+
 def evaluate_quality_gate(
     price: float,
     closes: list[float],
@@ -63,6 +76,7 @@ def evaluate_quality_gate(
     require_accumulation: bool = False,  # AppSettings.require_accumulation (stricter)
     require_rising_ma200: bool = False,  # AppSettings.require_rising_ma200
     max_extension_above_ma200_pct: float = 0.0,  # AppSettings.max_extension_above_ma200_pct (0 = off)
+    require_operating_leverage: bool = False,  # AppSettings.require_operating_leverage
 ) -> GateResult:
     checks: list[GateCheck] = []
 
@@ -98,6 +112,8 @@ def evaluate_quality_gate(
                 checks.append(GateCheck("acceleration", growth > before, f"growth {growth:+.1f}% vs {before:+.1f}% the year before"))
             else:
                 checks.append(GateCheck("acceleration", False, f"{len(financial_years)} reported year(s) of financials, three needed"))
+        if require_operating_leverage:
+            checks.append(_operating_leverage_check(latest, prior, growth))
         margin = latest.net_income / latest.revenue * 100 if latest.revenue else None
         checks.append(
             GateCheck("profit", latest.net_income > 0, f"net income ${latest.net_income / 1e6:,.0f}M"
@@ -108,6 +124,8 @@ def evaluate_quality_gate(
         checks += [GateCheck("growth", False, note), GateCheck("profit", False, note)]
         if require_acceleration:
             checks.append(GateCheck("acceleration", False, note))
+        if require_operating_leverage:
+            checks.append(GateCheck("operating_leverage", False, note))
 
     if overview is None:
         checks.append(GateCheck("valuation", False, "no company overview"))

@@ -135,4 +135,5 @@ def check_quality(
         min_growth_pct=s.hold_min_revenue_growth_pct, require_acceleration=s.require_growth_acceleration,
         volume_ratio=ratio, block_on_distribution=s.block_on_distribution, require_accumulation=s.require_accumulation,
         require_rising_ma200=s.require_rising_ma200, max_extension_above_ma200_pct=s.max_extension_above_ma200_pct,
+        require_operating_leverage=s.require_operating_leverage,
     )

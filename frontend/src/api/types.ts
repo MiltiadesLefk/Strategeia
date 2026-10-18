@@ -395,6 +395,7 @@ export interface AppSettings {
   /** Quality gate: minimum year-on-year revenue growth %, and whether growth must also accelerate. */
   hold_min_revenue_growth_pct: number;
   require_growth_acceleration: boolean;
+  require_operating_leverage: boolean;
   /** Volume (all off): the gate fails on distribution / needs accumulation; the sell plan counts distribution under the 50-day. */
   block_on_distribution: boolean;
   require_accumulation: boolean;
@@ -496,6 +497,7 @@ export interface SettingsUpdateRequest {
   hold_failed_gate_size_pct?: number;
   hold_min_revenue_growth_pct?: number;
   require_growth_acceleration?: boolean;
+  require_operating_leverage?: boolean;
   block_on_distribution?: boolean;
   require_accumulation?: boolean;
   sell_on_distribution?: boolean;

@@ -272,6 +272,15 @@ def test_archived_facts_convert_back_to_scorer_shapes(session):
     assert [y.year for y in years] == [2023, 2024]
 
 
+def test_operating_income_survives_the_snapshot(session):
+    from app.data_providers.base import FinancialYear
+
+    ys = [FinancialYear(2023, 1e9, 1e8, 2e8), FinancialYear(2024, 1.1e9, 1.2e8)]
+    archive_fundamentals(session, "AAPL", _overview(), ys, "yfinance", fetched_at=T_FETCH)
+    _, back = fundamentals_from_fact(latest_fundamentals_snapshot(session, "AAPL"))
+    assert [y.operating_income for y in back] == [2e8, None]
+
+
 # --- the best-effort wrapper -------------------------------------------------------------------
 
 

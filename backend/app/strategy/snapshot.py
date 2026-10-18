@@ -67,6 +67,7 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_failed_gate_size_pct": "hold failed-gate size %",
     "hold_min_revenue_growth_pct": "gate min revenue growth %",
     "require_growth_acceleration": "gate requires growth acceleration",
+    "require_operating_leverage": "gate requires operating leverage",
     "block_on_distribution": "gate blocks on distribution",
     "require_accumulation": "gate requires accumulation",
     "sell_on_distribution": "sell plan counts distribution",

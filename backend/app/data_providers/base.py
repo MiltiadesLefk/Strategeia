@@ -41,6 +41,7 @@ class FinancialYear:
     year: int
     revenue: float
     net_income: float
+    operating_income: float | None = None  # only yfinance fills it; None = not reported, never a guess
 
 
 @dataclass

@@ -76,6 +76,7 @@ class SettingsUpdateRequest(BaseModel):
     hold_failed_gate_size_pct: float | None = Field(default=None, gt=0, le=100)
     hold_min_revenue_growth_pct: float | None = Field(default=None, ge=0, le=100)
     require_growth_acceleration: bool | None = None
+    require_operating_leverage: bool | None = None
     block_on_distribution: bool | None = None
     require_accumulation: bool | None = None
     sell_on_distribution: bool | None = None
