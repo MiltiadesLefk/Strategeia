@@ -17,6 +17,8 @@ from app.schemas.smart_money_schemas import (
     InsiderTradesResponse,
 )
 from app.services import smart_money_service as service
+from app.services.smart_money_overview_service import overview as build_overview
+from app.smartmoney.tracker import smart_money_score_as_of
 
 router = APIRouter(prefix="/api/smart-money", tags=["smart-money"], dependencies=[Depends(require_auth)])
 
@@ -83,3 +85,27 @@ def refresh_insiders(
     _last_insider_refresh_monotonic = now
     symbols = body.symbols if body and body.symbols else service.default_refresh_symbols(settings.scan_universe_size)
     return service.refresh_insiders(session, symbols)
+
+
+@router.get("/score/{symbol}")
+def get_smart_money_score(
+    symbol: str, session: Session = Depends(get_session), settings: AppSettings = Depends(get_app_settings)
+) -> dict:
+    """All smart-money sources of one stock in one score (insiders, Congress, 13F funds, 5% owners, 8-Ks), with the
+    points and the reason of each part. The same scorer the morning scan uses; read-only."""
+    scored = smart_money_score_as_of(session, symbol.strip().upper(), None, settings)
+    return {
+        "symbol": scored.symbol,
+        "total": scored.result.total,
+        "min_score": settings.smart_money_min_score,
+        "components": [{"source": c.source, "points": c.points, "reason": c.reason} for c in scored.result.components],
+    }
+
+
+@router.get("/overview")
+def get_smart_money_overview(
+    days: int = DaysQuery, limit: int = Query(30, ge=1, le=100),
+    session: Session = Depends(get_session), settings: AppSettings = Depends(get_app_settings),
+) -> dict:
+    """Totals of every source (insiders, Congress, funds, 5% owners, candidates) and the stocks ranked by combined score."""
+    return build_overview(session, settings, days, limit)

@@ -119,7 +119,7 @@ function ClusterRow({ c }: { c: CongressCluster }) {
   );
 }
 
-function CongressTradesTable({ trades }: { trades: CongressTrade[] }) {
+export function CongressTradesTable({ trades }: { trades: CongressTrade[] }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       <table>

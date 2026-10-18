@@ -308,3 +308,19 @@ def test_crypto_is_left_out_of_the_default_refresh_list(monkeypatch):
     )
     assert service.default_refresh_symbols(10) == ["AAPL", "MSFT"]
     assert service.default_refresh_symbols(1) == ["AAPL"]
+
+
+def test_score_endpoint_returns_every_source_with_its_points(client, seeded):
+    body = client.get("/api/smart-money/score/aaa").json()
+    assert body["symbol"] == "AAA" and body["min_score"] == 3.0
+    assert body["total"] > 0 and {c["source"] for c in body["components"]} == {"insider"}
+    assert all(c["reason"] for c in body["components"])
+    assert client.get("/api/smart-money/score/NOPE").json()["total"] == 0
+
+
+def test_overview_adds_up_the_sources_and_ranks_by_combined_score(client, seeded):
+    body = client.get("/api/smart-money/overview?days=30").json()
+    assert body["totals"]["insider"]["buys"] >= 2 and body["totals"]["congress"] == {"buys": 0, "sells": 0, "members": 0}
+    assert body["ranked"][0]["symbol"] == "AAA" and body["ranked"][0]["parts"]["insider"] > 0
+    assert [r["total"] for r in body["ranked"]] == sorted((r["total"] for r in body["ranked"]), reverse=True)
+    assert body["passing"] == sum(r["total"] >= body["min_score"] for r in body["ranked"])

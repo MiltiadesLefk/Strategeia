@@ -39,7 +39,7 @@ function OwnershipNotes() {
   );
 }
 
-function FilingRow({ f }: { f: OwnershipFiling }) {
+export function FilingRow({ f }: { f: OwnershipFiling }) {
   const [open, setOpen] = useState(false);
   return (
     <tr>

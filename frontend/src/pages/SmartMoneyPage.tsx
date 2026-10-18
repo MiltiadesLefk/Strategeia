@@ -14,6 +14,7 @@ import { ReviewQueueTab } from '../components/smartmoney/ReviewQueueTab';
 import { SleeveReportTab } from '../components/smartmoney/SleeveReportTab';
 import { CandidatesTab } from '../components/smartmoney/CandidatesTab';
 import { CongressTab } from '../components/smartmoney/CongressTab';
+import { OverviewTab } from '../components/smartmoney/OverviewTab';
 import { ActivistsTab } from '../components/smartmoney/ActivistsTab';
 import { FundsTab } from '../components/smartmoney/FundsTab';
 import { InsiderTradesTable, RoleBadges, formatAccepted } from '../components/smartmoney/InsiderTradesTable';
@@ -34,10 +35,11 @@ const SIDE_OPTIONS: { value: SmartMoneySide; label: string }[] = [
   { value: 'sells', label: 'Sells only' },
 ];
 
-type SourceTab = 'review' | 'sleeves' | 'candidates' | 'insiders' | 'congress' | 'funds' | 'activists';
+type SourceTab = 'overview' | 'review' | 'sleeves' | 'candidates' | 'insiders' | 'congress' | 'funds' | 'activists';
 
 function SourceTabs({ tab, onTab }: { tab: SourceTab; onTab: (tab: SourceTab) => void }) {
   const tabs: { value: SourceTab; label: string }[] = [
+    { value: 'overview', label: 'Overview (all sources)' },
     { value: 'review', label: 'Review queue' },
     { value: 'sleeves', label: 'Sleeve report' },
     { value: 'candidates', label: 'Candidates' },
@@ -237,7 +239,7 @@ function InsidersTab({ status }: { status: SmartMoneyStatus }) {
 
 export function SmartMoneyPage() {
   const status = useSmartMoneyStatus();
-  const [tab, setTab] = useState<SourceTab>('insiders');
+  const [tab, setTab] = useState<SourceTab>('overview');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -252,6 +254,7 @@ export function SmartMoneyPage() {
         </div>
       </div>
       <SourceTabs tab={tab} onTab={setTab} />
+      {tab === 'overview' && <OverviewTab />}
       {tab === 'review' && <ReviewQueueTab />}
       {tab === 'sleeves' && <SleeveReportTab />}
       {tab === 'candidates' && <CandidatesTab />}

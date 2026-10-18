@@ -18,6 +18,7 @@ import { Flash } from '../components/Flash';
 import { FinraPanel } from '../components/FinraPanel';
 import { InsiderPanel } from '../components/smartmoney/InsiderPanel';
 import { FundHoldersPanel } from '../components/smartmoney/FundHoldersPanel';
+import { SmartMoneyScoreCard, StockCongressPanel, StockOwnersPanel } from '../components/smartmoney/StockSmartMoneyPanels';
 import { isAlwaysOpenSymbol } from '../lib/marketHours';
 import { INTRADAY_FALLBACK_RANGE, INTRADAY_UNAVAILABLE_MESSAGE, isIntradayRange } from '../lib/intraday';
 import type { ApiError } from '../api/client';
@@ -641,8 +642,11 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
             </>
           )}
 
+          {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <SmartMoneyScoreCard symbol={data.symbol} />}
           {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <InsiderPanel symbol={data.symbol} />}
           {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <FundHoldersPanel symbol={data.symbol} />}
+          {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <StockCongressPanel symbol={data.symbol} />}
+          {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <StockOwnersPanel symbol={data.symbol} />}
           {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <FinraPanel symbol={data.symbol} />}
         </>
       )}

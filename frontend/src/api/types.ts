@@ -2759,3 +2759,34 @@ export interface RatingRunDetail {
   running: boolean;
   ratings: RatingRow[];
 }
+
+/** One stock's smart-money score across every source (insiders, Congress, funds, 5% owners, 8-Ks), as the morning scan reads it. */
+export interface SmartMoneyScore {
+  symbol: string;
+  total: number;
+  min_score: number;
+  components: { source: string; points: number; reason: string }[];
+}
+
+export interface SmartMoneyOverviewRow {
+  symbol: string;
+  total: number;
+  parts: Record<'insider' | 'house' | 'fund' | 'ownership' | 'filing_8k', number>;
+  reasons: string[];
+}
+
+/** Totals of every smart-money source for a window, and the stocks ranked by combined score. */
+export interface SmartMoneyOverview {
+  days: number;
+  min_score: number;
+  totals: {
+    insider: { buys: number; buy_value: number; sells: number; sell_value: number };
+    congress: { buys: number; sells: number; members: number };
+    funds: { followed_with_filings: number; new_positions: number; added: number };
+    owners: { '13D': number; '13G': number };
+    candidates: { new: number; needs_review: number; all: number };
+  };
+  ranked: SmartMoneyOverviewRow[];
+  scored_stocks: number;
+  passing: number;
+}

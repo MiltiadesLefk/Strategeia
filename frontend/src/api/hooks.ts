@@ -46,6 +46,7 @@ import type {
   SmartMoneyStatus,
 } from './types';
 import type { HeatmapResponse, MacroResponse, RecapResponse, TerminalWindow } from './types';
+import type { SmartMoneyOverview, SmartMoneyScore } from './types';
 import type { SleevePause, FinraRefreshResponse, FinraSymbolResponse, WatcherEvent, WatcherRunResponse, WatchersResponse, WatcherStatus } from './types';
 import type {
   BacktestBaseline,
@@ -1401,5 +1402,21 @@ export function useStartRatingRun() {
   return useMutation({
     mutationFn: () => api.post<{ run_id: string }>('/api/ratings/run'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rating-runs'] }),
+  });
+}
+
+// ---- Smart Money: every source in one score / one overview ----
+
+export function useSmartMoneyScore(symbol: string) {
+  return useQuery({
+    queryKey: ['smart-money', 'score', symbol],
+    queryFn: () => api.get<SmartMoneyScore>(`/api/smart-money/score/${encodeURIComponent(symbol)}`),
+  });
+}
+
+export function useSmartMoneyOverview(days: number) {
+  return useQuery({
+    queryKey: ['smart-money', 'overview', days],
+    queryFn: () => api.get<SmartMoneyOverview>(`/api/smart-money/overview?days=${days}`),
   });
 }
