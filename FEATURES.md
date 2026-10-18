@@ -1111,7 +1111,7 @@ Every call the app makes to a source is counted once, in one place, since the se
 
 | Setting | Default | What it does |
 |---|---|---|
-| AI provider | none | Which AI writes the narratives (§9) |
+| AI provider | claude_code_cli | Which AI writes the narratives and reads the morning news (§9). Needs the `claude` command installed and logged in on the machine; without it the AI steps fall back to plain rules and keyword news. Choose `none` to turn the AI off |
 | Model and key per provider | per provider | For example OpenRouter `anthropic/claude-3.5-haiku`, OpenAI `gpt-4o-mini`, Gemini `gemini-1.5-flash`, OrcaRouter `orcarouter/auto` |
 | Decision model (unused now), per provider (`claude_cli_decision_model`, `openrouter_decision_model`, `orcarouter_decision_model`, `openai_decision_model`, `gemini_decision_model`) | blank | Nothing uses it since the overlay was deleted. Blank = the same model as the provider's normal one. Same characters as the normal model; Gemini's can't contain `/` (§9) |
 | Claude CLI model | `sonnet` | The model the Claude Code CLI is pinned to (`--model`). An alias or a full id; letters, digits and `. _ - : @ [ ]` only, up to 64 characters. Blank = don't pin, use whatever the CLI is set to (§9) |

@@ -438,7 +438,7 @@ class AppSettings(BaseModel):
     log this model's contents, never echo api keys back in API responses.
     """
 
-    llm_provider: LlmProviderName = "none"
+    llm_provider: LlmProviderName = "claude_code_cli"
     openrouter_api_key: str = ""
     openrouter_model: str = "anthropic/claude-3.5-haiku"
     orcarouter_api_key: str = ""
