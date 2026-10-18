@@ -74,6 +74,9 @@ NEWS_CARD_PROMPT = (
     "other. `materiality`: high = earnings results, guidance changes, mergers or acquisitions, major legal or "
     "regulatory outcomes, executive exits; medium = notable but not decisive; low = routine, promotional, "
     "calendar notices or tangential mentions.\n"
+    "- `certainty`: confirmed = the deal or result is done, signed or reported by the company or an agency; "
+    "conditional = announced but still subject to conditions, approvals or final terms; rumor = reported by "
+    "sources, speculated, 'could', 'may', 'in talks' or analyst talk; unclear = the headline does not say.\n"
     "- `is_about_this_company` is false for sector-wide stories and for headlines that only mention the company "
     "in passing.\n"
     "- Return exactly one card per headline, using the headline's number as `index`.\n\n"
@@ -190,6 +193,7 @@ def label_new_items(
     *,
     company_name: str | None = None,
     max_calls: int = MAX_LLM_CALLS_PER_RUN,
+    max_articles: int = MAX_ARTICLE_READS_PER_RUN,
 ) -> LabelRunResult:
     """Label up to `limit` headlines of `symbol` that have no card, in batches.
 
@@ -235,7 +239,7 @@ def label_new_items(
         for index, entry in by_index.items():
             fact = batch[index - 1]
             article = None
-            if entry.sentiment in ("positive", "negative") and result.articles_read < MAX_ARTICLE_READS_PER_RUN:
+            if entry.sentiment in ("positive", "negative") and result.articles_read < max_articles:
                 read = read_article(llm_provider, str(fact.payload.get("url", "")),
                                     str(fact.payload.get("headline", "")), symbol, company_name)
                 if read is not None:

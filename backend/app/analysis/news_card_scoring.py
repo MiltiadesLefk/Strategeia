@@ -59,6 +59,8 @@ def net_news_weight(cards: list[dict]) -> tuple[int, int]:
     for card in cards:
         # When the article body was read, its verdict replaces the headline's.
         read = card.get("article") or card
+        if card.get("certainty") == "rumor":
+            continue  # speculation never earns or costs points
         weight = MATERIALITY_WEIGHT.get(str(read.get("materiality")))
         if weight is None or not card.get("is_about_this_company"):
             continue

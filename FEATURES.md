@@ -178,6 +178,7 @@ Every ticker in the app links to one page per company, `/stock/NVDA` (old `/anal
     switched on in Settings and an AI provider). A headline that has an AI label also shows chips for its
     event type, sentiment and materiality, marked "AI-labelled" (§11, "News cards"). For positive or negative
     headlines the AI also reads the article behind the link, and that reading replaces the headline's in the news score.
+    Each label also says how firm the news is (confirmed, conditional, rumor). The morning rating's news part now uses these labels (up to 3 points either way; a rumor never counts) and falls back to keyword scoring when a stock has none.
   - **Saved history** (News tab): how many news items and fundamentals snapshots the app has saved for
     this stock, and since when, with a note that a backtest can only use news from the day the archive
     began (§11).

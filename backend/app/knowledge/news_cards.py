@@ -42,12 +42,14 @@ CARD_SOURCE = "news_card"
 EventType = Literal["earnings", "guidance", "mna", "product", "legal", "regulatory", "leadership", "analyst", "macro", "other"]
 Sentiment = Literal["positive", "negative", "neutral", "mixed"]
 Materiality = Literal["high", "medium", "low"]
+Certainty = Literal["confirmed", "conditional", "rumor", "unclear"]
 
 EVENT_TYPES: tuple[str, ...] = (
     "earnings", "guidance", "mna", "product", "legal", "regulatory", "leadership", "analyst", "macro", "other",
 )
 SENTIMENTS: tuple[str, ...] = ("positive", "negative", "neutral", "mixed")
 MATERIALITIES: tuple[str, ...] = ("high", "medium", "low")
+CERTAINTIES: tuple[str, ...] = ("confirmed", "conditional", "rumor", "unclear")
 
 MAX_SUMMARY_LENGTH = 200
 MAX_COMPANIES = 10
@@ -72,6 +74,11 @@ class NewsCard(BaseModel):
     materiality: Materiality = Field(
         description="How likely the news is to matter to the stock: high (earnings, guidance, a deal, a "
         "lawsuit outcome), medium, or low (routine, promotional or tangential)."
+    )
+    certainty: Certainty = Field(
+        default="unclear",
+        description="How firm the news is: confirmed (done or signed), conditional (announced but subject to "
+        "conditions or approval), rumor (reported, speculated or unconfirmed), or unclear.",
     )
     companies_mentioned: list[CompanyName] = Field(
         max_length=MAX_COMPANIES, description="Names of the companies the headline mentions, as written."

@@ -22,6 +22,7 @@ from app.analysis.fundamental_scoring import score_fundamentals, score_news_sent
 from app.analysis.indicators import latest_atr
 from app.analysis.insider_scoring import insider_sell_split, score_insider_activity
 from app.analysis.live_evidence import EXTRA_LABELS, evaluate_extra_evidence
+from app.analysis.news_card_scoring import ai_news_score
 from app.analysis.macro_calendar import score_macro_event_proximity
 from app.analysis.market_confirmation import (
     MARKET_PROXY_SYMBOL, VIX_PROXY_SYMBOL, score_market_confirmation, score_vix_regime,
@@ -37,6 +38,7 @@ from app.portfolio.models import RatingRecord
 
 logger = logging.getLogger(__name__)
 DIRECTION = "long"  # hold mode only buys
+AI_NEWS_RATING_CAP = 3  # most points the AI-labelled news can add or remove
 
 
 def _try(read, default=None):
@@ -84,7 +86,9 @@ def rate_stock(data_provider: DataProvider, symbol: str, bar_pct: int, session: 
         parts[key], reasons[key] = scored
 
     add("fundamentals", score_fundamentals(overview, years, earnings_date, price, DIRECTION) if overview else (0, []))
-    add("news", score_news_sentiment(news, DIRECTION))
+    # AI-labelled news (headline label, article read when it was positive/negative) when any exists, else the keyword scorer.
+    ai_available, ai_points, ai_reasons = ai_news_score(session, symbol, DIRECTION, AI_NEWS_RATING_CAP)
+    add("news", (ai_points, ai_reasons) if ai_available else score_news_sentiment(news, DIRECTION))
     add("confluence", score_market_confirmation(DIRECTION, weekly, market_chart))
     add("vix", score_vix_regime(vix))
     add("options", score_options_positioning(DIRECTION, options))
