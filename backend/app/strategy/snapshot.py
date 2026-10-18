@@ -65,6 +65,8 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_max_per_sector": "hold max per sector",
     "hold_max_new_per_scan": "hold max new per scan",
     "hold_failed_gate_size_pct": "hold failed-gate size %",
+    "hold_min_revenue_growth_pct": "gate min revenue growth %",
+    "require_growth_acceleration": "gate requires growth acceleration",
     "evidence_bonus_enabled": "evidence bonus",
     "big_news_buy_enabled": "big-news buys",
     "big_news_size_pct": "big-news size %",
@@ -93,7 +95,7 @@ DECISION_SETTINGS: dict[str, str] = {
 # silently dropping out of the fingerprint.
 RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     # The hold gate's own rules (hold_stop_pct and hold_target_weight_pct are settings above).
-    "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS", "MIN_REVENUE_GROWTH_PCT"),
+    "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS"),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),
     "app.analysis.evidence_bonus": (
         "BONUS_CAP", "BONUS_FLOOR", "INSIDER_CLUSTER_POINTS", "INSIDER_BUY_POINTS", "CONGRESS_BUY_POINTS", "BIG_NEWS_POINTS", "NEGATIVE_NEWS_POINTS",

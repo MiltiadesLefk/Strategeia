@@ -74,6 +74,8 @@ class SettingsUpdateRequest(BaseModel):
     hold_max_per_sector: int | None = Field(default=None, ge=1, le=50)
     hold_max_new_per_scan: int | None = Field(default=None, ge=0, le=50)
     hold_failed_gate_size_pct: float | None = Field(default=None, gt=0, le=100)
+    hold_min_revenue_growth_pct: float | None = Field(default=None, ge=0, le=100)
+    require_growth_acceleration: bool | None = None
     big_news_buy_enabled: bool | None = None
     big_news_size_pct: float | None = Field(default=None, gt=0, le=100)
     big_news_lookback_hours: int | None = Field(default=None, ge=1, le=168)

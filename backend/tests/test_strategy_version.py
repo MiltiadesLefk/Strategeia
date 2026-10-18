@@ -181,7 +181,7 @@ def test_a_code_side_constant_change_bumps_the_fingerprint(monkeypatch, module_p
 
 def test_the_key_stop_and_exit_constants_named_in_the_brief_are_covered():
     covered = {name for _, name in _all_rule_constants()}
-    for name in ("DIP_PCT", "MA_DAYS", "MIN_REVENUE_GROWTH_PCT", "MAX_ENTRY_DRIFT_PCT", "EXIT_SCAN_PERIOD", "SMART_MONEY_MIN_SCORE"):
+    for name in ("DIP_PCT", "MA_DAYS", "MAX_ENTRY_DRIFT_PCT", "EXIT_SCAN_PERIOD", "SMART_MONEY_MIN_SCORE"):
         assert name in covered
 
 

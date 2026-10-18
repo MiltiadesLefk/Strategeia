@@ -654,6 +654,10 @@ class AppSettings(BaseModel):
     hold_max_new_per_scan: int = Field(default=3, ge=0, le=50)
     # A smart-money buy that fails the quality gate still buys, at this % of the normal slice.
     hold_failed_gate_size_pct: float = Field(default=50.0, gt=0, le=100)
+    # Quality gate growth check: latest year's revenue growth must be at least this % (0 = just not shrinking);
+    # optionally it must also beat the year before's growth (needs 3 reported years; missing data fails).
+    hold_min_revenue_growth_pct: float = Field(default=5.0, ge=0, le=100)
+    require_growth_acceleration: bool = False
     # Evidence bonus (analysis/evidence_bonus.py): insider/Congress buys and big news for the stock rank the scan's
     # candidates and skip one with negative news. Never overrides a failed fundamentals check.
     evidence_bonus_enabled: bool = True

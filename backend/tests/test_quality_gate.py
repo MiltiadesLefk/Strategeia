@@ -28,6 +28,18 @@ def test_each_failure_is_named():
     assert verdict(overview=ov(pe=90.0)).failed_reasons[0].startswith("valuation")
 
 
+def test_growth_bar_is_a_setting_and_acceleration_is_optional():
+    slow = [FinancialYear(2024, 100e6, 10e6), FinancialYear(2025, 103e6, 14e6)]  # +3%
+    assert verdict(financial_years=slow).failed_reasons[0].startswith("growth")  # default bar 5%
+    assert verdict(financial_years=slow, min_growth_pct=0.0).passed
+    three = [FinancialYear(2023, 80e6, 8e6), FinancialYear(2024, 100e6, 10e6), FinancialYear(2025, 114e6, 14e6)]  # 25% then 14%
+    assert [c.name for c in verdict(financial_years=three).checks] == ["trend", "growth", "profit", "valuation"]
+    r = verdict(financial_years=three, require_acceleration=True)
+    assert r.failed_reasons[0].startswith("acceleration")
+    assert verdict(financial_years=[three[0], FinancialYear(2024, 100e6, 10e6), FinancialYear(2025, 130e6, 14e6)], require_acceleration=True).passed
+    assert verdict(require_acceleration=True).failed_reasons[0].startswith("acceleration")  # 2 years: missing data fails
+
+
 def test_missing_data_fails_never_guesses():
     r = verdict(closes=RISING[: MA_DAYS - 1], overview=None, financial_years=[])
     assert not r.passed and len(r.failed_reasons) == 4

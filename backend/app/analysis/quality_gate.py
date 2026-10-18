@@ -14,8 +14,6 @@ from app.data_providers.base import CompanyOverview, FinancialYear
 
 # Close above the 200-day average (needs this many daily bars).
 MA_DAYS = 200
-# Latest year's revenue must not be below the prior year's by more than this.
-MIN_REVENUE_GROWTH_PCT = 0.0
 
 
 # The dip rule (PORTOFOLIO_BUILDER O3): a good stock at least this % below its high of the last
@@ -55,6 +53,8 @@ def evaluate_quality_gate(
     overview: CompanyOverview | None,
     financial_years: list[FinancialYear],
     require_trend: bool = True,  # False = the rebuy gate: a stock that just fell is rarely above its 200-day
+    min_growth_pct: float = 5.0,  # AppSettings.hold_min_revenue_growth_pct
+    require_acceleration: bool = False,  # AppSettings.require_growth_acceleration
     price_only: bool = False,  # trend check only (+ the dip flag): what a backtest can know at T. Never a pass by default
 ) -> GateResult:
     checks: list[GateCheck] = []
@@ -73,7 +73,13 @@ def evaluate_quality_gate(
     if len(financial_years) >= 2 and financial_years[-2].revenue:
         latest, prior = financial_years[-1], financial_years[-2]
         growth = (latest.revenue - prior.revenue) / prior.revenue * 100
-        checks.append(GateCheck("growth", growth >= MIN_REVENUE_GROWTH_PCT, f"revenue {growth:+.1f}% year on year"))
+        checks.append(GateCheck("growth", growth >= min_growth_pct, f"revenue {growth:+.1f}% year on year (bar {min_growth_pct:g}%)"))
+        if require_acceleration:
+            if len(financial_years) >= 3 and financial_years[-3].revenue:
+                before = (prior.revenue - financial_years[-3].revenue) / financial_years[-3].revenue * 100
+                checks.append(GateCheck("acceleration", growth > before, f"growth {growth:+.1f}% vs {before:+.1f}% the year before"))
+            else:
+                checks.append(GateCheck("acceleration", False, f"{len(financial_years)} reported year(s) of financials, three needed"))
         margin = latest.net_income / latest.revenue * 100 if latest.revenue else None
         checks.append(
             GateCheck("profit", latest.net_income > 0, f"net income ${latest.net_income / 1e6:,.0f}M"
@@ -82,6 +88,8 @@ def evaluate_quality_gate(
     else:
         note = f"{len(financial_years)} reported year(s) of financials, two needed"
         checks += [GateCheck("growth", False, note), GateCheck("profit", False, note)]
+        if require_acceleration:
+            checks.append(GateCheck("acceleration", False, note))
 
     if overview is None:
         checks.append(GateCheck("valuation", False, "no company overview"))

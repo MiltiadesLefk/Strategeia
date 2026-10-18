@@ -362,7 +362,7 @@ When a symbol lacks the data a required rule needs, it is shown as **not judged*
 by the **quality gate** (`backend/app/analysis/quality_gate.py`), plain rules with no AI:
 
 1. **Trend:** the last close is above the 200-day average (needs 200 daily bars).
-2. **Growth:** the latest year's revenue is not below the prior year's.
+2. **Growth:** the latest year's revenue is up at least `hold_min_revenue_growth_pct` (default 5%; 0 = just not shrinking) on the prior year's. Optional (off): growth must also beat the year before's growth (`require_growth_acceleration`; needs three reported years).
 3. **Profit:** the company is profitable.
 4. **Valuation:** `score_valuation` (P/E, market size) does not call it expensive.
 5. **Dip flag** (price only, not a pass/fail check): the close is 10% or more under the highest close of the last 63

@@ -115,4 +115,10 @@ def check_quality(
         from app.services.archive_service import archive_fetched_data
 
         archive_fetched_data(session, symbol, overview=overview, financial_years=years, news=[], data_provider=data_provider)
-    return evaluate_quality_gate(price, closes, overview, years, require_trend)
+    from app.config import load_app_settings
+
+    s = load_app_settings()
+    return evaluate_quality_gate(
+        price, closes, overview, years, require_trend,
+        min_growth_pct=s.hold_min_revenue_growth_pct, require_acceleration=s.require_growth_acceleration,
+    )
