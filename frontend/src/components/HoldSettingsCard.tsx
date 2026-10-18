@@ -26,6 +26,7 @@ type Draft = Pick<
   | 'big_news_buy_enabled'
   | 'big_news_size_pct'
   | 'big_news_lookback_hours'
+  | 'big_news_skip_if_up_pct'
   | 'hold_stop_mode'
   | 'news_discovery_enabled'
   | 'hold_add_on_dips'
@@ -49,6 +50,7 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_min_revenue_growth_pct', label: 'Quality check: minimum revenue growth (% year on year)', hint: '5 by default. 0 = only not shrinking.', step: 0.5 },
   { key: 'big_news_size_pct', label: 'Size of a big-news buy (% of a normal slice)', hint: 'Only used when big-news buys are on. Half a slice by default (50).' },
   { key: 'big_news_lookback_hours', label: 'Big news counts for (hours)', hint: 'A headline older than this is ignored; a bad headline in this window blocks the buy.' },
+  { key: 'big_news_skip_if_up_pct', label: 'Big news: skip the buy if the stock is already up this % today (0 = off)', hint: 'Avoids buying after a pop. Off by default; you choose the number.', step: 0.5 },
   { key: 'news_discovery_max_per_run', label: 'Max news-discovered tickers per run', hint: 'Only used when news discovery is on.' },
   { key: 'sell_ma200_days', label: 'Sell plan: closes under the 200-day that count as a signal', hint: 'In a row.' },
   { key: 'sell_trail_pct', label: 'Sell plan: stop trails this % below the high (profit, one signal)', hint: '0 = move the stop to breakeven instead.' },
@@ -68,7 +70,7 @@ function fromSettings(data: AppSettings): Draft {
     sell_on_distribution: data.sell_on_distribution,
     require_rising_ma200: data.require_rising_ma200, max_extension_above_ma200_pct: data.max_extension_above_ma200_pct,
     big_news_buy_enabled: data.big_news_buy_enabled, big_news_size_pct: data.big_news_size_pct,
-    big_news_lookback_hours: data.big_news_lookback_hours, hold_stop_mode: data.hold_stop_mode,
+    big_news_lookback_hours: data.big_news_lookback_hours, big_news_skip_if_up_pct: data.big_news_skip_if_up_pct, hold_stop_mode: data.hold_stop_mode,
     hold_add_on_dips: data.hold_add_on_dips, evidence_bonus_enabled: data.evidence_bonus_enabled, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
     sell_ma200_days: data.sell_ma200_days, sell_trail_pct: data.sell_trail_pct, rebuy_cooldown_days: data.rebuy_cooldown_days,
     hold_review_days: data.hold_review_days,

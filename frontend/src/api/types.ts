@@ -419,6 +419,8 @@ export interface AppSettings {
   big_news_buy_enabled: boolean;
   big_news_size_pct: number;
   big_news_lookback_hours: number;
+  /** Big-news lane: skip the buy when the stock is already up this % today. 0 = off. */
+  big_news_skip_if_up_pct: number;
   /** 'touch' = the disaster stop fires when price touches it; 'close' = only a final daily close beyond it. */
   hold_stop_mode: 'close' | 'touch';
 
@@ -519,6 +521,7 @@ export interface SettingsUpdateRequest {
   big_news_buy_enabled?: boolean;
   big_news_size_pct?: number;
   big_news_lookback_hours?: number;
+  big_news_skip_if_up_pct?: number;
   hold_stop_mode?: 'close' | 'touch';
 
   news_discovery_enabled?: boolean;

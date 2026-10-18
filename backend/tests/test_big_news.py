@@ -127,3 +127,26 @@ def test_big_8k_from_the_market_wide_feed_is_a_candidate(session, monkeypatch):
                 known_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),
                 payload={"accession": "o1", "form": "8-K", "items": ["1.01"]})
     assert market_8k_symbols(session, AppSettings()) == ["OUTSIDE"]
+
+
+def test_skip_if_already_up_is_off_by_default_and_skips_only_the_buy(session, monkeypatch):
+    from app.data_providers.base import QuoteData
+
+    class Popped(NewsProvider):
+        def get_quote(self, symbol):
+            return QuoteData(symbol=symbol, price=self.price, change_pct_24h=8.0, volume=1.0, avg_volume_20d=10_000_000.0)
+
+    from app.services import automation_service
+
+    def scan(settings):
+        monkeypatch.setattr(automation_service, "get_default_watchlist", lambda n: ["AAA"])
+        monkeypatch.setattr(automation_service, "notify", lambda *a, **k: None)
+        monkeypatch.setattr("app.services.hold_buy_service.check_quality", lambda dp, s, **kw: __import__("app.analysis.quality_gate", fromlist=["GateResult"]).GateResult(True, []))
+        return automation_service.run_hold_scan(settings, Popped(), session)
+
+    assert scan(AppSettings(big_news_buy_enabled=True, big_news_skip_if_up_pct=10)) == ["AAA"]  # up 8%, limit 10
+    session.rollback()
+    for p in session.exec(select(__import__("app.portfolio.models", fromlist=["PaperPosition"]).PaperPosition)).all():
+        session.delete(p)
+    session.commit()
+    assert scan(AppSettings(big_news_buy_enabled=True, big_news_skip_if_up_pct=5)) == []  # up 8%, limit 5: skipped

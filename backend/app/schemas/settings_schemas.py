@@ -86,6 +86,7 @@ class SettingsUpdateRequest(BaseModel):
     big_news_buy_enabled: bool | None = None
     big_news_size_pct: float | None = Field(default=None, gt=0, le=100)
     big_news_lookback_hours: int | None = Field(default=None, ge=1, le=168)
+    big_news_skip_if_up_pct: float | None = Field(default=None, ge=0, le=100)
 
     news_discovery_enabled: bool | None = None
     news_discovery_max_per_run: int | None = Field(default=None, ge=0, le=20)

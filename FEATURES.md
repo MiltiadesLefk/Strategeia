@@ -180,6 +180,7 @@ Every ticker in the app links to one page per company, `/stock/NVDA` (old `/anal
     headlines the AI also reads the article behind the link, and that reading replaces the headline's in the news score.
     Each label also says how firm the news is (confirmed, conditional, rumor). The morning rating's news part now uses these labels (up to 3 points either way; a rumor never counts) and falls back to keyword scoring when a stock has none.
   - **Morning news reading**: before the 10:00 scan decides anything, the AI reads the latest headlines of every stock it will rate (a bounded number of AI calls per scan) and, with the big-news buy switch on, the market-wide press releases too. A material, positive, confirmed-or-conditional story about a company is a big-news hit; a rumor or a material negative story never buys.
+  - **Skip a pop** (Settings, Portfolio builder: "Big news: skip the buy if the stock is already up this % today"): off at 0. When you set a number, the big-news lane still analyses, alerts about and adds the stock, but does not buy it if it is already up at least that much today.
   - **Saved history** (News tab): how many news items and fundamentals snapshots the app has saved for
     this stock, and since when, with a note that a backtest can only use news from the day the archive
     began (§11).

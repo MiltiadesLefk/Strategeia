@@ -679,6 +679,8 @@ class AppSettings(BaseModel):
     big_news_buy_enabled: bool = False
     big_news_size_pct: float = Field(default=50.0, gt=0, le=100)
     big_news_lookback_hours: int = Field(default=24, ge=1, le=168)
+    # Big-news lane: skip the buy when the stock is already up this % today (not chasing a pop). 0 = off, the owner picks the %.
+    big_news_skip_if_up_pct: float = Field(default=0.0, ge=0, le=100)
     # Sell plan (F4): consecutive closes under the 200-day that count as a bad signal; the trail
     # (% under the high since entry) a profitable position's stop is raised to on one signal, 0 =
     # breakeven; days a stopped-out or sold stock waits before it may be bought again.

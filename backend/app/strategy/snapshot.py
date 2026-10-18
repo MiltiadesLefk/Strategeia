@@ -78,6 +78,7 @@ DECISION_SETTINGS: dict[str, str] = {
     "big_news_buy_enabled": "big-news buys",
     "big_news_size_pct": "big-news size %",
     "big_news_lookback_hours": "big-news lookback hours",
+    "big_news_skip_if_up_pct": "big-news skip if already up %",
 
     "news_discovery_enabled": "news discovery",
     "news_discovery_max_per_run": "news discovery max per run",

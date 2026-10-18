@@ -134,6 +134,12 @@ def big_news_scan_symbol(
         return False
     gate = check_quality(data_provider, symbol, session=session)  # also proves a live quote exists
     adopt_found_stock(session, settings, data_provider, symbol, LANE_BIG_NEWS, f'{hit.category}: "{hit.headline[:200]}"', gate)
+    if settings.big_news_skip_if_up_pct > 0:  # analysed and added above; only the buy is skipped
+        with fresh_data_only():
+            move = float(data_provider.get_quote(symbol).change_pct_24h)
+        if move >= settings.big_news_skip_if_up_pct:
+            logger.info("Big news: %s not bought: already up %.1f%% today (skip at %.1f%%)", symbol, move, settings.big_news_skip_if_up_pct)
+            return False
     try:
         hold_buy(session, engine, data_provider, settings, symbol, size_pct=100.0 if gate.passed else settings.big_news_size_pct,
                  reason=f'hold scan [big news lane] ({hit.category}, headline: "{hit.headline[:200]}"): '
