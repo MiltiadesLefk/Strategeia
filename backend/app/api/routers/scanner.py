@@ -79,5 +79,5 @@ def run_auto_trade_now(
             )
     _last_auto_trade_run_monotonic = now
 
-    bought = run_hold_scan(settings, data_provider, session)
+    bought = run_hold_scan(settings, data_provider, session, llm_provider)
     return AutoScanResponse(generated=bought, no_trade=[])

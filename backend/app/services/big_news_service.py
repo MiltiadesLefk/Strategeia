@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session
 
-from app.analysis.big_news import BIG_8K_ITEMS, BigNewsHit, evaluate_headlines, parse_published
+from app.analysis.big_news import BIG_8K_ITEMS, BigNewsHit, evaluate_cards, evaluate_headlines, parse_published
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.data_providers.cache import fresh_data_only
@@ -36,7 +36,7 @@ def market_8k_symbols(session: Session, settings: AppSettings, now: datetime | N
 MAX_WIRE_PER_RUN = 30  # wire-feed tickers looked at per scan
 
 
-def wire_news_headlines(settings: AppSettings, now: datetime | None = None) -> dict[str, str]:
+def wire_news_headlines(settings: AppSettings, now: datetime | None = None, only_big: bool = True) -> dict[str, str]:
     """{ticker: headline} for market-wide press releases (wire RSS feeds, plus a Google News search of the four big wires) that carry an exchange tag, sit inside
     the lookback window and match a big-news pattern with no negative one. Any ticker, universe or not. A feed that fails is
     skipped; `find_big_news` still re-checks each headline and the live quote is proved by `check_quality`."""
@@ -55,7 +55,7 @@ def wire_news_headlines(settings: AppSettings, now: datetime | None = None) -> d
         for r in releases:
             if r.published_at is None or (now - r.published_at).total_seconds() > settings.big_news_lookback_hours * 3600:
                 continue
-            if classify_headline(r.title) is None or is_negative(r.title):
+            if only_big and (classify_headline(r.title) is None or is_negative(r.title)):
                 continue
             for ticker in tickers_in_text(f"{r.title} {r.summary}"):
                 found.setdefault(ticker, r.title)
@@ -63,7 +63,7 @@ def wire_news_headlines(settings: AppSettings, now: datetime | None = None) -> d
         from app.data_providers.wire_search import wire_ticker_headlines
 
         for ticker, title in wire_ticker_headlines(settings.big_news_lookback_hours, now).items():
-            if classify_headline(title) is not None and not is_negative(title):
+            if not only_big or (classify_headline(title) is not None and not is_negative(title)):
                 found.setdefault(ticker, title)
     except Exception:  # noqa: BLE001 - the SEC map or Google may be down; the other sources still count
         logger.info("Big news: whole-market wire search skipped", exc_info=True)
@@ -97,6 +97,17 @@ def find_big_news(
     if any(URGENT_8K_ITEMS.intersection(f.items) for f in filings):
         logger.info("Big news: %s blocked by an urgent 8-K item", symbol)
         return None
+    try:
+        from app.knowledge.news_cards import cards_for_symbol
+
+        card_hit, card_block = evaluate_cards([dict(f.payload) for f in cards_for_symbol(session, symbol)], now, hours)
+    except Exception:  # noqa: BLE001 - unreadable cards are no evidence either way
+        logger.exception("Big news: could not read the news cards of %s", symbol)
+        card_hit, card_block = None, None
+    if card_block:
+        logger.info("Big news: %s blocked by AI-read negative news: %s", symbol, card_block)
+        return None
+    hit = hit or card_hit
     if hit is None:
         for f in filings:
             items = set(BIG_8K_ITEMS).intersection(f.items)

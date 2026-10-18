@@ -44,7 +44,7 @@ from app.config import AppSettings
 
 # Bump when rule LOGIC changes in a way no named constant reflects (a new
 # condition in a scorer, a changed formula). Part of every fingerprint.
-RULES_REVISION = 5
+RULES_REVISION = 6
 
 # Settings that always shape a decision, in snapshot order, with the label the
 # change list uses. Everything else in AppSettings is excluded (see above).
@@ -110,7 +110,7 @@ RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     "app.analysis.evidence_bonus": (
         "BONUS_CAP", "BONUS_FLOOR", "INSIDER_CLUSTER_POINTS", "INSIDER_BUY_POINTS", "CONGRESS_BUY_POINTS", "BIG_NEWS_POINTS", "NEGATIVE_NEWS_POINTS",
     ),
-    "app.analysis.big_news": ("BIG_NEWS_PATTERNS", "BIG_8K_ITEMS", "INCLUDE_ANALYST_UPGRADES", "ANALYST_UPGRADE_PATTERNS", "NEGATIVE_PATTERNS"),
+    "app.analysis.big_news": ("BIG_NEWS_PATTERNS", "BIG_8K_ITEMS", "INCLUDE_ANALYST_UPGRADES", "ANALYST_UPGRADE_PATTERNS", "NEGATIVE_PATTERNS", "AI_HIT_CERTAINTIES", "AI_HIT_MATERIALITY"),
     "app.smartmoney.scoring": (
         "WINDOW_DAYS", "RECENT_DAYS", "OLD_RECENCY_FACTOR", "INSIDER_SCORE_CAP", "INSIDER_PER_BUYER",
         "INSIDER_CEO_CFO_EXTRA", "INSIDER_SIZE_TIERS", "HOUSE_BRACKET_POINTS", "HOUSE_EXTRA_MEMBER_POINTS",

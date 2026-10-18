@@ -113,7 +113,7 @@ def _auto_scan_job() -> None:
     data_provider = get_data_provider(settings)
     with Session(engine) as session:
         try:
-            run_hold_scan(settings, data_provider, session)
+            run_hold_scan(settings, data_provider, session, get_llm_provider(settings))
         except Exception:
             logger.exception("Scheduled auto-scan tick failed")
 

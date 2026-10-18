@@ -8,7 +8,7 @@ company list: the headline must START with the company's full name (suffixes lik
 wins, and a name shared by two different companies is dropped. A wrong match is still possible for a short one-word name;
 the caller (`big_news_service`) re-checks the headline, requires a live quote and runs the quality gate.
 
-Politeness: same paced, cached, size-limited fetch as `pr_newswire.fetch_feed_text`; five queries per run.
+Politeness: same paced, cached, size-limited fetch as `pr_newswire.fetch_feed_text`; one query per family (seven) per run.
 """
 
 from __future__ import annotations
@@ -37,6 +37,8 @@ KEYWORD_QUERIES: tuple[str, ...] = (
     '"to acquire" OR "definitive agreement" OR "acquisition offer"',
     '"raises guidance" OR "raises outlook" OR "record revenue" OR "beats"',
     '"share repurchase" OR "buyback"',
+    '"loan" OR "financing" OR "grant" OR "equity stake" OR "billion investment"',
+    '"partnership" OR "strategic agreement" OR "collaboration agreement"',
 )
 SEARCH_URL = "https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
 TICKER_MAP_TTL_SECONDS = 24 * 60 * 60

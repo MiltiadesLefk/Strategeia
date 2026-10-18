@@ -179,6 +179,7 @@ Every ticker in the app links to one page per company, `/stock/NVDA` (old `/anal
     event type, sentiment and materiality, marked "AI-labelled" (§11, "News cards"). For positive or negative
     headlines the AI also reads the article behind the link, and that reading replaces the headline's in the news score.
     Each label also says how firm the news is (confirmed, conditional, rumor). The morning rating's news part now uses these labels (up to 3 points either way; a rumor never counts) and falls back to keyword scoring when a stock has none.
+  - **Morning news reading**: before the 10:00 scan decides anything, the AI reads the latest headlines of every stock it will rate (a bounded number of AI calls per scan) and, with the big-news buy switch on, the market-wide press releases too. A material, positive, confirmed-or-conditional story about a company is a big-news hit; a rumor or a material negative story never buys.
   - **Saved history** (News tab): how many news items and fundamentals snapshots the app has saved for
     this stock, and since when, with a note that a backtest can only use news from the day the archive
     began (§11).

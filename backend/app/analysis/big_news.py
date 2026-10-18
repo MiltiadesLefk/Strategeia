@@ -41,6 +41,11 @@ NEGATIVE_PATTERNS: tuple[str, ...] = (
 )
 
 
+# AI-read news (news cards): only a firm, material, positive story about the company is a hit.
+AI_HIT_CERTAINTIES: tuple[str, ...] = ("confirmed", "conditional")
+AI_HIT_MATERIALITY = "high"
+
+
 @dataclass(frozen=True)
 class BigNewsHit:
     category: str
@@ -85,4 +90,27 @@ def evaluate_headlines(items: list[tuple[str, datetime | None]], now: datetime, 
             return None, headline
         if hit is None and published is not None and since <= published <= now and (category := classify_headline(headline)):
             hit = BigNewsHit(category, headline)
+    return hit, None
+
+
+def evaluate_cards(cards: list[dict], now: datetime, lookback_hours: float) -> tuple[BigNewsHit | None, str | None]:
+    """(hit, blocking summary) from AI-labelled news cards inside the window. The AI only labelled each story; these
+    fixed rules decide. A rumor counts for nothing either way. A material negative story about the company blocks;
+    a material positive one that is confirmed or conditional is a hit. The article's reading replaces the headline's."""
+    since = now - timedelta(hours=lookback_hours)
+    hit: BigNewsHit | None = None
+    for card in cards:
+        if not card.get("is_about_this_company") or card.get("certainty") == "rumor":
+            continue
+        published = parse_published(str(card.get("news_known_at") or ""))
+        if published is None or not since <= published <= now:
+            continue
+        read = card.get("article") or card
+        if read.get("materiality") != AI_HIT_MATERIALITY:
+            continue
+        summary = str(read.get("one_line_summary") or card.get("headline") or "")
+        if read.get("sentiment") == "negative":
+            return None, summary
+        if hit is None and read.get("sentiment") == "positive" and card.get("certainty") in AI_HIT_CERTAINTIES:
+            hit = BigNewsHit("AI-read news", summary)
     return hit, None

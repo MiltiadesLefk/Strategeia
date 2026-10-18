@@ -71,7 +71,7 @@ def hold_scan_symbol(
         return False
 
 
-def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: Session) -> list[str]:
+def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: Session, llm_provider=None) -> list[str]:
     """The daily portfolio-builder scan: every watchlist stock not yet held goes through the quality
     gate and a pass is hold-bought (target weight, wide stop), up to `hold_max_new_per_scan`. A stock
     that fails is simply not bought. Returns the symbols bought. The engine's checks still apply."""
@@ -94,6 +94,14 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         for symbol, headline in discover_from_news(settings, data_provider).items():
             if symbol not in held and symbol not in candidates:
                 candidates[symbol] = f'hold scan [quality lane] (news discovery, headline: "{headline}"): passed the quality gate'
+    market_found: dict[str, str] = {}
+    if llm_provider is not None:
+        from app.services.news_reader_service import read_news
+
+        try:  # the AI labels the morning's headlines first; the rating and the big-news lane read the labels
+            market_found = read_news(settings, data_provider, llm_provider, session, list(candidates), market=settings.big_news_buy_enabled)
+        except Exception:
+            logger.exception("Hold scan: the news reader failed; the rating falls back to keywords")
     evidence: dict = {}
     if settings.evidence_bonus_enabled:
         from app.services.evidence_service import evidence_for
@@ -122,6 +130,8 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         extras: dict[str, str | None] = {s: None for s in candidates}
         try:
             for ticker, headline in discover_from_news(settings, data_provider).items():
+                extras.setdefault(ticker, headline)
+            for ticker, headline in market_found.items():
                 extras.setdefault(ticker, headline)
             for ticker in market_8k_symbols(session, settings):
                 extras.setdefault(ticker, None)
