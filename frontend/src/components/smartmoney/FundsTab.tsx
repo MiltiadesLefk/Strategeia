@@ -3,6 +3,7 @@ import { useFundChanges, useFundsOverview, useRefreshFunds } from '../../api/hoo
 import type { ApiError } from '../../api/client';
 import type { FundChange, FundChangeStatus, FundSummary, FundsOverview } from '../../api/types';
 import { StatCard } from '../StatCard';
+import { SmartMoneyTotals } from './SmartMoneyTotals';
 import { TickerLink } from '../TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, isSafeHttpUrl } from '../common';
 
@@ -239,6 +240,11 @@ function FundDetail({ cik }: { cik: string }) {
               The earlier stored quarter is not the quarter right before this one: changes may span several quarters.
             </div>
           )}
+          <SmartMoneyTotals
+            buys={{ count: (d.counts.new ?? 0) + (d.counts.added ?? 0), value: formatMoney(d.changes.filter((c) => c.status === 'new' || c.status === 'added').reduce((n, c) => n + c.value_now - c.value_before, 0), { compact: true }) }}
+            sells={{ count: (d.counts.trimmed ?? 0) + (d.counts.sold_out ?? 0), value: formatMoney(d.changes.filter((c) => c.status === 'trimmed' || c.status === 'sold_out').reduce((n, c) => n + c.value_before - c.value_now, 0), { compact: true }) }}
+            note={d.total > d.shown ? `Dollar figures cover the ${d.shown} largest of ${d.total} changes shown.` : 'Value added to or taken out of positions since the previous quarter.'}
+          />
           <div className="stat-grid">
             <StatCard label="New positions" value={String(d.counts.new ?? 0)} />
             <StatCard label="Added to" value={String(d.counts.added ?? 0)} />

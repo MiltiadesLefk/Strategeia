@@ -3,6 +3,7 @@ import { useSmartMoneyOverview } from '../../api/hooks';
 import type { ApiError } from '../../api/client';
 import { StatCard } from '../StatCard';
 import { SmartMoneyEvents } from './StockSmartMoney';
+import { SmartMoneyTotals, rangeLabel } from './SmartMoneyTotals';
 import type { SmartMoneySide } from '../../api/types';
 import { SymbolFilterSelect } from '../SymbolFilterSelect';
 import { TickerLink } from '../TickerLink';
@@ -57,6 +58,19 @@ export function OverviewTab() {
       {overview.error && <ErrorBanner message={(overview.error as ApiError).message} onRetry={() => overview.refetch()} />}
       {d && t && (
         <>
+          <SmartMoneyTotals
+            buys={{
+              count: t.insider.buys + t.congress.buys + t.funds.new_positions + t.funds.added,
+              value: `${formatMoney(t.insider.buy_value + t.funds.buy_value, { compact: true })} (insiders and fund positions)`,
+            }}
+            sells={{
+              count: t.insider.sells + t.congress.sells + t.funds.trimmed + t.funds.sold_out,
+              value: `${formatMoney(t.insider.sell_value + t.funds.sell_value, { compact: true })} (insiders and fund positions)`,
+            }}
+            clusters={t.clusters.insider + t.clusters.congress}
+            extra={[`Congress: buys ${rangeLabel(t.congress.buy_low, t.congress.buy_high)}, sells ${rangeLabel(t.congress.sell_low, t.congress.sell_high)} (reported ranges)`]}
+            note="Every source added up for the window and filters above. Congress forms give ranges, never dollars, so they are not added into the dollar totals; 5% owner filings say what is held, not a direction."
+          />
           <div className="grid stat-grid">
             <StatCard label="Insider buys" value={String(t.insider.buys)} note={`${formatMoney(t.insider.buy_value, { compact: true })} bought, ${t.insider.sells} sells (${formatMoney(t.insider.sell_value, { compact: true })})`} />
             <StatCard label="Congress stock trades" value={String(t.congress.buys + t.congress.sells)} note={`${t.congress.buys} buys, ${t.congress.sells} sells, ${t.congress.members} members`} />

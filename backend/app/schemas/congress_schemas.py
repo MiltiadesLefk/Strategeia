@@ -41,6 +41,13 @@ class CongressTradesResponse(BaseModel):
     buy_count: int
     sell_count: int
     stock_buy_count: int
+    stock_sell_count: int
+    # Sums of the reported ranges of the STOCK rows (never exact dollars). A high is None when any range is open-ended.
+    buy_low: int
+    buy_high: int | None
+    sell_low: int
+    sell_high: int | None
+    cluster_count: int  # distinct stocks with 2+ members buying close together, in this window
     members: int  # distinct members among the matching rows
     trades: list[CongressTradeOut]
 

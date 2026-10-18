@@ -15,6 +15,7 @@ import { SleeveReportTab } from '../components/smartmoney/SleeveReportTab';
 import { CandidatesTab } from '../components/smartmoney/CandidatesTab';
 import { CongressTab } from '../components/smartmoney/CongressTab';
 import { OverviewTab } from '../components/smartmoney/OverviewTab';
+import { SmartMoneyTotals } from '../components/smartmoney/SmartMoneyTotals';
 import { ActivistsTab } from '../components/smartmoney/ActivistsTab';
 import { FundsTab } from '../components/smartmoney/FundsTab';
 import { InsiderTradesTable, RoleBadges, formatAccepted } from '../components/smartmoney/InsiderTradesTable';
@@ -158,6 +159,13 @@ function InsidersTab({ status }: { status: SmartMoneyStatus }) {
 
   return (
     <>
+      {data && (
+        <SmartMoneyTotals
+          buys={{ count: data.buy_count, value: formatMoney(data.buy_value, { compact: true }) }}
+          sells={{ count: data.sell_count, value: formatMoney(data.sell_value, { compact: true }) }}
+          clusters={clusters.data?.clusters.length}
+        />
+      )}
       <div className="grid stat-grid">
         <StatCard
           label={`Trades in ${days} days`}

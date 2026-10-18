@@ -320,7 +320,19 @@ def test_score_endpoint_returns_every_source_with_its_points(client, seeded):
 
 def test_overview_adds_up_the_sources_and_ranks_by_combined_score(client, seeded):
     body = client.get("/api/smart-money/overview?days=30").json()
-    assert body["totals"]["insider"]["buys"] >= 2 and body["totals"]["congress"] == {"buys": 0, "sells": 0, "members": 0}
+    assert body["totals"]["insider"]["buys"] >= 2 and body["totals"]["congress"] == {"buys": 0, "sells": 0, "members": 0, "buy_low": 0, "buy_high": 0, "sell_low": 0, "sell_high": 0}
+    assert body["totals"]["clusters"]["insider"] >= 1 and body["totals"]["funds"]["buy_value"] == 0
     assert body["ranked"][0]["symbol"] == "AAA" and body["ranked"][0]["parts"]["insider"] > 0
     assert [r["total"] for r in body["ranked"]] == sorted((r["total"] for r in body["ranked"]), reverse=True)
     assert body["passing"] == sum(r["total"] >= body["min_score"] for r in body["ranked"])
+
+
+def test_congress_range_sums_stay_ranges_and_open_ended_tops_have_no_high():
+    from types import SimpleNamespace as T
+
+    from app.services.congress_service import range_sums
+
+    rows = [T(side="buy", asset_type="ST", amount_low=1001, amount_high=15000), T(side="buy", asset_type="ST", amount_low=15001, amount_high=50000),
+            T(side="buy", asset_type="OP", amount_low=999999, amount_high=999999), T(side="sell", asset_type="ST", amount_low=50_000_001, amount_high=None)]
+    assert range_sums(rows) == {"buy_low": 16002, "buy_high": 65000, "sell_low": 50_000_001, "sell_high": None}  # options are not counted
+    assert range_sums([]) == {"buy_low": 0, "buy_high": 0, "sell_low": 0, "sell_high": 0}

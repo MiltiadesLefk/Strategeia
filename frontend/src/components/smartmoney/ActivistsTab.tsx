@@ -4,6 +4,7 @@ import { useFundsOverview, useOwnershipFilings } from '../../api/hooks';
 import type { ApiError } from '../../api/client';
 import type { OwnershipFiling } from '../../api/types';
 import { StatCard } from '../StatCard';
+import { SmartMoneyTotals } from './SmartMoneyTotals';
 import { TickerLink } from '../TickerLink';
 import { ErrorBanner, LoadingSpinner, isSafeHttpUrl } from '../common';
 import { RefreshFundsControls } from './FundsTab';
@@ -150,6 +151,10 @@ export function ActivistsTab() {
       )}
       {d && d.has_data && (
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <SmartMoneyTotals
+            extra={[`${d.count_13d + d.count_13g} filings`, `${d.count_13d} 13D`, `${d.count_13g} 13G`, `${d.filings.filter((f) => !f.is_amendment).length} new, ${d.filings.filter((f) => f.is_amendment).length} amendments`]}
+            note="A 5% filing says what the holder owns, not whether it is buying or selling, so there is no buys / sells split here."
+          />
           <div className="stat-grid">
             <StatCard label="Schedule 13D (may seek influence)" value={String(d.count_13d)} note={`last ${d.days} days`} />
             <StatCard label="Schedule 13G (passive)" value={String(d.count_13g)} note={`last ${d.days} days`} />

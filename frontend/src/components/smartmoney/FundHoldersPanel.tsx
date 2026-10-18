@@ -1,6 +1,7 @@
 import { useFundHolders } from '../../api/hooks';
 import type { ApiError } from '../../api/client';
 import { ErrorBanner, LoadingSpinner, formatMoney } from '../common';
+import { SmartMoneyTotals } from './SmartMoneyTotals';
 
 const STATUS_TEXT: Record<string, string> = {
   new: 'new position',
@@ -39,6 +40,12 @@ export function FundHoldersPanel({ symbol }: { symbol: string }) {
           13F: long only, as of the quarter end, filed up to 45 days later
         </span>
       </div>
+      <SmartMoneyTotals
+        buys={{ count: d.holders.filter((h) => h.status === 'new' || h.status === 'added').length }}
+        sells={{ count: d.holders.filter((h) => h.status === 'trimmed' || h.status === 'sold_out').length }}
+        extra={[`${d.holders.length} of ${d.funds_stored} followed funds`]}
+        note="Funds that bought (new or added) or sold (trimmed or sold out) at their latest quarter."
+      />
       {d.holders.length === 0 ? (
         <div className="text-muted" style={{ fontSize: 13 }}>
           None of the {d.funds_stored} followed funds with stored filings reported {symbol} at their latest quarter end.

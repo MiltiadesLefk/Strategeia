@@ -121,6 +121,17 @@ def _trade_out(t: CongressTrade) -> CongressTradeOut:
     )
 
 
+def range_sums(trades) -> dict:
+    """Low and high sums of the reported amount ranges of the stock buys and sells. A form gives ranges, never dollars,
+    so the result is a range too; the high is None when any range is open-ended ("Over $50,000,000")."""
+    out: dict = {}
+    for side in ("buy", "sell"):
+        rows = [t for t in trades if t.side == side and t.asset_type == "ST"]
+        out[f"{side}_low"] = sum(int(t.amount_low or 0) for t in rows)
+        out[f"{side}_high"] = None if any(t.amount_high is None for t in rows) and rows else sum(int(t.amount_high or 0) for t in rows)
+    return out
+
+
 def list_trades(
     session: Session,
     settings: AppSettings,
@@ -160,6 +171,9 @@ def list_trades(
         buy_count=sum(1 for t in trades if t.side == "buy"),
         sell_count=sum(1 for t in trades if t.side == "sell"),
         stock_buy_count=sum(1 for t in trades if t.side == "buy" and t.asset_type == "ST"),
+        stock_sell_count=sum(1 for t in trades if t.side == "sell" and t.asset_type == "ST"),
+        **range_sums(trades),
+        cluster_count=len(congress_clusters_as_of(session, symbol, None, days, members=followed if apply_follow else None)),
         members=len({t.member_key for t in trades}),
         trades=[_trade_out(t) for t in shown],
     )

@@ -3,6 +3,7 @@ import { useSmartMoneyCandidates } from '../../api/hooks';
 import type { ApiError } from '../../api/client';
 import type { SmartMoneyCandidate } from '../../api/types';
 import { StatCard } from '../StatCard';
+import { SmartMoneyTotals } from './SmartMoneyTotals';
 import { TickerLink } from '../TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatRelativeTime } from '../common';
 
@@ -90,6 +91,7 @@ export function CandidatesTab() {
         the bar. It only means the symbol is worth the normal full evaluation; it does not open a trade, and nothing here
         says anyone knew something. {data?.disclaimer}
       </div>
+      {data && <SmartMoneyTotals extra={[`${data.total} candidates`, `${open} open`, `bar ${data.min_score} points`]} note="A candidate is a stock whose buying evidence reached the bar; selling never creates one." />}
       <div className="grid stat-grid">
         <StatCard label="Candidates" value={data ? String(data.total) : '—'} note={data ? `${open} open` : undefined} />
         <StatCard label="Bar" value={data ? String(data.min_score) : '—'} note="points to become a candidate" />

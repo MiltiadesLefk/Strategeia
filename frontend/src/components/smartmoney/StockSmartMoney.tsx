@@ -12,6 +12,7 @@ import { FinraPanel } from '../FinraPanel';
 import { EmptyState, LoadingSpinner, formatMoney, isSafeHttpUrl } from '../common';
 import { FundHoldersPanel } from './FundHoldersPanel';
 import { InsiderPanel } from './InsiderPanel';
+import { SmartMoneyTotals } from './SmartMoneyTotals';
 import { SmartMoneyScoreCard, StockCongressPanel, StockOwnersPanel } from './StockSmartMoneyPanels';
 
 const DAY_OPTIONS = [30, 90, 180, 365];
@@ -35,6 +36,8 @@ interface EventRow {
   action: 'buy' | 'sell' | 'info';
   actionText: string;
   amount: string;
+  /** Exact dollars when the source gives them (insiders); null for ranges and fund values. */
+  dollars: number | null;
   url: string | null;
 }
 
@@ -64,7 +67,7 @@ export function SmartMoneyEvents({
     if (t.side === 'other') continue;
     rows.push({
       when: t.known_at, source: 'Insider', who: `${t.insider ?? 'unknown'}${t.role_tags.length ? ` (${t.role_tags.join(', ')})` : ''}`,
-      action: t.side, actionText: t.side === 'buy' ? 'bought' : 'sold', amount: t.value === null ? '—' : formatMoney(t.value, { compact: true }), url: t.filing_url,
+      action: t.side, actionText: t.side === 'buy' ? 'bought' : 'sold', amount: t.value === null ? '—' : formatMoney(t.value, { compact: true }), dollars: t.value, url: t.filing_url,
     });
   }
   for (const t of congress.data?.trades ?? []) {
@@ -72,28 +75,38 @@ export function SmartMoneyEvents({
     rows.push({
       when: t.known_at, source: 'Congress', who: `${t.member}${t.owner !== 'self' ? ` (${t.owner})` : ''}`,
       action: t.side, actionText: `${t.side === 'buy' ? 'bought' : 'sold'}${t.asset_type && t.asset_type !== 'ST' ? ` (${t.asset_type === 'OP' ? 'option' : t.asset_type})` : ''}`,
-      amount: t.amount_text || 'range not stated', url: t.filing_url,
+      amount: t.amount_text || 'range not stated', dollars: null, url: t.filing_url,
     });
   }
   for (const h of funds.data?.holders ?? []) {
     const f = FUND_ACTION[h.status] ?? { action: 'info' as const, text: h.status };
     if (days < 365 && Date.parse(h.filed_at) < Date.now() - days * 86_400_000) continue;
-    rows.push({ when: h.filed_at, source: 'Fund (13F)', who: h.manager ?? `CIK ${h.cik}`, action: f.action, actionText: f.text, amount: formatMoney(h.value, { compact: true }), url: h.filing_url });
+    rows.push({ when: h.filed_at, source: 'Fund (13F)', who: h.manager ?? `CIK ${h.cik}`, action: f.action, actionText: f.text, amount: formatMoney(h.value, { compact: true }), dollars: null, url: h.filing_url });
   }
   for (const o of owners.data?.filings ?? []) {
     rows.push({
       when: o.known_at, source: '5% owner', who: o.filer_name ?? 'unknown', action: 'info',
-      actionText: `${o.schedule}${o.is_amendment ? '/A' : ''} filing`, amount: o.percent === null ? '—' : `${o.percent}%`, url: o.filing_url,
+      actionText: `${o.schedule}${o.is_amendment ? '/A' : ''} filing`, amount: o.percent === null ? '—' : `${o.percent}%`, dollars: null, url: o.filing_url,
     });
   }
   const shown = rows
     .filter((r) => side === 'all' || (side === 'buys' && r.action === 'buy') || (side === 'sells' && r.action === 'sell'))
     .sort((a, b) => Date.parse(b.when) - Date.parse(a.when));
 
-  if (shown.length === 0) {
-    return <EmptyState>No smart-money event for {symbol} in the last {days} days with these filters. If nothing is stored at all, load the sources from the Smart Money page.</EmptyState>;
-  }
+  const buyRows = shown.filter((r) => r.action === 'buy');
+  const sellRows = shown.filter((r) => r.action === 'sell');
+  const dollars = (rs: EventRow[], sources: string[]) => rs.filter((r) => sources.includes(r.source) && r.dollars !== null).reduce((n, r) => n + (r.dollars ?? 0), 0);
+  const congressOf = (rs: EventRow[]) => rs.filter((r) => r.source === 'Congress').length;
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <SmartMoneyTotals
+        buys={{ count: buyRows.length, value: formatMoney(dollars(buyRows, ['Insider']), { compact: true }) + ' (insider dollars)' }}
+        sells={{ count: sellRows.length, value: formatMoney(dollars(sellRows, ['Insider']), { compact: true }) + ' (insider dollars)' }}
+        extra={[`${congressOf(buyRows)} Congress buys, ${congressOf(sellRows)} sells (ranges in the table)`, `${shown.filter((r) => r.action === 'info').length} filings with no direction`]}
+      />
+      {shown.length === 0 ? (
+      <EmptyState>No smart-money event for {symbol} in the last {days} days with these filters. If nothing is stored at all, load the sources from the Smart Money page.</EmptyState>
+    ) : (
     <div style={{ overflowX: 'auto' }} data-testid="smart-money-events">
       <table>
         <thead>
@@ -113,6 +126,8 @@ export function SmartMoneyEvents({
         </tbody>
       </table>
     </div>
+    )}
+    </div>
   );
 }
 
@@ -123,6 +138,7 @@ function StockCandidates({ symbol }: { symbol: string }) {
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-testid="stock-candidates">
       <h3 style={{ fontSize: 15 }}>Times the scan flagged {symbol} as a smart-money candidate</h3>
+      <SmartMoneyTotals extra={[`${rows.length} flagged`, `${rows.filter((c) => ['new', 'evaluating', 'needs_review'].includes(c.status)).length} open`]} />
       {rows.length === 0 ? (
         <div className="text-muted" style={{ fontSize: 13 }}>
           Never flagged: its score has not reached the minimum of {candidates.data?.min_score ?? 3} in a scan.

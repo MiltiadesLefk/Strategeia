@@ -3,6 +3,7 @@ import type { ApiError } from '../../api/client';
 import { ErrorBanner, LoadingSpinner } from '../common';
 import { CongressTradesTable } from './CongressTab';
 import { FilingRow } from './ActivistsTab';
+import { SmartMoneyTotals, rangeLabel } from './SmartMoneyTotals';
 
 const SOURCE_LABEL: Record<string, string> = {
   insider: 'Insiders', house: 'Congress', fund: 'Funds (13F)', ownership: '5% owners', filing_8k: '8-K filings',
@@ -54,6 +55,12 @@ export function StockCongressPanel({ symbol }: { symbol: string }) {
         <h3 style={{ fontSize: 15 }}>Congress trades · last 365 days of filings</h3>
         <span className="text-muted" style={{ fontSize: 12 }}>House only; amounts are ranges; reported up to 45 days late</span>
       </div>
+      <SmartMoneyTotals
+        buys={{ count: d.stock_buy_count, value: rangeLabel(d.buy_low, d.buy_high) }}
+        sells={{ count: d.stock_sell_count, value: rangeLabel(d.sell_low, d.sell_high) }}
+        clusters={d.cluster_count}
+        note="Stock trades only; amounts are sums of reported ranges."
+      />
       {d.trades.length === 0 ? (
         <div className="text-muted" style={{ fontSize: 13 }}>
           No House member reported a trade in {symbol}. If nothing is stored at all, load the reports from the Congress tab of the Smart Money page.
@@ -77,6 +84,7 @@ export function StockOwnersPanel({ symbol }: { symbol: string }) {
         <h3 style={{ fontSize: 15 }}>5% owners (13D / 13G) · last 365 days</h3>
         <span className="text-muted" style={{ fontSize: 12 }}>A filing says what the holder owns now, not whether it is buying</span>
       </div>
+      <SmartMoneyTotals extra={[`${rows.length} filings`, `${rows.filter((f) => f.schedule === '13D').length} 13D`, `${rows.filter((f) => f.schedule === '13G').length} 13G`]} note="A filing says what the holder owns, not a direction." />
       {rows.length === 0 ? (
         <div className="text-muted" style={{ fontSize: 13 }}>No 13D or 13G filing stored for {symbol}.</div>
       ) : (

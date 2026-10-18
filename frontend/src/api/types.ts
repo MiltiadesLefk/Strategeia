@@ -1436,6 +1436,13 @@ export interface CongressTrades {
   buy_count: number;
   sell_count: number;
   stock_buy_count: number;
+  stock_sell_count: number;
+  /** Sums of the reported ranges of the stock rows; buy_high / sell_high are null when a top range is open-ended. */
+  buy_low: number;
+  buy_high: number | null;
+  sell_low: number;
+  sell_high: number | null;
+  cluster_count: number;
   members: number;
   trades: CongressTrade[];
 }
@@ -2787,9 +2794,10 @@ export interface SmartMoneyOverview {
   min_score: number;
   totals: {
     insider: { buys: number; buy_value: number; sells: number; sell_value: number };
-    congress: { buys: number; sells: number; members: number };
-    funds: { followed_with_filings: number; new_positions: number; added: number; trimmed: number; sold_out: number };
+    congress: { buys: number; sells: number; members: number; buy_low: number; buy_high: number | null; sell_low: number; sell_high: number | null };
+    funds: { followed_with_filings: number; new_positions: number; added: number; trimmed: number; sold_out: number; buy_value: number; sell_value: number };
     owners: { '13D': number; '13G': number };
+    clusters: { insider: number; congress: number };
     candidates: { new: number; needs_review: number; all: number };
   };
   ranked: SmartMoneyOverviewRow[];

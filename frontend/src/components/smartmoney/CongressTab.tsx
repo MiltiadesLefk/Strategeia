@@ -9,6 +9,7 @@ import {
 import type { ApiError } from '../../api/client';
 import type { CongressCluster, CongressStatus, CongressTrade } from '../../api/types';
 import { StatCard } from '../StatCard';
+import { SmartMoneyTotals, rangeLabel } from './SmartMoneyTotals';
 import { TickerLink } from '../TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, formatRelativeTime, isSafeHttpUrl } from '../common';
 
@@ -209,6 +210,14 @@ function CongressBody({ status }: { status: CongressStatus }) {
 
   return (
     <>
+      {data && (
+        <SmartMoneyTotals
+          buys={{ count: data.stock_buy_count, value: rangeLabel(data.buy_low, data.buy_high) }}
+          sells={{ count: data.stock_sell_count, value: rangeLabel(data.sell_low, data.sell_high) }}
+          clusters={data.cluster_count}
+          note="Stock trades only (options and funds are not counted). Amounts are the sums of the reported ranges, never exact dollars."
+        />
+      )}
       <div className="grid stat-grid">
         <StatCard
           label={`Trades in ${days} days`}
