@@ -127,7 +127,7 @@ export function RatingsPage() {
               >
                 <div>{when(r.run_at)}{r.running ? ' · running' : ''}</div>
                 <div className="text-muted" style={{ fontSize: 12 }}>
-                  {r.source === 'scan' ? 'Morning scan' : 'Manual'} · {r.rated} rated · {r.passed} passed · {r.bought} bought
+                  {r.source === 'scan' ? 'Morning scan' : r.source === 'replay' ? 'As-if replay' : 'Manual'} · {r.rated} rated · {r.passed} passed · {r.bought} bought
                 </div>
               </button>
             ))
