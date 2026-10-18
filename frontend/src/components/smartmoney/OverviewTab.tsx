@@ -28,7 +28,7 @@ const COLUMNS: { key: 'insider' | 'house' | 'fund' | 'ownership' | 'filing_8k'; 
 
 /** Every smart-money source added up: totals per source, and the stocks ranked by their combined score. */
 export function OverviewTab() {
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(90);
   const [side, setSide] = useState('all');
   const [minValue, setMinValue] = useState(0);
   const [symbol, setSymbol] = useState('');
