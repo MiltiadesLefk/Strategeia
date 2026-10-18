@@ -52,6 +52,9 @@ export interface AnalysisResponse {
   resistance: number[];
   /** ATR14 in price terms, and as a % of price — the comparable form. */
   atr14?: number | null;
+  /** Price vs its 50/200-day simple average, in %; null when too few bars (intraday ranges). */
+  pct_vs_ma50?: number | null;
+  pct_vs_ma200?: number | null;
   atr_pct?: number | null;
   macd?: number | null;
   macd_signal?: number | null;
@@ -121,6 +124,13 @@ export interface ArchiveResponse {
   recent_news: ArchivedNewsItem[];
   recent_fundamentals: ArchivedFundamentals[];
   totals: ArchiveTotals;
+}
+
+export interface QualityGateResponse {
+  symbol: string;
+  passed: boolean;
+  dip: boolean;
+  checks: { name: string; ok: boolean; note: string }[];
 }
 
 export interface ResearchResponse {
@@ -396,6 +406,8 @@ export interface AppSettings {
   hold_min_revenue_growth_pct: number;
   require_growth_acceleration: boolean;
   require_operating_leverage: boolean;
+  /** Gate also needs low debt-to-equity, current ratio above 1 and positive free cash flow (missing figures fail). */
+  require_financial_health: boolean;
   /** Volume (all off): the gate fails on distribution / needs accumulation; the sell plan counts distribution under the 50-day. */
   block_on_distribution: boolean;
   require_accumulation: boolean;
@@ -498,6 +510,7 @@ export interface SettingsUpdateRequest {
   hold_min_revenue_growth_pct?: number;
   require_growth_acceleration?: boolean;
   require_operating_leverage?: boolean;
+  require_financial_health?: boolean;
   block_on_distribution?: boolean;
   require_accumulation?: boolean;
   sell_on_distribution?: boolean;

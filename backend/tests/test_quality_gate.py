@@ -113,3 +113,30 @@ def test_price_only_runs_the_trend_check_alone_and_never_passes_on_missing_data(
     assert not verdict(price_only=True, price=100.0, overview=None, financial_years=[]).passed
     assert not verdict(price_only=True, closes=RISING[:50], overview=None, financial_years=[]).passed  # too few bars
     assert not verdict(price_only=True, require_trend=False, price=100.0).passed  # the trend can't be switched off
+
+
+def _health(de=0.5, cr=2.0, fcf=5e6):
+    return [FinancialYear(2024, 100e6, 10e6), FinancialYear(2025, 114e6, 14e6, None, de, cr, fcf)]
+
+
+def test_financial_health_is_optional_and_never_guesses():
+    assert "financial_health" not in [c.name for c in verdict(financial_years=_health()).checks]
+    assert verdict(financial_years=_health(), require_financial_health=True).passed
+    for bad in (_health(de=1.5), _health(cr=0.8), _health(fcf=-1e6), _health(fcf=0.0)):
+        assert verdict(financial_years=bad, require_financial_health=True).failed_reasons[0].startswith("financial_health")
+    assert "free cash flow not reported" in verdict(financial_years=_health(fcf=None), require_financial_health=True).failed_reasons[0]
+    assert not verdict(financial_years=GOOD_YEARS, require_financial_health=True).passed  # nothing reported
+    assert not verdict(financial_years=GOOD_YEARS[:1], require_financial_health=True).passed
+    assert verdict(price_only=True, require_financial_health=True).passed
+
+
+def test_balance_sheet_rating_part():
+    from app.analysis.balance_sheet_scoring import score_balance_sheet
+
+    assert score_balance_sheet("long", _health())[0] == 1
+    assert score_balance_sheet("long", _health(fcf=-1e6))[0] == -1
+    assert score_balance_sheet("long", _health(de=2.5))[0] == -1
+    assert score_balance_sheet("long", _health(de=1.5))[0] == 0  # between the bars
+    assert score_balance_sheet("long", _health(cr=None))[0] == 0  # missing never guesses
+    assert score_balance_sheet("long", GOOD_YEARS)[0] == 0
+    assert score_balance_sheet(None, _health())[0] == 0

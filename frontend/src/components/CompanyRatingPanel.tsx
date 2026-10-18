@@ -17,7 +17,7 @@ export function CompanyRatingPanel({ symbol }: { symbol: string }) {
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h3 style={{ marginBottom: 4 }}>
-            {row ? `${row.points}/${row.max_points} · ${row.percent}% · ${row.bought ? 'Bought' : row.passed ? 'Passed' : 'Below bar'}${row.dip ? ' · dip' : ''}` : 'Not rated yet'}
+            {row ? `${row.percent}/100 · ${row.bought ? 'Bought' : row.passed ? 'Passed' : 'Below bar'}${row.dip ? ' · dip' : ''}` : 'Not rated yet'}
           </h3>
           {row && <div className="text-muted" style={{ fontSize: 12 }}>Rated {when(row.run_at)}</div>}
         </div>
@@ -35,17 +35,16 @@ export function CompanyRatingPanel({ symbol }: { symbol: string }) {
             <div className="card">
               <h3 style={{ marginBottom: 8 }}>Earlier ratings</h3>
               <table>
-                <thead><tr><th>When</th><th style={{ textAlign: 'right' }}>Points</th><th style={{ textAlign: 'right' }}>%</th><th>Result</th><th /></tr></thead>
+                <thead><tr><th>When</th><th style={{ textAlign: 'right' }}>Score /100</th><th>Result</th><th /></tr></thead>
                 <tbody>
                   {older.flatMap((r) => [
                     <tr key={r.run_at} onClick={() => setOpen(open === r.run_at ? null : r.run_at)} style={{ cursor: 'pointer' }}>
                       <td>{when(r.run_at)}</td>
-                      <td style={{ textAlign: 'right' }}>{r.points}/{r.max_points}</td>
-                      <td style={{ textAlign: 'right' }}>{r.percent}%</td>
+                      <td style={{ textAlign: 'right' }}>{r.percent}</td>
                       <td>{r.bought ? 'Bought' : r.passed ? 'Passed' : 'Below bar'}</td>
                       <td className="text-muted">{open === r.run_at ? 'hide table' : 'show table'}</td>
                     </tr>,
-                    ...(open === r.run_at ? [<tr key={`${r.run_at}-t`}><td colSpan={5}><RatingTable row={r} /></td></tr>] : []),
+                    ...(open === r.run_at ? [<tr key={`${r.run_at}-t`}><td colSpan={4}><RatingTable row={r} /></td></tr>] : []),
                   ])}
                 </tbody>
               </table>

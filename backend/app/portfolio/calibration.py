@@ -49,7 +49,7 @@ from app.portfolio.signal_stats import (
 # Every plan made before raw points were stored was scored out of this many points.
 LEGACY_POINTS_MAX = 16
 
-CONFIDENCE_BANDS: tuple[tuple[int, int], ...] = ((0, 6), (7, 8), (9, 10), (11, 32))
+CONFIDENCE_BANDS: tuple[tuple[int, int], ...] = ((0, 6), (7, 8), (9, 10), (11, 33))
 
 # Below this many trades a row or an IC is shown but flagged "too few to read
 # much into" (matches the Dashboard/Portfolio win-rate note), and the verdict is

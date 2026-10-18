@@ -17,6 +17,7 @@ type Draft = Pick<
   | 'hold_min_revenue_growth_pct'
   | 'require_growth_acceleration'
   | 'require_operating_leverage'
+  | 'require_financial_health'
   | 'block_on_distribution'
   | 'require_accumulation'
   | 'sell_on_distribution'
@@ -62,7 +63,7 @@ function fromSettings(data: AppSettings): Draft {
     hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
     hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
     hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
-    hold_min_revenue_growth_pct: data.hold_min_revenue_growth_pct, require_growth_acceleration: data.require_growth_acceleration, require_operating_leverage: data.require_operating_leverage,
+    hold_min_revenue_growth_pct: data.hold_min_revenue_growth_pct, require_growth_acceleration: data.require_growth_acceleration, require_operating_leverage: data.require_operating_leverage, require_financial_health: data.require_financial_health,
     block_on_distribution: data.block_on_distribution, require_accumulation: data.require_accumulation,
     sell_on_distribution: data.sell_on_distribution,
     require_rising_ma200: data.require_rising_ma200, max_extension_above_ma200_pct: data.max_extension_above_ma200_pct,
@@ -114,6 +115,10 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.require_operating_leverage} onChange={(v) => set('require_operating_leverage', v)} label="Operating leverage" />
         <span>The quality check also needs operating income to grow faster than revenue (missing operating income fails; off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.require_financial_health} onChange={(v) => set('require_financial_health', v)} label="Financial health" />
+        <span>The quality check also needs debt-to-equity at most 1, current ratio at least 1 and positive free cash flow (missing figures fail; off by default)</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.require_rising_ma200} onChange={(v) => set('require_rising_ma200', v)} label="Rising 200-day" />

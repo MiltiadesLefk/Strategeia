@@ -19,6 +19,7 @@ const HELP: Record<string, string> = {
   'Short volume': 'Unusually high FINRA short-sale volume against its own baseline argues against a long. Short volume is not short interest.',
   '8-K filings': 'Negative-leaning 8-K items filed in the last 3 days (bankruptcy, delisting, restatement, executive change): against a long.',
   Financials: 'Profitability trend from the reported years: profitable and improving supports a long.',
+  'Balance sheet': 'Debt-to-equity, current ratio and free cash flow of the latest year (Yahoo only): strong supports a long, weak argues against. Missing figures score 0.',
   Valuation: 'P/E at the extremes plus the DCF and peer comparison: cheap supports a long, expensive argues against. Up to 2 points.',
   Consensus: 'Consensus EPS for the next report against the last reported EPS: expected growth of 10% or more supports a long.',
   'Vs market': "The stock's 63-day return against SPY: leading by 5 points or more supports a long.",
@@ -44,7 +45,7 @@ export function RatingTable({ row }: { row: RatingRow }) {
   return (
     <ScoreTable
       parts={parts}
-      summary={`${row.points}/${row.max_points} points = ${row.percent}% of the achievable evidence${bar != null ? ` (bar ${bar}%)` : ''}.`}
+      summary={`Score ${row.percent}/100${bar != null ? ` (bar ${bar})` : ''}. The points per part below add up to it, scaled so the best possible total is 100.`}
     />
   );
 }

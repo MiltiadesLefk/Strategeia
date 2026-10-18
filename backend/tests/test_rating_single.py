@@ -6,7 +6,7 @@ from app.main import app
 
 def test_rate_one_saves_and_stays_out_of_runs(monkeypatch):
     gate = GateResult(True, [GateCheck("rating", True, "note")], dip=False,
-                      detail={"points": 7, "max": 32, "percent": 22, "bar_pct": 16, "parts": {"technical": 7}, "why": {}})
+                      detail={"points": 7, "max": 33, "percent": 22, "bar_pct": 16, "parts": {"technical": 7}, "why": {}})
     monkeypatch.setattr("app.api.routers.ratings.rate_stock", lambda *a, **k: gate)
     c = TestClient(app)
     r = c.post("/api/ratings/stock/zzrate")

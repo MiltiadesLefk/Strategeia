@@ -18,6 +18,11 @@ MA_DAYS = 200
 MA_SLOPE_LOOKBACK = 20  # require_rising_ma200: the 200-day average must be >= its value this many bars ago
 
 
+# require_financial_health: the latest reported year must show low debt, enough liquidity and positive free cash flow.
+MAX_DEBT_TO_EQUITY = 1.0
+MIN_CURRENT_RATIO = 1.0
+
+
 # The dip rule (PORTOFOLIO_BUILDER O3): a good stock at least this % below its high of the last
 # DIP_LOOKBACK trading days (about 3 months). Price only, no AI.
 DIP_PCT = 10.0
@@ -62,6 +67,16 @@ def _operating_leverage_check(latest: FinancialYear, prior: FinancialYear, reven
     return GateCheck("operating_leverage", og > revenue_growth, f"operating income {og:+.1f}% vs revenue {revenue_growth:+.1f}%")
 
 
+def _financial_health_check(latest: FinancialYear) -> GateCheck:
+    """Debt-to-equity, current ratio and free cash flow all read and all inside their bars. Unreported figures fail."""
+    de, cr, fcf = latest.debt_to_equity, latest.current_ratio, latest.free_cash_flow
+    missing = [n for n, v in (("debt-to-equity", de), ("current ratio", cr), ("free cash flow", fcf)) if v is None]
+    if missing:
+        return GateCheck("financial_health", False, f"{', '.join(missing)} not reported")
+    ok = de <= MAX_DEBT_TO_EQUITY and cr >= MIN_CURRENT_RATIO and fcf > 0
+    return GateCheck("financial_health", ok, f"debt-to-equity {de:.2f} (max {MAX_DEBT_TO_EQUITY:g}), current ratio {cr:.2f} (min {MIN_CURRENT_RATIO:g}), free cash flow ${fcf / 1e6:,.0f}M")
+
+
 def evaluate_quality_gate(
     price: float,
     closes: list[float],
@@ -77,6 +92,7 @@ def evaluate_quality_gate(
     require_rising_ma200: bool = False,  # AppSettings.require_rising_ma200
     max_extension_above_ma200_pct: float = 0.0,  # AppSettings.max_extension_above_ma200_pct (0 = off)
     require_operating_leverage: bool = False,  # AppSettings.require_operating_leverage
+    require_financial_health: bool = False,  # AppSettings.require_financial_health
 ) -> GateResult:
     checks: list[GateCheck] = []
 
@@ -114,6 +130,8 @@ def evaluate_quality_gate(
                 checks.append(GateCheck("acceleration", False, f"{len(financial_years)} reported year(s) of financials, three needed"))
         if require_operating_leverage:
             checks.append(_operating_leverage_check(latest, prior, growth))
+        if require_financial_health:
+            checks.append(_financial_health_check(latest))
         margin = latest.net_income / latest.revenue * 100 if latest.revenue else None
         checks.append(
             GateCheck("profit", latest.net_income > 0, f"net income ${latest.net_income / 1e6:,.0f}M"
@@ -126,6 +144,8 @@ def evaluate_quality_gate(
             checks.append(GateCheck("acceleration", False, note))
         if require_operating_leverage:
             checks.append(GateCheck("operating_leverage", False, note))
+        if require_financial_health:
+            checks.append(GateCheck("financial_health", False, note))
 
     if overview is None:
         checks.append(GateCheck("valuation", False, "no company overview"))

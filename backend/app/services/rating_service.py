@@ -108,6 +108,9 @@ def rate_stock(data_provider: DataProvider, symbol: str, bar_pct: int, session: 
     closes = [float(c) for c in ohlcv["close"]]
     why = {k: "; ".join(v) for k, v in reasons.items() if k != "extra" and v}
     why.update({k: n for k, n in extra.notes.items() if n})
+    if len(closes) >= 200:
+        ma200 = sum(closes[-200:]) / 200
+        why["technical"] = "; ".join(filter(None, [why.get("technical"), f"price {price:,.2f} is {(price / ma200 - 1) * 100:+.1f}% vs its 200-day average {ma200:,.2f}"]))
     detail = {"points": total, "max": MAX_SCORE_FOR_CONFIDENCE, "percent": percent, "bar_pct": bar_pct,
               "parts": {labels.get(k, k): v for k, v in parts.items()},
               "why": {labels.get(k, k): w for k, w in why.items()}}

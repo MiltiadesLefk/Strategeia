@@ -22,7 +22,7 @@ function RatingRows({ rows, onRate, rating }: { rows: RatingRow[]; onRate?: (sym
       <table className="score-table">
         <thead>
           <tr>
-            <th>Stock</th><th style={{ textAlign: 'right' }}>Points</th><th style={{ textAlign: 'right' }}>%</th><th>Result</th><th>Dip</th>
+            <th>Stock</th><th style={{ textAlign: 'right' }}>Score /100</th><th>Result</th><th>Dip</th>
             {onRate && <th>Rated</th>}<th />{onRate && <th />}
           </tr>
         </thead>
@@ -34,8 +34,7 @@ function RatingRows({ rows, onRate, rating }: { rows: RatingRow[]; onRate?: (sym
                   <strong>{r.symbol}</strong>{' '}
                   <Link to={tickerHref(r.symbol)} onClick={(e) => e.stopPropagation()} className="text-muted" style={{ fontSize: 12 }}>company →</Link>
                 </td>
-                <td style={{ textAlign: 'right' }}>{r.points}/{r.max_points}</td>
-                <td style={{ textAlign: 'right' }}>{r.percent}%</td>
+                <td style={{ textAlign: 'right' }}>{r.percent}</td>
                 <td>{r.bought ? 'Bought' : r.passed ? 'Passed' : 'Below bar'}</td>
                 <td>{r.dip ? 'dip' : ''}</td>
                 {onRate && <td className="text-muted" style={{ fontSize: 12 }}>{when(r.run_at)}</td>}
@@ -49,7 +48,7 @@ function RatingRows({ rows, onRate, rating }: { rows: RatingRow[]; onRate?: (sym
                 )}
               </tr>
               {open === r.symbol && (
-                <tr><td colSpan={onRate ? 8 : 6}><RatingTable row={r} /></td></tr>
+                <tr><td colSpan={onRate ? 7 : 5}><RatingTable row={r} /></td></tr>
               )}
             </Fragment>
           ))}

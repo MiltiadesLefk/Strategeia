@@ -41,3 +41,16 @@ class ResearchResponse(BaseModel):
     ai_provider: str
     ai_error: str | None = None
     generated_at: str
+
+
+class QualityGateCheck(BaseModel):
+    name: str
+    ok: bool
+    note: str
+
+
+class QualityGateResponse(BaseModel):
+    symbol: str
+    passed: bool
+    dip: bool
+    checks: list[QualityGateCheck]

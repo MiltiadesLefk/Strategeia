@@ -147,6 +147,8 @@ and couldn't test.
 - **Auto-trade button:** runs the hold scan now (§27), at most once every 60 seconds. It buys only with auto-execute on.
 
 ### Company page (formerly Analysis)
+The company header shows the day change, sector, market cap and next earnings date, a stat card shows price vs the 50- and 200-day averages, and the Overview tab has a read-only **Quality check** card listing each gate check with its numbers. Ratings are shown as a score out of 100, and the rating has a **Balance sheet** part (debt-to-equity, current ratio, free cash flow; Yahoo only) and a 200-day note on the technical part.
+
 Every ticker in the app links to one page per company, `/stock/NVDA` (old `/analysis?symbol=` links still work). It holds the chart, technicals and tabs for Rating (its latest evidence rating and parts), Position (your paper trades in it), financials, news, options, valuation and smart money. The **Ratings** history and Rate now live in Market Scan's Ratings tab, and every scan row shows the stock's latest rating.
 - **Valuation tab:** see "Valuation tab (Analysis)" below.
 - **Options and TradingView tabs:** see "Options tab (Analysis)" and "TradingView widgets" below.
@@ -362,7 +364,7 @@ When a symbol lacks the data a required rule needs, it is shown as **not judged*
 by the **quality gate** (`backend/app/analysis/quality_gate.py`), plain rules with no AI:
 
 1. **Trend:** the last close is above the 200-day average (needs 200 daily bars). Optional (off): the 200-day must be rising (`require_rising_ma200`, needs 220 bars), and the close may be at most `max_extension_above_ma200_pct` above it (0 = off).
-2. **Growth:** the latest year's revenue is up at least `hold_min_revenue_growth_pct` (default 5%; 0 = just not shrinking) on the prior year's. Optional (off): growth must also beat the year before's growth (`require_growth_acceleration`; needs three reported years). Optional (off): operating income must grow faster than revenue (`require_operating_leverage`; Yahoo data only, missing fails).
+2. **Growth:** the latest year's revenue is up at least `hold_min_revenue_growth_pct` (default 5%; 0 = just not shrinking) on the prior year's. Optional (off): growth must also beat the year before's growth (`require_growth_acceleration`; needs three reported years). Optional (off): operating income must grow faster than revenue (`require_operating_leverage`; Yahoo data only, missing fails). Optional (off): financial health, meaning debt-to-equity at most 1, current ratio at least 1 and positive free cash flow (`require_financial_health`; Yahoo data only, missing fails).
 3. **Profit:** the company is profitable.
 4. **Valuation:** `score_valuation` (P/E, market size) does not call it expensive.
    Optional volume check (all off): `block_on_distribution` fails a stock whose 20-day up-day volume is 1/1.3 of its down-day volume or less; `require_accumulation` needs 1.3x or more. `sell_on_distribution` makes the same distribution, while the price is under its 50-day average, one sell signal (never sells alone).

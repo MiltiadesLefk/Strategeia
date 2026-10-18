@@ -68,6 +68,7 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_min_revenue_growth_pct": "gate min revenue growth %",
     "require_growth_acceleration": "gate requires growth acceleration",
     "require_operating_leverage": "gate requires operating leverage",
+    "require_financial_health": "gate requires financial health",
     "block_on_distribution": "gate blocks on distribution",
     "require_accumulation": "gate requires accumulation",
     "sell_on_distribution": "sell plan counts distribution",
@@ -101,7 +102,8 @@ DECISION_SETTINGS: dict[str, str] = {
 # silently dropping out of the fingerprint.
 RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     # The hold gate's own rules (hold_stop_pct and hold_target_weight_pct are settings above).
-    "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS", "MA_SLOPE_LOOKBACK"),
+    "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS", "MA_SLOPE_LOOKBACK", "MAX_DEBT_TO_EQUITY", "MIN_CURRENT_RATIO"),
+    "app.analysis.balance_sheet_scoring": ("BALANCE_SHEET_SCORE_CAP", "WEAK_DEBT_TO_EQUITY"),
     "app.analysis.price_evidence": ("ACCUMULATION_RATIO", "VOLUME_TREND_DAYS"),
     "app.services.sell_plan_service": ("PRESSURE_MA_DAYS",),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),

@@ -100,8 +100,16 @@ def get_analysis(
             if v is not None and not pd.isna(v)
         ]
 
+    def _pct_vs_ma(days: int) -> float | None:
+        closes = ohlcv["close"]
+        if intraday or len(closes) < days:
+            return None
+        return float((chart.price / closes.tail(days).mean() - 1) * 100)
+
     return AnalysisResponse(
         symbol=symbol,
+        pct_vs_ma50=_pct_vs_ma(50),
+        pct_vs_ma200=_pct_vs_ma(200),
         price=chart.price,
         ema20=chart.ema20,
         ema50=chart.ema50,

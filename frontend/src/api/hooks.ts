@@ -30,7 +30,7 @@ import type {
 } from './types';
 import type { CalibrationReport } from './types';
 import type { RebuyWatchItem } from './types';
-import type { CalendarResponse, EarningsPreview } from './types';
+import type { CalendarResponse, EarningsPreview, QualityGateResponse } from './types';
 import type { MissedTradeReport } from './types';
 import type { ReviewBuyResponse, ReviewItem, ReviewList, SleeveReport } from './types';
 import type { StrategyHistory } from './types';
@@ -917,6 +917,16 @@ export function useTerminalRecap(ai: boolean, limit: number) {
     queryFn: () => api.get<RecapResponse>(`/api/terminal/recap?ai=${ai}&limit=${limit}`),
     refetchInterval: TERMINAL_REFETCH_MS,
     staleTime: TERMINAL_REFETCH_MS,
+  });
+}
+
+export function useQualityGate(symbol: string | null) {
+  return useQuery({
+    queryKey: ['quality-gate', symbol ?? ''] as const,
+    queryFn: () => api.get<QualityGateResponse>(`/api/research/${symbol}/quality-gate`),
+    enabled: !!symbol,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 }
 

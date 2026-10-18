@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { qk, useAnalysis, useArchive, useNewsCards, useResearch, useUniverse } from '../api/hooks';
+import { qk, useAnalysis, useArchive, useNewsCards, useQualityGate, useResearch, useUniverse } from '../api/hooks';
 import { NewsCardChips, NewsCardsPanel } from '../components/NewsCardChips';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { AlertMeButton } from '../components/PriceAlertsPanel';
@@ -176,6 +176,39 @@ function ArchivePanel({ symbol }: { symbol: string }) {
   );
 }
 
+/** The hold quality check as plain sentences: every part passes or fails with the numbers behind it. Informational; the scan makes the decision. */
+function QualityGateCard({ symbol }: { symbol: string }) {
+  const { data, isLoading, error } = useQualityGate(symbol);
+  return (
+    <div className="card" data-testid="quality-gate-card">
+      <h3 style={{ marginBottom: 12 }}>
+        Quality check
+        {data && (
+          <span className={`badge ${data.passed ? 'badge-green' : 'badge-red'}`} style={{ marginLeft: 8 }}>
+            {data.passed ? 'Passes' : 'Fails'}
+          </span>
+        )}
+        {data?.dip && <span className="badge badge-amber" style={{ marginLeft: 6 }}>In a dip</span>}
+      </h3>
+      {isLoading && <LoadingSpinner label="Checking…" />}
+      {error && <EmptyState>{(error as ApiError).message}</EmptyState>}
+      {data && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {data.checks.map((c) => (
+            <div key={c.name} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <span style={{ color: c.ok ? 'var(--green)' : 'var(--red)', fontWeight: 700, lineHeight: '20px' }}>{c.ok ? '✓' : '✗'}</span>
+              <div style={{ fontSize: 13, lineHeight: '20px' }}>
+                <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{c.name.replace(/_/g, ' ')}</span>
+                <span className="text-muted"> — {c.note}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UpcomingEarningsCard({ data }: { data: ResearchResponse }) {
   if (!data.earnings_date) {
     return (
@@ -229,8 +262,9 @@ function UpcomingEarningsCard({ data }: { data: ResearchResponse }) {
   );
 }
 
-function ChartSection({ symbol, companyName, range, setRange }: { symbol: string; companyName: string | undefined; range: string; setRange: (r: string) => void }) {
+function ChartSection({ symbol, companyName, sector, range, setRange }: { symbol: string; companyName: string | undefined; sector: string | undefined; range: string; setRange: (r: string) => void }) {
   const { data, isLoading, error, refetch, dataUpdatedAt, isFetching } = useAnalysis(symbol, range);
+  const { data: research } = useResearch(symbol); // same query the tabs below use, so no extra request
   const queryClient = useQueryClient();
   // Intraday bars come from one free source (Yahoo), and when it is rate-limited there is no second
   // one to ask. Rather than leave the chart blank, an intraday range that fails drops to the daily
@@ -278,6 +312,19 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
                 </Flash>
               ) : (
                 '—'
+              )}
+              {research?.change_pct != null && (
+                <span className={research.change_pct >= 0 ? 'text-green' : 'text-red'} style={{ marginLeft: 8, fontSize: 13 }}>
+                  {research.change_pct >= 0 ? '▲' : '▼'} {formatPct(research.change_pct)}
+                  {research.change != null && ` (${formatMoney(research.change)})`}
+                </span>
+              )}
+            </div>
+            <div className="text-muted" style={{ fontSize: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {sector && sector !== 'Unknown' && <span className="badge">{sector}</span>}
+              {research?.market_cap != null && <span>Market cap {formatMoney(research.market_cap, { compact: true })}</span>}
+              {research?.earnings_date && (
+                <span>· Next earnings {new Date(research.earnings_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               )}
             </div>
             <div style={{ marginTop: 2 }}>
@@ -349,6 +396,21 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
                 {formatNumber(data.rsi14, 0)}
               </div>
             </div>
+            {(data.pct_vs_ma50 != null || data.pct_vs_ma200 != null) && (
+              <div className="card">
+                <div className="text-muted" style={{ fontSize: 12 }}>
+                  Price vs 50-day / 200-day
+                </div>
+                <div className="tabular-nums" style={{ fontWeight: 700 }}>
+                  {[data.pct_vs_ma50, data.pct_vs_ma200].map((v, i) => (
+                    <span key={i} className={v == null ? undefined : v >= 0 ? 'text-green' : 'text-red'}>
+                      {i > 0 && <span className="text-muted"> / </span>}
+                      {v == null ? '—' : formatPct(v)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="card">
               <div className="text-muted" style={{ fontSize: 12 }}>
                 EMA20 / EMA50
@@ -485,6 +547,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <QualityGateCard symbol={data.symbol} />
                   <UpcomingEarningsCard data={data} />
                   <div className="card">
                     <h3 style={{ marginBottom: 12 }}>Key Catalysts</h3>
@@ -593,7 +656,8 @@ export function AnalysisPage() {
   const [range, setRange] = useState('3mo');
   const [tab, setTab] = useState('overview');
   const { data: universe } = useUniverse();
-  const companyName = universe?.find((e) => e.symbol === symbol)?.name;
+  const entry = universe?.find((e) => e.symbol === symbol);
+  const companyName = entry?.name;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -609,7 +673,7 @@ export function AnalysisPage() {
 
       {symbol && (
         <>
-          <ChartSection symbol={symbol} companyName={companyName} range={range} setRange={setRange} />
+          <ChartSection symbol={symbol} companyName={companyName} sector={entry?.sector} range={range} setRange={setRange} />
           <ResearchSection symbol={symbol} tab={tab} setTab={setTab} />
         </>
       )}

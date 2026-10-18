@@ -660,6 +660,8 @@ class AppSettings(BaseModel):
     require_growth_acceleration: bool = False
     # Operating leverage: operating income must grow faster than revenue (missing operating income fails).
     require_operating_leverage: bool = False
+    # Financial health: low debt-to-equity, current ratio above 1 and positive free cash flow (missing figures fail).
+    require_financial_health: bool = False
     # Volume checks (all off): the gate's "volume" check fails on distribution (up-day volume <= 1/1.3 of down-day
     # volume over 20 days); require_accumulation is stricter (must show accumulation). The sell plan counts
     # distribution while the price is under its 50-day average as one signal.

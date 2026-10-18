@@ -149,6 +149,24 @@ class YFinanceProvider:
         if financials is None or financials.empty:
             raise DataProviderError(f"yfinance returned no financials for {symbol}")
 
+        def _statement(attr: str):
+            try:
+                frame = getattr(ticker, attr)
+                return None if frame is None or frame.empty else frame
+            except Exception:  # noqa: BLE001 - health figures are optional: unreadable = None, never a failed read
+                return None
+
+        def _cell(frame, row: str, column) -> float | None:
+            try:
+                v = float(frame.at[row, column])
+            except (AttributeError, KeyError, TypeError, ValueError):
+                return None
+            return None if pd.isna(v) else v
+
+        def _ratio(top: float | None, bottom: float | None) -> float | None:
+            return top / bottom if top is not None and bottom else None
+
+        balance, cashflow = _statement("balance_sheet"), _statement("cashflow")
         years: list[FinancialYear] = []
         for column in financials.columns:
             try:
@@ -162,8 +180,15 @@ class YFinanceProvider:
                 op = float(financials.at["Operating Income", column])
             except (KeyError, TypeError, ValueError):
                 op = float("nan")
+            # a statement's columns are the same fiscal year-ends as `financials`; a column it lacks reads as None
+            b = (lambda row: _cell(balance, row, column)) if balance is not None else (lambda row: None)
+            c = (lambda row: _cell(cashflow, row, column)) if cashflow is not None else (lambda row: None)
+            equity = b("Stockholders Equity")
             years.append(FinancialYear(year=pd.Timestamp(column).year, revenue=revenue, net_income=net_income,
-                                       operating_income=None if pd.isna(op) else op))
+                                       operating_income=None if pd.isna(op) else op,
+                                       debt_to_equity=_ratio(b("Total Debt"), equity if equity and equity > 0 else None),
+                                       current_ratio=_ratio(b("Current Assets"), b("Current Liabilities")),
+                                       free_cash_flow=c("Free Cash Flow")))
         years.sort(key=lambda fy: fy.year)
         if not years:
             raise DataProviderError(f"yfinance financials for {symbol} missing Revenue/Net Income rows")

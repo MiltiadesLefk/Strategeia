@@ -10,6 +10,7 @@ Smart Money, buying AND selling (people bought supports a long; people sold or s
 Company events and numbers:
   filing_8k         negative-leaning 8-K items                           (analysis/filing_8k_scoring.py)
   financial_health  profitability trend                                  (analysis/financial_health_scoring.py)
+  balance_sheet     debt-to-equity, current ratio, free cash flow          (analysis/balance_sheet_scoring.py)
   valuation         P/E extremes plus the DCF and peer comparison        (analysis/valuation_scoring.py)
   analyst_consensus consensus EPS against the last reported EPS          (analysis/options_consensus_evidence.py)
 Market evidence:
@@ -39,6 +40,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 from sqlmodel import Session
 
+from app.analysis.balance_sheet_scoring import score_balance_sheet
 from app.analysis.congress_scoring import build_congress_signal
 from app.analysis.fed_event_window import build_fed_window_signal
 from app.analysis.filing_8k_scoring import build_8k_signal
@@ -78,6 +80,7 @@ EXTRA_PARTS: tuple[tuple[str, str, int, bool], ...] = (
     ("short_volume", "Short volume", 1, False),
     ("filing_8k", "8-K filings", 1, False),
     ("financial_health", "Financials", 1, False),
+    ("balance_sheet", "Balance sheet", 1, False),
     ("valuation", "Valuation", 2, False),
     ("analyst_consensus", "Consensus", 1, False),
     ("relative_strength", "Vs market", 1, False),
@@ -230,6 +233,17 @@ def evaluate_extra_evidence(
             "neither clearly healthy and improving nor loss-making or sliding."
         )
 
+    def balance_sheet_zero() -> str:
+        if not financial_years:
+            return "No financials reported."
+        latest = financial_years[-1]
+        if None in (latest.debt_to_equity, latest.current_ratio, latest.free_cash_flow):
+            return f"Debt-to-equity, current ratio or free cash flow not reported for {latest.year} (only Yahoo supplies them)."
+        return no_direction(
+            f"{latest.year} debt-to-equity {latest.debt_to_equity:.2f}, current ratio {latest.current_ratio:.2f}, "
+            f"free cash flow ${latest.free_cash_flow / 1e6:,.0f}M: neither clearly strong nor weak."
+        )
+
     def options_oi_zero() -> str:
         reading = open_interest_ratio(options_chain)
         if reading is None:
@@ -273,6 +287,7 @@ def evaluate_extra_evidence(
 
     if not is_simulated():  # today's company figures, chain, consensus and peers: not rebuilt for a past date
         rule_part("financial_health", lambda: score_financial_health(direction, financial_years), financial_health_zero)
+        rule_part("balance_sheet", lambda: score_balance_sheet(direction, financial_years), balance_sheet_zero)
         rule_part("valuation", lambda: score_valuation(direction, overview, financial_years, valuation), valuation_zero)
         rule_part("analyst_consensus", lambda: score_analyst_consensus(direction, estimate, earnings_history or []), consensus_zero)
         rule_part("options_oi", lambda: score_options_open_interest(direction, options_chain), options_oi_zero)

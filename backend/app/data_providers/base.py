@@ -42,6 +42,10 @@ class FinancialYear:
     revenue: float
     net_income: float
     operating_income: float | None = None  # only yfinance fills it; None = not reported, never a guess
+    # Balance-sheet health, also yfinance only; None = not reported, never a guess.
+    debt_to_equity: float | None = None  # total debt / stockholders' equity (a ratio, 0.04 = 4%)
+    current_ratio: float | None = None  # current assets / current liabilities
+    free_cash_flow: float | None = None  # dollars
 
 
 @dataclass

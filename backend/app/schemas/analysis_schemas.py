@@ -34,6 +34,9 @@ class AnalysisResponse(BaseModel):
     atr_pct: float | None = None
     macd: float | None = None
     macd_signal: float | None = None
+    # Price vs its 50- and 200-day simple averages, in % (None = fewer bars than the window, e.g. intraday ranges).
+    pct_vs_ma50: float | None = None
+    pct_vs_ma200: float | None = None
     candles: list[CandleSchema]
     ema20_series: list[SeriesPoint]
     ema50_series: list[SeriesPoint]
