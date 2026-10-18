@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ApiError } from '../api/client';
 import { useRateStock, useStockRatings } from '../api/hooks';
 import { RatingTable } from './RatingTable';
@@ -10,6 +11,7 @@ export function CompanyRatingPanel({ symbol }: { symbol: string }) {
   const history = useStockRatings(symbol);
   const rate = useRateStock(symbol);
   const [row, ...older] = history.data ?? [];
+  const [open, setOpen] = useState<string | null>(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -33,16 +35,18 @@ export function CompanyRatingPanel({ symbol }: { symbol: string }) {
             <div className="card">
               <h3 style={{ marginBottom: 8 }}>Earlier ratings</h3>
               <table>
-                <thead><tr><th>When</th><th style={{ textAlign: 'right' }}>Points</th><th style={{ textAlign: 'right' }}>%</th><th>Result</th></tr></thead>
+                <thead><tr><th>When</th><th style={{ textAlign: 'right' }}>Points</th><th style={{ textAlign: 'right' }}>%</th><th>Result</th><th /></tr></thead>
                 <tbody>
-                  {older.map((r) => (
-                    <tr key={r.run_at}>
+                  {older.flatMap((r) => [
+                    <tr key={r.run_at} onClick={() => setOpen(open === r.run_at ? null : r.run_at)} style={{ cursor: 'pointer' }}>
                       <td>{when(r.run_at)}</td>
                       <td style={{ textAlign: 'right' }}>{r.points}/{r.max_points}</td>
                       <td style={{ textAlign: 'right' }}>{r.percent}%</td>
                       <td>{r.bought ? 'Bought' : r.passed ? 'Passed' : 'Below bar'}</td>
-                    </tr>
-                  ))}
+                      <td className="text-muted">{open === r.run_at ? 'hide table' : 'show table'}</td>
+                    </tr>,
+                    ...(open === r.run_at ? [<tr key={`${r.run_at}-t`}><td colSpan={5}><RatingTable row={r} /></td></tr>] : []),
+                  ])}
                 </tbody>
               </table>
             </div>

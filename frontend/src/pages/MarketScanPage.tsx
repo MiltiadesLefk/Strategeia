@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useLatestRatings, useRunAutoScanNow, useScan, useUniverse } from '../api/hooks';
 import { SignalBadge, TrendBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
@@ -9,7 +9,6 @@ import { Flash } from '../components/Flash';
 import { PresetMatchChips, ScreenPresetBar, useActivePreset } from '../components/ScreenPresetBar';
 import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatPct } from '../components/common';
 import type { ApiError } from '../api/client';
-import { RatingsPanel } from '../components/RatingsPanel';
 import { Tabs } from '../components/Tabs';
 import type { ScanResult } from '../api/types';
 
@@ -18,7 +17,6 @@ const TABS = [
   { id: 'top', label: 'Top Setups' },
   { id: 'all', label: 'All Stocks' },
   { id: 'watchlist', label: 'Watchlist' },
-  { id: 'ratings', label: 'Ratings' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -51,8 +49,7 @@ function StarButton({ active, onClick }: { active: boolean; onClick: () => void 
 
 export function MarketScanPage() {
   const [symbolsFilter, setSymbolsFilter] = useState<string | undefined>(undefined);
-  const [params] = useSearchParams();
-  const [tab, setTab] = useState<Tab>(params.get('tab') === 'ratings' ? 'ratings' : 'top');
+  const [tab, setTab] = useState<Tab>('top');
   const ratingBySymbol = useLatestRatings().data ?? {};
   const [screenPreset, setScreenPreset] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>(() => loadWatchlist());
@@ -150,20 +147,18 @@ export function MarketScanPage() {
         onChange={(v) => setTab(v as Tab)}
       />
 
-      {tab === 'ratings' && <RatingsPanel />}
-
-      {tab !== 'ratings' && <ScreenPresetBar
+      <ScreenPresetBar
         selected={screenPreset}
         onSelect={setScreenPreset}
         run={presetRun.data}
         isLoading={presetRun.isFetching}
         error={presetRun.error}
-      />}
+      />
 
-      {tab !== 'ratings' && isLoading && <LoadingSpinner label="Scanning markets…" />}
-      {tab !== 'ratings' && error && <ErrorBanner message={(error as ApiError).message} />}
+      {isLoading && <LoadingSpinner label="Scanning markets…" />}
+      {error && <ErrorBanner message={(error as ApiError).message} />}
 
-      {tab !== 'ratings' && data && (
+      {data && (
         <div className="card">
           {data.errors.length > 0 && (
             <div className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>

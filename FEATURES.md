@@ -361,7 +361,7 @@ When a symbol lacks the data a required rule needs, it is shown as **not judged*
 *Rewritten on 2026-10-15.* `generate_trade_plan` and the ten-part evaluation were deleted. One stock is now evaluated
 by the **quality gate** (`backend/app/analysis/quality_gate.py`), plain rules with no AI:
 
-1. **Trend:** the last close is above the 200-day average (needs 200 daily bars).
+1. **Trend:** the last close is above the 200-day average (needs 200 daily bars). Optional (off): the 200-day must be rising (`require_rising_ma200`, needs 220 bars), and the close may be at most `max_extension_above_ma200_pct` above it (0 = off).
 2. **Growth:** the latest year's revenue is up at least `hold_min_revenue_growth_pct` (default 5%; 0 = just not shrinking) on the prior year's. Optional (off): growth must also beat the year before's growth (`require_growth_acceleration`; needs three reported years).
 3. **Profit:** the company is profitable.
 4. **Valuation:** `score_valuation` (P/E, market size) does not call it expensive.
@@ -2297,4 +2297,4 @@ There are three ways to buy, in one portfolio under the same caps. Each buy reas
 - **Caveats.** None of this has run live yet, and the big-news lane, the evidence bonus, the live touch stop and the automatic watchlist adds were written on 2026-10-16 and have not been through the full test, build and screen check yet. The numbers above are starting guesses. The studies behind the gate are optimistic (survivors, daily bars, no costs) and show the gate alone is about equal to SPY.
 - **Backtest in hold mode (§18).** The Backtest Lab replays this scan with `hold_scan_symbol(price_only=True)`: only the trend check and dip rule run, because profit and P/E are not known for a past date. The big-news lane, the evidence bonus and the live touch stop have no replay: a backtest uses close-mode stops. A random-hold-entry baseline and walk-forward validation (stop %, target weight, buy-only-dips, slippage) judge it by **return %**. The result is optimistic (survivors, daily bars) and not comparable with the live gate, which also checks growth, profit and valuation.
 
-- **Rating tab (Company page):** the stock's latest evidence rating as a table (every part, its points, a verdict and why), earlier ratings, and **Re-rate now** to rate just that stock. Market Scan's Ratings tab shows the same table per stock for each daily or manual run.
+- **Ratings page (`/ratings`):** "Latest per company" lists each stock's newest rating with a **Rate** button per company (and a company dropdown to rate any stock); **Rate all** rates the watchlist. The left column lists every daily or manual run; pressing one shows that day's table, and pressing a row opens the part-by-part explanation (points, verdict, why). On a Company page the **Rating** tab shows the same table, a **Re-rate now** button and earlier ratings that each expand to their own table.

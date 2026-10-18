@@ -1373,6 +1373,18 @@ export function useRateStock(symbol: string) {
   });
 }
 
+/** Rates any one stock now (the Ratings page's per-company button); buys nothing. */
+export function useRateSymbol() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (symbol: string) => api.post<RatingRow>(`/api/ratings/stock/${encodeURIComponent(symbol)}`),
+    onSuccess: (row) => {
+      queryClient.invalidateQueries({ queryKey: ['ratings-latest'] });
+      queryClient.invalidateQueries({ queryKey: ['ratings-stock', row.symbol] });
+    },
+  });
+}
+
 /** Rates the whole watchlist now and saves it as a run; buys nothing. */
 export function useStartRatingRun() {
   const queryClient = useQueryClient();

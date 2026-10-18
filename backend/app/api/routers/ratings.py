@@ -16,6 +16,7 @@ from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.database import engine
 from app.portfolio.models import RatingRecord
+from app.timeutil import utcnow_naive
 from app.services.rating_service import rate_stock, rate_universe, record_rating
 
 router = APIRouter(prefix="/api/ratings", tags=["ratings"], dependencies=[Depends(require_auth)])
@@ -32,11 +33,16 @@ def list_runs(limit: int = 30, session: Session = Depends(get_session)) -> list[
             func.sum(RatingRecord.passed), func.sum(RatingRecord.bought),
         ).where(RatingRecord.source != "single").group_by(RatingRecord.run_id).order_by(func.min(RatingRecord.run_at).desc()).limit(min(max(limit, 1), 200))
     ).all()
-    return [
+    out = [
         {"run_id": r[0], "run_at": r[1], "source": r[2], "rated": r[3], "passed": int(r[4] or 0), "bought": int(r[5] or 0),
          "running": _running.get(r[0], False)}
         for r in rows
     ]
+    # A run that has started but saved no row yet must still be listed, or the page cannot follow it.
+    seen = {o["run_id"] for o in out}
+    started = [{"run_id": rid, "run_at": utcnow_naive(), "source": "manual", "rated": 0, "passed": 0, "bought": 0, "running": True}
+               for rid, going in _running.items() if going and rid not in seen]
+    return started + out
 
 
 def _row_json(r: RatingRecord) -> dict:

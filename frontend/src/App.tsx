@@ -11,6 +11,7 @@ import {
   MarketScanPage,
   MarketTerminalPage,
   PortfolioPage,
+  RatingsPage,
   ScreenerPage,
   SettingsPage,
   SmartMoneyPage,
@@ -36,7 +37,7 @@ export default function App() {
           <Route path="analysis" element={<CompanyRedirect />} />
           <Route path="research" element={<CompanyRedirect />} />
           <Route path="calendar" element={<CalendarPage />} />
-          <Route path="ratings" element={<Navigate to="/scan?tab=ratings" replace />} />
+          <Route path="ratings" element={<RatingsPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
           <Route path="terminal" element={<MarketTerminalPage />} />
           <Route path="smart-money" element={<SmartMoneyPage />} />

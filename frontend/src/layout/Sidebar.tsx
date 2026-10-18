@@ -32,13 +32,14 @@ const ICONS = {
 };
 
 type NavItem = { to: string; label: string; end?: boolean; icon: keyof typeof ICONS };
-// Grouped by what you are doing, not by feature. Ratings live inside Market Scan, one company has one page.
+// Grouped by what you are doing, not by feature. Ratings have their own page, one company has one page.
 const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   { title: 'Home', items: [{ to: '/', label: 'Dashboard', end: true, icon: 'dashboard' }] },
   {
     title: 'Discover',
     items: [
       { to: '/scan', label: 'Market Scan', icon: 'scan' },
+      { to: '/ratings', label: 'Ratings', icon: 'plans' },
       { to: '/screener', label: 'Screener', icon: 'screener' },
       { to: '/smart-money', label: 'Smart Money', icon: 'smartMoney' },
       { to: '/calendar', label: 'Calendar', icon: 'calendar' },
