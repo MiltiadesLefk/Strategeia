@@ -173,7 +173,8 @@ and couldn't test.
   - **Press releases and AI labels** (News tab): PR Newswire press releases saved for this stock (with a
     "PR Newswire" badge), a **Collect press releases** button, and a **Label now** button (needs News cards
     switched on in Settings and an AI provider). A headline that has an AI label also shows chips for its
-    event type, sentiment and materiality, marked "AI-labelled" (§11, "News cards").
+    event type, sentiment and materiality, marked "AI-labelled" (§11, "News cards"). For positive or negative
+    headlines the AI also reads the article behind the link, and that reading replaces the headline's in the news score.
   - **Saved history** (News tab): how many news items and fundamentals snapshots the app has saved for
     this stock, and since when, with a note that a backtest can only use news from the day the archive
     began (§11).
