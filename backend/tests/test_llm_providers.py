@@ -124,3 +124,15 @@ def test_orcarouter_not_configured_without_key():
 
 def test_orcarouter_default_model_is_adaptive_router():
     assert OrcaRouterProvider(api_key="x")._model == "orcarouter/auto"
+
+
+def test_claude_code_cli_talks_utf8_so_a_curly_quote_cannot_crash_on_windows(monkeypatch):
+    seen = {}
+
+    def fake_run(*a, **k):
+        seen.update(k)
+        return FakeCompletedProcess(returncode=0, stdout=json.dumps({"result": "ok"}))
+
+    monkeypatch.setattr("app.llm_providers.claude_code_cli_provider.subprocess.run", fake_run)
+    ClaudeCodeCLIProvider(cli_path="/usr/bin/claude").generate("SoFi\u2019s 52-week low \u2014 \U0001F4C9")
+    assert seen["encoding"] == "utf-8" and seen["errors"] == "replace"

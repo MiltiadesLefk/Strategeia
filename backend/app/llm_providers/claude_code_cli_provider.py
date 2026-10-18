@@ -164,6 +164,8 @@ class ClaudeCodeCLIProvider:
                 argv,
                 input=prompt,
                 text=True,
+                encoding="utf-8",  # Windows would use cp1252 and crash on a curly quote or an emoji in a headline
+                errors="replace",
                 capture_output=True,
                 timeout=max(self.timeout_sec, RESEARCH_TIMEOUT_SEC) if use_web else self.timeout_sec,
                 shell=False,
