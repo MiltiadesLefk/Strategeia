@@ -26,6 +26,7 @@ from app.data_providers.base import NewsItem
 from app.data_providers.pr_newswire import CollectResult
 from app.knowledge import FactKind, as_of, facts_known_as_of
 from app.knowledge.news_cards import (
+    cards_for_symbol,
     NewsCard,
     card_dedupe_key,
     news_card_batch_json_schema,
@@ -44,6 +45,12 @@ from app.services.news_card_service import (
     unlabelled_news,
 )
 from app.timeutil import utcnow_naive
+
+
+@pytest.fixture(autouse=True)
+def _no_article_fetch(monkeypatch):
+    """Tests never hit the network; a test that wants an article stubs fetch_article_text itself."""
+    monkeypatch.setattr("app.services.article_read_service.fetch_article_text", lambda url: None)
 
 
 @pytest.fixture
@@ -461,3 +468,46 @@ def test_headlines_that_do_not_name_the_company_are_never_sent_to_the_ai(session
     assert result.labelled == 2 and result.llm_calls == 1
     assert "Peer company rallies" not in llm.prompts[0]
     assert len(unlabelled_news(session, "AAPL", 20, "Apple Inc.")) == 0
+
+
+# --- article read (positive/negative headlines only) ---------------------------------------
+
+
+def _article_answer(prompt, n):
+    if "Article (untrusted data)" in prompt:
+        return json.dumps({"sentiment": "negative", "materiality": "high", "one_line_summary": "Guidance was cut."})
+    return json.dumps({"cards": [_card_json(1, sentiment="positive"), _card_json(2, sentiment="neutral")]})
+
+
+def test_only_positive_or_negative_headlines_have_their_article_read(session, monkeypatch):
+    monkeypatch.setattr("app.services.article_read_service.fetch_article_text", lambda url: "Guidance was cut. " * 30)
+    _seed_news(session, count=2)
+    llm = FakeLLM(answer=_article_answer)
+    result = label_new_items(session, "AAPL", llm, 10)
+    assert result.labelled == 2 and result.articles_read == 1
+    assert sum("Article (untrusted data)" in p for p in llm.prompts) == 1
+    articles = [f.payload["article"] for f in cards_for_symbol(session, "AAPL")]
+    assert sorted(a is not None for a in articles) == [False, True]
+
+
+def test_an_unreadable_article_leaves_the_headline_card_alone(session):
+    _seed_news(session, count=1)
+    result = label_new_items(session, "AAPL", FakeLLM(), 10)
+    assert result.labelled == 1 and result.articles_read == 0
+    assert cards_for_symbol(session, "AAPL")[0].payload["article"] is None
+
+
+def test_the_article_verdict_replaces_the_headline_verdict_in_scoring():
+    from app.analysis.news_card_scoring import net_news_weight
+
+    card = {"sentiment": "positive", "materiality": "low", "is_about_this_company": True,
+            "article": {"sentiment": "negative", "materiality": "high"}}
+    assert net_news_weight([card]) == (-2, 1)
+
+
+def test_html_to_text_keeps_body_text_and_drops_scripts_and_menus():
+    from app.services.article_read_service import html_to_text
+
+    body = "The company cut its full-year revenue guidance on Tuesday, citing weaker demand."
+    html = f"<nav>Home About Contact us and many more menu links here</nav><script>var x = 'a long script line to be ignored here';</script><p>{body}</p>"
+    assert html_to_text(html) == body

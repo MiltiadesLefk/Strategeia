@@ -39,6 +39,7 @@ from app.knowledge.news_cards import (
 from app.llm_providers.base import ROUTINE_TIER, LLMProvider
 from app.llm_providers.factory import generate_with_tier
 from app.services.archive_service import archived_news
+from app.services.article_read_service import read_article
 from app.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,8 @@ BATCH_SIZE = 10
 # Hard ceiling on AI calls in one run (one button press or one watcher tick),
 # whatever the headline limit says: three calls label at most 30 headlines.
 MAX_LLM_CALLS_PER_RUN = 3
+# Articles opened and read per run (each is one more AI call, only for positive or negative headlines).
+MAX_ARTICLE_READS_PER_RUN = 6
 # How many of the newest archived headlines are examined for ones without a card.
 CANDIDATE_SCAN_LIMIT = 200
 MAX_TOKENS_PER_CALL = 2500
@@ -84,6 +87,7 @@ class LabelRunResult:
     labelled: int = 0
     skipped_batches: int = 0
     llm_calls: int = 0
+    articles_read: int = 0
     remaining_unlabelled: int = 0
     reason: str | None = None
     errors: list[str] = field(default_factory=list)
@@ -229,10 +233,18 @@ def label_new_items(
         labelled_at = utcnow_naive()
         label_model = reply.model or reply.provider or llm_provider.name
         for index, entry in by_index.items():
+            fact = batch[index - 1]
+            article = None
+            if entry.sentiment in ("positive", "negative") and result.articles_read < MAX_ARTICLE_READS_PER_RUN:
+                read = read_article(llm_provider, str(fact.payload.get("url", "")),
+                                    str(fact.payload.get("headline", "")), symbol, company_name)
+                if read is not None:
+                    result.articles_read += 1
+                    article = read.model_dump()
             record_card(
-                session, batch[index - 1], _plain_card(entry),
+                session, fact, _plain_card(entry),
                 label_model=label_model, label_provider=reply.provider or llm_provider.name,
-                labelled_at=labelled_at,
+                labelled_at=labelled_at, article=article,
             )
             result.labelled += 1
 

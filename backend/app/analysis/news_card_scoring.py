@@ -57,11 +57,13 @@ def net_news_weight(cards: list[dict]) -> tuple[int, int]:
     """(net weighted sentiment, number of cards that counted)."""
     net = counted = 0
     for card in cards:
-        weight = MATERIALITY_WEIGHT.get(str(card.get("materiality")))
+        # When the article body was read, its verdict replaces the headline's.
+        read = card.get("article") or card
+        weight = MATERIALITY_WEIGHT.get(str(read.get("materiality")))
         if weight is None or not card.get("is_about_this_company"):
             continue
         counted += 1
-        net += weight * SENTIMENT_SIGN.get(str(card.get("sentiment")), 0)
+        net += weight * SENTIMENT_SIGN.get(str(read.get("sentiment")), 0)
     return net, counted
 
 

@@ -154,6 +154,7 @@ def record_card(
     label_provider: str,
     labelled_at: datetime | None = None,
     commit: bool = True,
+    article: dict | None = None,
 ) -> RecordedFact:
     """Save one card for one archived headline, once. known_at is the labelling
     time (see the module note); the headline's own time stays in the payload."""
@@ -177,6 +178,9 @@ def record_card(
             "url": str(news_fact.payload.get("url", "")),
             "news_known_at": news_fact.known_at.isoformat(),
             **card.model_dump(),
+            # The AI's read of the article body (sentiment, materiality, one_line_summary), only for headlines
+            # it called positive or negative; absent when the page could not be read.
+            "article": article,
             "label_model": label_model,
             "label_provider": label_provider,
             "labelled_at": when.isoformat(),
