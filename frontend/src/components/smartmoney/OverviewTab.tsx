@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useSmartMoneyOverview } from '../../api/hooks';
 import type { ApiError } from '../../api/client';
 import { StatCard } from '../StatCard';
+import { SmartMoneyEvents } from './StockSmartMoney';
+import type { SmartMoneySide } from '../../api/types';
 import { SymbolFilterSelect } from '../SymbolFilterSelect';
 import { TickerLink } from '../TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney } from '../common';
@@ -66,7 +68,12 @@ export function OverviewTab() {
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <h3 style={{ fontSize: 16 }}>Stocks by combined smart-money score</h3>
             {d.ranked.length === 0 ? (
-              <EmptyState>No smart-money evidence is stored for this window. Load insiders, Congress reports and fund filings from their tabs.</EmptyState>
+              <EmptyState>
+                Nothing scores points in the scan&apos;s last 30 days{symbol ? ` for ${symbol}` : ''}, which is all the morning scan counts.
+                {t.insider.buys + t.insider.sells + t.congress.buys + t.congress.sells + t.funds.new_positions + t.funds.added + t.funds.trimmed + t.funds.sold_out + t.owners['13D'] + t.owners['13G'] > 0
+                  ? ' The cards above also count older filings in your window.'
+                  : ' Load insiders, Congress reports and fund filings from their tabs if you expect more.'}
+              </EmptyState>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table>
@@ -96,6 +103,12 @@ export function OverviewTab() {
               </div>
             )}
           </div>
+          {symbol && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <h3 style={{ fontSize: 16 }}>{symbol}: every source, newest first</h3>
+              <SmartMoneyEvents symbol={symbol} days={days} side={side as SmartMoneySide} minValue={minValue} />
+            </div>
+          )}
         </>
       )}
     </>
