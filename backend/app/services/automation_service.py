@@ -94,6 +94,14 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
         for symbol, headline in discover_from_news(settings, data_provider).items():
             if symbol not in held and symbol not in candidates:
                 candidates[symbol] = f'hold scan [quality lane] (news discovery, headline: "{headline}"): passed the quality gate'
+    try:  # smart-money buys (Congress, insiders, funds, 5% owners) join the universe even when too small to buy
+        from app.services.smart_money_adopt_service import adopt_smart_money_finds
+
+        adopted = adopt_smart_money_finds(settings, data_provider, session)
+        if adopted:
+            logger.info("Hold scan: smart-money finds added to the universe: %s", ", ".join(adopted))
+    except Exception:
+        logger.exception("Hold scan: adopting smart-money finds failed")
     market_found: dict[str, str] = {}
     if llm_provider is not None:
         from app.services.news_reader_service import read_news

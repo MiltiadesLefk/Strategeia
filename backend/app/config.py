@@ -619,6 +619,10 @@ class AppSettings(BaseModel):
     smart_money_followed_member_multiplier: float = Field(default=1.5, ge=1.0, le=3.0)
     smart_money_scope: Literal["universe", "market_wide"] = "market_wide"
     smart_money_min_score: float = Field(default=3.0, ge=0, le=30)
+    # Every morning, stocks whose smart-money BUY score reaches this are analysed, alerted and added to the universe for
+    # good (no buy: buying keeps its own minimum above). At most this many per run; 0 = off.
+    smart_money_adopt_min_score: float = Field(default=1.0, gt=0, le=30)
+    smart_money_adopt_max_per_run: int = Field(default=5, ge=0, le=50)
     smart_money_max_open_positions: int = Field(default=5, ge=1, le=50)
     smart_money_max_new_per_week: int = Field(default=2, ge=0, le=20)
     # Market-wide scope: at most this many feed companies are read per poll; the rest carry over.

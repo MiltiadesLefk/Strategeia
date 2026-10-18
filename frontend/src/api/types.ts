@@ -421,6 +421,10 @@ export interface AppSettings {
   big_news_lookback_hours: number;
   /** Big-news lane: skip the buy when the stock is already up this % today. 0 = off. */
   big_news_skip_if_up_pct: number;
+  /** Morning scan: stocks whose smart-money buy score reaches this are analysed and added to the universe (no buy). */
+  smart_money_adopt_min_score: number;
+  /** Most such stocks added per scan; 0 = off. */
+  smart_money_adopt_max_per_run: number;
   /** 'touch' = the disaster stop fires when price touches it; 'close' = only a final daily close beyond it. */
   hold_stop_mode: 'close' | 'touch';
 
@@ -522,6 +526,8 @@ export interface SettingsUpdateRequest {
   big_news_size_pct?: number;
   big_news_lookback_hours?: number;
   big_news_skip_if_up_pct?: number;
+  smart_money_adopt_min_score?: number;
+  smart_money_adopt_max_per_run?: number;
   hold_stop_mode?: 'close' | 'touch';
 
   news_discovery_enabled?: boolean;

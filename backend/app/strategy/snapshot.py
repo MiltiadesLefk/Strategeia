@@ -92,6 +92,8 @@ DECISION_SETTINGS: dict[str, str] = {
     "smart_money_followed_member_multiplier": "smart-money followed-member multiplier",
     "smart_money_scope": "smart-money scope",
     "smart_money_min_score": "smart-money min score",
+    "smart_money_adopt_min_score": "smart-money adopt min score",
+    "smart_money_adopt_max_per_run": "smart-money adopts per run",
     "smart_money_max_open_positions": "smart-money max open positions",
     "smart_money_max_new_per_week": "smart-money max new per week",
 }

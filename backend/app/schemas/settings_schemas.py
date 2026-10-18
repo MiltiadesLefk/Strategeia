@@ -60,6 +60,8 @@ class SettingsUpdateRequest(BaseModel):
     smart_money_followed_member_multiplier: float | None = Field(default=None, ge=1.0, le=3.0)
     smart_money_scope: Literal["universe", "market_wide"] | None = None
     smart_money_min_score: float | None = Field(default=None, ge=0, le=30)
+    smart_money_adopt_min_score: float | None = Field(default=None, gt=0, le=30)
+    smart_money_adopt_max_per_run: int | None = Field(default=None, ge=0, le=50)
     smart_money_max_open_positions: int | None = Field(default=None, ge=1, le=50)
     smart_money_max_new_per_week: int | None = Field(default=None, ge=0, le=20)
     smart_money_max_companies_per_poll: int | None = Field(default=None, ge=10, le=2000)
