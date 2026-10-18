@@ -2724,7 +2724,7 @@ export interface RebuyWatchItem {
 export interface RatingRunSummary {
   run_id: string;
   run_at: string;
-  source: 'scan' | 'manual';
+  source: 'scan' | 'manual' | 'replay';
   rated: number;
   passed: number;
   bought: number;
