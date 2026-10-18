@@ -305,6 +305,17 @@ def _insider_coverage_job() -> None:
         _insider_coverage_lock.release()
 
 
+LOGO_SYNC_INTERVAL_HOURS = 6
+
+
+def _logo_sync_job() -> None:
+    if is_simulated():
+        return
+    from app.services.logo_service import run_sync
+
+    run_sync()
+
+
 def kick_insider_coverage() -> None:
     """Start a coverage tick now in the background (after the watchlist changed), instead of waiting for the next one."""
     threading.Thread(target=_insider_coverage_job, name="insider-coverage-kick", daemon=True).start()
@@ -365,6 +376,15 @@ def start_scheduler() -> BackgroundScheduler:
         return _scheduler
     settings = load_app_settings()
     _scheduler = BackgroundScheduler()
+    _scheduler.add_job(
+        _logo_sync_job,
+        "interval",
+        hours=LOGO_SYNC_INTERVAL_HOURS,
+        id="logo_sync",
+        next_run_time=datetime.now() + timedelta(seconds=90),  # the first fill starts shortly after the app does
+        max_instances=1,
+        coalesce=True,
+    )
     _scheduler.add_job(
         _mark_to_market_job,
         "interval",

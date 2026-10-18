@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../api/client';
 
+// The app keeps its own copy of every logo (the backend downloads each one once: /api/logos/<symbol>) and asks the
+// third-party API below only if that copy is not available.
 // Automated logo lookup by ticker symbol via Elbstream's free Stock Logo API
 // (api.elbstream.com) — no key, no per-ticker mapping to maintain, so it
 // keeps working as the bundled universe (sp500.csv) grows. Falls back to a
@@ -23,6 +26,10 @@ function colorFor(symbol: string): string {
   return MONOGRAM_COLORS[Math.abs(hash) % MONOGRAM_COLORS.length];
 }
 
+function localLogoUrl(symbol: string): string {
+  return `${API_BASE_URL}/api/logos/${encodeURIComponent(symbol)}`;
+}
+
 function logoUrlFor(symbol: string): string {
   if (symbol.endsWith('-USD')) {
     const coin = symbol.slice(0, -'-USD'.length).toLowerCase();
@@ -38,16 +45,19 @@ const RETRY_DELAYS_MS = [1500, 5000];
 export function CompanyIcon({ symbol, size = 28 }: { symbol: string; size?: number }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [useRemote, setUseRemote] = useState(false);
 
   useEffect(() => {
     setFailed(false);
     setAttempt(0);
+    setUseRemote(false);
   }, [symbol]);
 
   useEffect(() => {
     if (!failed || attempt >= RETRY_DELAYS_MS.length) return;
     const timer = setTimeout(() => {
       setAttempt((n) => n + 1);
+      setUseRemote(false);
       setFailed(false);
     }, RETRY_DELAYS_MS[attempt]);
     return () => clearTimeout(timer);
@@ -91,11 +101,14 @@ export function CompanyIcon({ symbol, size = 28 }: { symbol: string; size?: numb
         overflow: 'hidden',
       }}
     >
+      {/* The stored copy needs the login cookie (credentials); the third-party URL must not ask for CORS. */}
       <img
-        src={attempt === 0 ? logoUrlFor(symbol) : `${logoUrlFor(symbol)}?retry=${attempt}`}
+        key={useRemote ? 'remote' : 'local'}
+        src={useRemote ? (attempt === 0 ? logoUrlFor(symbol) : `${logoUrlFor(symbol)}?retry=${attempt}`) : localLogoUrl(symbol)}
+        crossOrigin={useRemote ? undefined : 'use-credentials'}
         alt={symbol}
         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-        onError={() => setFailed(true)}
+        onError={() => (useRemote ? setFailed(true) : setUseRemote(true))}
       />
     </div>
   );

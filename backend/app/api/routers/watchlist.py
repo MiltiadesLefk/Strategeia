@@ -37,6 +37,9 @@ def save_watchlist(
     from app.scheduler import kick_insider_coverage
 
     background.add_task(kick_insider_coverage)  # a new symbol gets its year of insider filings now, not in 10 minutes
+    from app.services.logo_service import kick_sync
+
+    background.add_task(kick_sync)  # and its logo
     return watchlist_service.describe_watchlist(settings)
 
 

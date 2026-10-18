@@ -33,8 +33,10 @@ os.environ["GOOGLE_NEWS_ENABLED"] = "false"
 for _name in ("FINNHUB_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
     os.environ[_name] = ""
 
+import tempfile
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -107,6 +109,11 @@ def _no_insider_coverage_kick(monkeypatch):
     import app.scheduler
 
     monkeypatch.setattr(app.scheduler, "kick_insider_coverage", lambda: None)
+
+    import app.services.logo_service as logo_service
+
+    monkeypatch.setattr(logo_service, "kick_sync", lambda: None)  # a new ticker would start a logo download
+    monkeypatch.setattr(logo_service, "logo_dir", lambda: Path(tempfile.gettempdir()) / "strategeia-test-logos")
 
 
 @pytest.fixture(autouse=True)

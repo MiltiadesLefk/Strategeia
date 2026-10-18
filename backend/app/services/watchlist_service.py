@@ -172,6 +172,9 @@ def add_to_universe(raw: str, provider: DataProvider) -> bool:
         return False
     base.append(StoredSymbol(symbol, _company_name(symbol, provider) or symbol, default_sector_for(symbol)))
     universe_store.write_store(base)
+    from app.services.logo_service import kick_sync
+
+    kick_sync()  # its logo is stored in the background
     return True
 
 

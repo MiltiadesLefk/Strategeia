@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.routers import logos as logos_router
 from app.api.routers import terminal as terminal_router
 from app.api.routers import options as options_router
 from app.api.routers import library as library_router
@@ -117,6 +118,7 @@ def all_providers_failed_handler(request: Request, exc: AllProvidersFailedError)
 app.include_router(auth.router)
 app.include_router(scanner.router)
 app.include_router(ratings.router)
+app.include_router(logos_router.router)
 app.include_router(screen_presets_router.router)
 app.include_router(analysis.router)
 app.include_router(research.router)
