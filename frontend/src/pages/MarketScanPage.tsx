@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useRatingRun, useRatingRuns, useRunAutoScanNow, useScan, useUniverse } from '../api/hooks';
+import { useLatestRatings, useRunAutoScanNow, useScan, useUniverse } from '../api/hooks';
 import { SignalBadge, TrendBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { Sparkline } from '../components/Sparkline';
@@ -53,8 +53,7 @@ export function MarketScanPage() {
   const [symbolsFilter, setSymbolsFilter] = useState<string | undefined>(undefined);
   const [params] = useSearchParams();
   const [tab, setTab] = useState<Tab>(params.get('tab') === 'ratings' ? 'ratings' : 'top');
-  const latestRun = useRatingRuns().data?.find((r) => !r.running);
-  const ratingBySymbol = new Map((useRatingRun(latestRun?.run_id ?? null).data?.ratings ?? []).map((r) => [r.symbol, r]));
+  const ratingBySymbol = useLatestRatings().data ?? {};
   const [screenPreset, setScreenPreset] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>(() => loadWatchlist());
   const { data: universe } = useUniverse();
@@ -218,7 +217,7 @@ export function MarketScanPage() {
                     </td>
                     <td className="text-muted">{r.momentum}</td>
                     <td className="tabular-nums">{r.score}</td>
-                    <td className="tabular-nums">{ratingBySymbol.get(r.symbol) ? `${ratingBySymbol.get(r.symbol)!.percent}%` : '—'}</td>
+                    <td className="tabular-nums">{ratingBySymbol[r.symbol] ? `${ratingBySymbol[r.symbol].percent}%` : '—'}</td>
                     <td>
                       <SignalBadge signal={r.signal} />
                     </td>

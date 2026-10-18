@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { qk, useAnalysis, useArchive, useNewsCards, useResearch, useUniverse } from '../api/hooks';
@@ -411,23 +411,13 @@ function ChartSection({ symbol, companyName, range, setRange }: { symbol: string
 
 function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string; setTab: (t: string) => void }) {
   const { data, isLoading, error, refetch } = useResearch(symbol);
-  const tabsRef = useRef<HTMLDivElement>(null);
 
-  // Switching to a shorter tab (Earnings/News/Catalysts vs. the taller
-  // Overview/Financials) shrinks the page below wherever the user had
-  // scrolled to, so the browser clamps the scroll position — which reads as
-  // "the whole page jumped to the top," past the pinned chart above. Anchor
-  // deliberately to the tab bar instead, so a tab click always lands
-  // predictably on that tab's content rather than an accidental clamp.
-  function handleTabChange(next: string) {
-    setTab(next);
-    tabsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }
-
+  // A shorter tab would shrink the page below the scroll position and the browser would clamp it up the page;
+  // the minimum height keeps the page as tall as the tallest tab needs, so a tab click never moves the view.
   return (
-    <>
-      <div className="card" ref={tabsRef}>
-        <Tabs tabs={TABS} value={tab} onChange={handleTabChange} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '90vh' }}>
+      <div className="card">
+        <Tabs tabs={TABS} value={tab} onChange={setTab} />
       </div>
 
       {isLoading && <LoadingSpinner label="Loading fundamentals…" />}
@@ -593,7 +583,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
           {tab === 'smartmoney' && !data.symbol.endsWith('-USD') && <FinraPanel symbol={data.symbol} />}
         </>
       )}
-    </>
+    </div>
   );
 }
 

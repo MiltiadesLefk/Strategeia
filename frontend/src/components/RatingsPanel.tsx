@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRatingRun, useRatingRuns, useStartRatingRun } from '../api/hooks';
 import type { ApiError } from '../api/client';
 import type { RatingRow } from '../api/types';
+import { RatingTable } from './RatingTable';
 import { TickerLink } from './TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner } from './common';
 
@@ -9,22 +10,11 @@ function when(iso: string): string {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).toLocaleString();
 }
 
-export function RatingDetailRow({ row }: { row: RatingRow }) {
-  const parts = Object.entries(row.detail.parts ?? {}).filter(([, v]) => v !== 0);
-  const why = row.detail.why ?? {};
+function RatingDetailRow({ row }: { row: RatingRow }) {
   return (
     <tr>
-      <td colSpan={6} style={{ background: 'var(--bg-subtle, transparent)' }}>
-        {parts.length === 0 ? <span className="text-muted">No part scored.</span> : (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {parts.map(([name, points]) => (
-              <li key={name}>
-                <strong>{name} {points > 0 ? `+${points}` : points}</strong>
-                {why[name] ? <span className="text-muted"> — {why[name]}</span> : null}
-              </li>
-            ))}
-          </ul>
-        )}
+      <td colSpan={6}>
+        <RatingTable row={row} />
       </td>
     </tr>
   );
@@ -93,7 +83,7 @@ export function RatingsPanel() {
                         <td style={{ textAlign: 'right' }}>{r.percent}%</td>
                         <td>{r.bought ? 'Bought' : r.passed ? 'Passed' : 'Below bar'}</td>
                         <td>{r.dip ? 'dip' : ''}</td>
-                        <td className="text-muted">{open === r.symbol ? 'hide' : 'show parts'}</td>
+                        <td className="text-muted">{open === r.symbol ? 'hide' : 'show table'}</td>
                       </tr>,
                       ...(open === r.symbol ? [<RatingDetailRow key={`${r.symbol}-d`} row={r} />] : []),
                     ])}

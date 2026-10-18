@@ -33,8 +33,8 @@ function SourceRows({
   return (
     <>
       {rows.map((row) => (
-        <tr key={row.name}>
-          <td>
+        <div key={row.name} style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'flex-start', padding: '10px 0', borderTop: '1px solid var(--border)' }}>
+          <div style={{ minWidth: 0 }}>
             <span
               title={STATUS_HELP[row.status]}
               aria-label={row.status}
@@ -42,22 +42,24 @@ function SourceRows({
             />
             <strong>{row.position !== null ? `${row.position}. ` : ''}{row.label}</strong>
             <div className="text-muted" style={{ fontSize: 12 }}>{row.purpose}</div>
+            <div className="tabular-nums text-muted" style={{ fontSize: 12, marginTop: 2 }} title={`Success over the last calls; median / slowest 5% of live requests (cache hits excluded)`}>
+              {row.calls === 0 ? 'no calls yet' : `${row.calls} calls`}
+              {row.success_rate !== null && ` · ${Math.round(row.success_rate * 100)}% ok`}
+              {row.latency_p50_ms !== null && ` · ${ms(row.latency_p50_ms)} / ${ms(row.latency_p95_ms)}`}
+            </div>
             {row.last_success_at && (
               <div className="text-muted" style={{ fontSize: 12 }}>last success {formatRelativeTime(row.last_success_at)}</div>
             )}
             {row.last_error && (
-              <div className="text-red" style={{ fontSize: 12 }} title={row.last_error}>
+              <div className="text-red" style={{ fontSize: 12, overflowWrap: 'anywhere' }} title={row.last_error}>
                 last error: {row.last_error.length > 90 ? `${row.last_error.slice(0, 90)}…` : row.last_error} ({formatRelativeTime(row.last_error_at)})
               </div>
             )}
             {row.stale_served > 0 && (
               <div className="text-muted" style={{ fontSize: 12 }}>old cached data shown {row.stale_served}x</div>
             )}
-          </td>
-          <td className="tabular-nums">{row.calls === 0 ? '—' : row.calls}</td>
-          <td className="tabular-nums">{row.success_rate === null ? '—' : `${Math.round(row.success_rate * 100)}%`}</td>
-          <td className="tabular-nums" style={{ whiteSpace: 'nowrap' }}>{ms(row.latency_p50_ms)} / {ms(row.latency_p95_ms)}</td>
-          <td>
+          </div>
+          <div style={{ flexShrink: 0 }}>
             {row.can_probe ? (
               <button type="button" className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} disabled={probing === row.name} onClick={() => onProbe(row.name)}>
                 {probing === row.name ? '…' : 'Probe'}
@@ -65,8 +67,8 @@ function SourceRows({
             ) : (
               <span className="text-muted" style={{ fontSize: 12 }}>no probe</span>
             )}
-          </td>
-        </tr>
+          </div>
+        </div>
       ))}
     </>
   );
@@ -98,28 +100,11 @@ export function DataSourcesCard() {
               market data, or press Probe.
             </div>
           )}
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>Calls</th>
-                  <th title={`Over the last ${data.window_size} calls`}>Success</th>
-                  <th title="Median / slowest 5% of live requests (cache hits excluded)">p50 / p95</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={5} className="text-muted" style={{ fontSize: 12, paddingTop: 8 }}>Price and company data, in fallback order</td>
-                </tr>
-                <SourceRows rows={data.chain} probing={probing} onProbe={(n) => probe.mutate(n)} />
-                <tr>
-                  <td colSpan={5} className="text-muted" style={{ fontSize: 12, paddingTop: 12 }}>Other sources</td>
-                </tr>
-                <SourceRows rows={data.others} probing={probing} onProbe={(n) => probe.mutate(n)} />
-              </tbody>
-            </table>
+          <div>
+            <div className="text-muted" style={{ fontSize: 12, paddingTop: 8 }}>Price and company data, in fallback order</div>
+            <SourceRows rows={data.chain} probing={probing} onProbe={(n) => probe.mutate(n)} />
+            <div className="text-muted" style={{ fontSize: 12, paddingTop: 12 }}>Other sources</div>
+            <SourceRows rows={data.others} probing={probing} onProbe={(n) => probe.mutate(n)} />
           </div>
         </>
       )}

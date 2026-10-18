@@ -392,6 +392,9 @@ export interface AppSettings {
   hold_max_new_per_scan: number;
   /** A smart-money buy that fails the quality gate buys this % of the normal slice. */
   hold_failed_gate_size_pct: number;
+  /** Quality gate: minimum year-on-year revenue growth %, and whether growth must also accelerate. */
+  hold_min_revenue_growth_pct: number;
+  require_growth_acceleration: boolean;
   /** Big-news lane: buys without the quality gate at this % of a slice (off by default). */
   big_news_buy_enabled: boolean;
   big_news_size_pct: number;
@@ -484,6 +487,8 @@ export interface SettingsUpdateRequest {
   hold_max_per_sector?: number;
   hold_max_new_per_scan?: number;
   hold_failed_gate_size_pct?: number;
+  hold_min_revenue_growth_pct?: number;
+  require_growth_acceleration?: boolean;
   big_news_buy_enabled?: boolean;
   big_news_size_pct?: number;
   big_news_lookback_hours?: number;

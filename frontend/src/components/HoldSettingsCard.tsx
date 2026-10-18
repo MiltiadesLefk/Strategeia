@@ -14,6 +14,8 @@ type Draft = Pick<
   | 'hold_max_per_sector'
   | 'hold_max_new_per_scan'
   | 'hold_failed_gate_size_pct'
+  | 'hold_min_revenue_growth_pct'
+  | 'require_growth_acceleration'
   | 'big_news_buy_enabled'
   | 'big_news_size_pct'
   | 'big_news_lookback_hours'
@@ -36,6 +38,7 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_max_per_sector', label: 'Max per sector', hint: 'Same-sector hold positions.' },
   { key: 'hold_max_new_per_scan', label: 'Max new buys per daily scan', hint: 'Keeps one scan from buying the whole list.' },
   { key: 'hold_failed_gate_size_pct', label: 'Size of a smart-money buy that fails the gate (% of a normal slice)', hint: 'Half a slice by default (50).' },
+  { key: 'hold_min_revenue_growth_pct', label: 'Quality check: minimum revenue growth (% year on year)', hint: '5 by default. 0 = only not shrinking.', step: 0.5 },
   { key: 'big_news_size_pct', label: 'Size of a big-news buy (% of a normal slice)', hint: 'Only used when big-news buys are on. Half a slice by default (50).' },
   { key: 'big_news_lookback_hours', label: 'Big news counts for (hours)', hint: 'A headline older than this is ignored; a bad headline in this window blocks the buy.' },
   { key: 'news_discovery_max_per_run', label: 'Max news-discovered tickers per run', hint: 'Only used when news discovery is on.' },
@@ -52,6 +55,7 @@ function fromSettings(data: AppSettings): Draft {
     hold_target_weight_pct: data.hold_target_weight_pct, hold_max_positions: data.hold_max_positions,
     hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
     hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
+    hold_min_revenue_growth_pct: data.hold_min_revenue_growth_pct, require_growth_acceleration: data.require_growth_acceleration,
     big_news_buy_enabled: data.big_news_buy_enabled, big_news_size_pct: data.big_news_size_pct,
     big_news_lookback_hours: data.big_news_lookback_hours, hold_stop_mode: data.hold_stop_mode,
     hold_add_on_dips: data.hold_add_on_dips, evidence_bonus_enabled: data.evidence_bonus_enabled, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
@@ -92,6 +96,10 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.hold_add_on_dips} onChange={(v) => set('hold_add_on_dips', v)} label="Add on dips" />
         <span>Top up a held stock toward its target weight when it passes the check and is in a dip (off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.require_growth_acceleration} onChange={(v) => set('require_growth_acceleration', v)} label="Growth must accelerate" />
+        <span>The quality check also needs this year's revenue growth to beat last year's (three reported years; off by default)</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.evidence_bonus_enabled} onChange={(v) => set('evidence_bonus_enabled', v)} label="Evidence bonus" />

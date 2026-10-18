@@ -1,34 +1,53 @@
-import { useRatingRun, useRatingRuns } from '../api/hooks';
-import { EmptyState, LoadingSpinner } from './common';
+import type { ApiError } from '../api/client';
+import { useRateStock, useStockRatings } from '../api/hooks';
+import { RatingTable } from './RatingTable';
+import { EmptyState, ErrorBanner, LoadingSpinner } from './common';
 
-/** The newest evidence rating of one stock, with the parts that made it. */
+const when = (iso: string) => new Date(iso.endsWith('Z') ? iso : `${iso}Z`).toLocaleString();
+
+/** One stock's evidence rating, explained part by part, with a button to re-rate it now. */
 export function CompanyRatingPanel({ symbol }: { symbol: string }) {
-  const runs = useRatingRuns();
-  const latest = runs.data?.find((r) => !r.running) ?? runs.data?.[0];
-  const run = useRatingRun(latest?.run_id ?? null);
-  if (runs.isLoading || run.isLoading) return <LoadingSpinner />;
-  const row = run.data?.ratings.find((r) => r.symbol === symbol);
-  if (!row) return <EmptyState>{symbol} has not been rated yet. Rate now on Market Scan → Ratings rates the whole watchlist.</EmptyState>;
-  const parts = Object.entries(row.detail.parts ?? {}).filter(([, v]) => v !== 0);
-  const why = row.detail.why ?? {};
+  const history = useStockRatings(symbol);
+  const rate = useRateStock(symbol);
+  const [row, ...older] = history.data ?? [];
   return (
-    <div className="card">
-      <h3 style={{ marginBottom: 4 }}>
-        {row.points}/{row.max_points} · {row.percent}% · {row.bought ? 'Bought' : row.passed ? 'Passed' : 'Below bar'}
-        {row.dip ? ' · dip' : ''}
-      </h3>
-      <div className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-        Rated {new Date(row.run_at.endsWith('Z') ? row.run_at : `${row.run_at}Z`).toLocaleString()}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ marginBottom: 4 }}>
+            {row ? `${row.points}/${row.max_points} · ${row.percent}% · ${row.bought ? 'Bought' : row.passed ? 'Passed' : 'Below bar'}${row.dip ? ' · dip' : ''}` : 'Not rated yet'}
+          </h3>
+          {row && <div className="text-muted" style={{ fontSize: 12 }}>Rated {when(row.run_at)}</div>}
+        </div>
+        <button className="btn btn-primary" onClick={() => rate.mutate()} disabled={rate.isPending}>
+          {rate.isPending ? 'Rating…' : 'Re-rate now'}
+        </button>
       </div>
-      {parts.length === 0 ? <span className="text-muted">No part scored.</span> : (
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
-          {parts.map(([name, points]) => (
-            <li key={name}>
-              <strong>{name} {points > 0 ? `+${points}` : points}</strong>
-              {why[name] ? <span className="text-muted"> — {why[name]}</span> : null}
-            </li>
-          ))}
-        </ul>
+      {rate.error && <ErrorBanner message={(rate.error as ApiError).message ?? 'Could not rate this stock'} />}
+      {history.isLoading ? <LoadingSpinner /> : !row ? (
+        <EmptyState>{symbol} has not been rated yet. Press Re-rate now. It only rates; it buys nothing.</EmptyState>
+      ) : (
+        <>
+          <RatingTable row={row} />
+          {older.length > 0 && (
+            <div className="card">
+              <h3 style={{ marginBottom: 8 }}>Earlier ratings</h3>
+              <table>
+                <thead><tr><th>When</th><th style={{ textAlign: 'right' }}>Points</th><th style={{ textAlign: 'right' }}>%</th><th>Result</th></tr></thead>
+                <tbody>
+                  {older.map((r) => (
+                    <tr key={r.run_at}>
+                      <td>{when(r.run_at)}</td>
+                      <td style={{ textAlign: 'right' }}>{r.points}/{r.max_points}</td>
+                      <td style={{ textAlign: 'right' }}>{r.percent}%</td>
+                      <td>{r.bought ? 'Bought' : r.passed ? 'Passed' : 'Below bar'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

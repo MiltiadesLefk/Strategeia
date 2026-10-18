@@ -58,6 +58,7 @@ import type {
   BacktestStartRequest,
   BacktestTrade,
   RatingRunDetail,
+  RatingRow,
   RatingRunSummary,
 } from './types';
 
@@ -1342,6 +1343,33 @@ export function useRatingRun(runId: string | null) {
     queryFn: () => api.get<RatingRunDetail>(`/api/ratings/runs/${runId}`),
     enabled: !!runId,
     refetchInterval: (q) => (q.state.data?.running ? 4000 : false),
+  });
+}
+
+/** Newest rating of every stock (any run, including a single re-rate), by symbol. */
+export function useLatestRatings() {
+  return useQuery({
+    queryKey: ['ratings-latest'] as const,
+    queryFn: () => api.get<Record<string, RatingRow>>('/api/ratings/latest'),
+  });
+}
+
+export function useStockRatings(symbol: string) {
+  return useQuery({
+    queryKey: ['ratings-stock', symbol] as const,
+    queryFn: () => api.get<RatingRow[]>(`/api/ratings/stock/${encodeURIComponent(symbol)}`),
+  });
+}
+
+/** Re-rates one stock now; buys nothing. */
+export function useRateStock(symbol: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<RatingRow>(`/api/ratings/stock/${encodeURIComponent(symbol)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ratings-stock', symbol] });
+      queryClient.invalidateQueries({ queryKey: ['ratings-latest'] });
+    },
   });
 }
 
