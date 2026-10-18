@@ -11,18 +11,16 @@ import {
   MarketScanPage,
   MarketTerminalPage,
   PortfolioPage,
-  RatingsPage,
   ScreenerPage,
   SettingsPage,
   SmartMoneyPage,
 } from './routePages';
 
-// Research was folded into Analysis (one page per symbol: chart + technicals
-// pinned above, fundamentals/news/earnings as tabs below) — this keeps any
-// old /research?symbol=X links/bookmarks working instead of 404ing.
-function ResearchRedirect() {
-  const location = useLocation();
-  return <Navigate to={`/analysis${location.search}`} replace />;
+// One page per company at /stock/:symbol. The old /analysis?symbol=X and
+// /research?symbol=X links/bookmarks land here instead of 404ing.
+function CompanyRedirect() {
+  const symbol = new URLSearchParams(useLocation().search).get('symbol');
+  return <Navigate to={symbol ? `/stock/${encodeURIComponent(symbol)}` : '/stock'} replace />;
 }
 
 export default function App() {
@@ -33,10 +31,12 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="scan" element={<MarketScanPage />} />
           <Route path="screener" element={<ScreenerPage />} />
-          <Route path="analysis" element={<AnalysisPage />} />
-          <Route path="research" element={<ResearchRedirect />} />
+          <Route path="stock" element={<AnalysisPage />} />
+          <Route path="stock/:symbol" element={<AnalysisPage />} />
+          <Route path="analysis" element={<CompanyRedirect />} />
+          <Route path="research" element={<CompanyRedirect />} />
           <Route path="calendar" element={<CalendarPage />} />
-          <Route path="ratings" element={<RatingsPage />} />
+          <Route path="ratings" element={<Navigate to="/scan?tab=ratings" replace />} />
           <Route path="portfolio" element={<PortfolioPage />} />
           <Route path="terminal" element={<MarketTerminalPage />} />
           <Route path="smart-money" element={<SmartMoneyPage />} />

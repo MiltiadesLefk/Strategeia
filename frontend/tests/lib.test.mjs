@@ -170,7 +170,7 @@ const ids = (rows) => rows.map((r) => r.id);
 test('palette: a symbol query lists the symbol', () => {
   const rows = buildPaletteItems(INDEX, 'nvda', []);
   assert.equal(rows[0].id, 'symbol:NVDA');
-  assert.equal(rows[0].to, '/analysis?symbol=NVDA');
+  assert.equal(rows[0].to, '/stock/NVDA');
   assert.equal(rows.find((r) => r.id === 'plan:NVDA'), undefined, 'no trade-plan action any more');
 });
 

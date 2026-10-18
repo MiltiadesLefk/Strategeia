@@ -5,7 +5,7 @@ import { CompanyIcon } from './CompanyIcon';
 /** Every place a ticker symbol appears should be clickable through to its
  * chart — this is the one place that destination is decided. */
 export function tickerHref(symbol: string): string {
-  return `/analysis?symbol=${symbol}`;
+  return `/stock/${encodeURIComponent(symbol)}`;
 }
 
 export function TickerLink({

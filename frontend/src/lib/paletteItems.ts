@@ -32,16 +32,16 @@ export interface PaletteItem {
   shiftTo?: string;
 }
 
-/** The pages, in the sidebar's order. Mirrors layout/Sidebar.tsx NAV_ITEMS. */
+/** The pages, in the sidebar's order. Mirrors layout/Sidebar.tsx NAV_SECTIONS. */
 export const NAV_COMMANDS: { to: string; label: string; keywords: string }[] = [
   { to: '/', label: 'Dashboard', keywords: 'home overview summary' },
   { to: '/scan', label: 'Market Scan', keywords: 'scanner setups signals watchlist' },
-  { to: '/analysis', label: 'Analysis', keywords: 'chart technical fundamentals news research' },
+  { to: '/stock', label: 'Company', keywords: 'analysis chart technical fundamentals news research rating' },
   { to: '/portfolio', label: 'Portfolio', keywords: 'positions paper account equity pnl' },
   { to: '/settings', label: 'Settings', keywords: 'config providers ai telegram watchlist' },
 ];
 
-export const analysisHref = (symbol: string) => `/analysis?symbol=${encodeURIComponent(symbol)}`;
+export const analysisHref = (symbol: string) => `/stock/${encodeURIComponent(symbol)}`;
 
 function symbolItem(entry: SearchableSymbol, section: PaletteSection): PaletteItem {
   return {

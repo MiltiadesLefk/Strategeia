@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { useRatingRun, useRatingRuns, useStartRatingRun } from '../api/hooks';
 import type { ApiError } from '../api/client';
 import type { RatingRow } from '../api/types';
-import { TickerLink } from '../components/TickerLink';
-import { EmptyState, ErrorBanner, LoadingSpinner } from '../components/common';
+import { TickerLink } from './TickerLink';
+import { EmptyState, ErrorBanner, LoadingSpinner } from './common';
 
 function when(iso: string): string {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).toLocaleString();
 }
 
-function RatingDetailRow({ row }: { row: RatingRow }) {
+export function RatingDetailRow({ row }: { row: RatingRow }) {
   const parts = Object.entries(row.detail.parts ?? {}).filter(([, v]) => v !== 0);
   const why = row.detail.why ?? {};
   return (
@@ -30,7 +30,7 @@ function RatingDetailRow({ row }: { row: RatingRow }) {
   );
 }
 
-export function RatingsPage() {
+export function RatingsPanel() {
   const runs = useRatingRuns();
   const start = useStartRatingRun();
   const [selected, setSelected] = useState<string | null>(null);
@@ -49,11 +49,8 @@ export function RatingsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
-        <div>
-          <h1>Ratings</h1>
-          <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
-            The 32-point evidence rating of every watchlist stock: each morning scan that ran, and runs you start here. Rate now only rates; it buys nothing.
-          </div>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          The 32-point evidence rating of every watchlist stock: each morning scan that ran, and runs you start here. Rate now only rates; it buys nothing.
         </div>
         <button className="btn btn-primary" onClick={rateNow} disabled={start.isPending || going}>
           {going ? 'Rating…' : 'Rate now'}

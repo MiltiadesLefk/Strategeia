@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { qk, useAnalysis, useArchive, useNewsCards, useResearch, useUniverse } from '../api/hooks';
 import { NewsCardChips, NewsCardsPanel } from '../components/NewsCardChips';
 import { CompanyDropdown } from '../components/CompanyDropdown';
@@ -27,9 +27,13 @@ import { TradingViewWidget } from '../components/TradingViewWidget';
 import { ValuationPanel } from '../components/valuation/ValuationPanel';
 import { LibraryPanel } from '../components/library/LibraryPanel';
 import { EarningsPreviewPanel } from '../components/EarningsPreviewPanel';
+import { CompanyRatingPanel } from '../components/CompanyRatingPanel';
+import { CompanyPositionPanel } from '../components/CompanyPositionPanel';
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
+  { value: 'rating', label: 'Rating' },
+  { value: 'position', label: 'Position' },
   { value: 'financials', label: 'Financials' },
   { value: 'earnings', label: 'Earnings' },
   { value: 'news', label: 'News' },
@@ -502,6 +506,9 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
             </>
           )}
 
+          {tab === 'rating' && <CompanyRatingPanel symbol={data.symbol} />}
+          {tab === 'position' && <CompanyPositionPanel symbol={data.symbol} />}
+
           {tab === 'financials' && (
             <div className="card">
               <h3 style={{ marginBottom: 12 }}>Key Financials</h3>
@@ -591,8 +598,8 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
 }
 
 export function AnalysisPage() {
-  const [params, setParams] = useSearchParams();
-  const symbol = params.get('symbol');
+  const navigate = useNavigate();
+  const symbol = useParams().symbol?.toUpperCase() ?? null;
   const [range, setRange] = useState('3mo');
   const [tab, setTab] = useState('overview');
   const { data: universe } = useUniverse();
@@ -601,9 +608,9 @@ export function AnalysisPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
-        <h1>Analysis</h1>
+        <h1>Company</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <CompanyDropdown value={symbol ?? ''} onChange={(s) => setParams({ symbol: s })} />
+          <CompanyDropdown value={symbol ?? ''} onChange={(s) => navigate(`/stock/${encodeURIComponent(s)}`)} />
           {symbol && <AlertMeButton symbol={symbol} />}
         </div>
       </div>

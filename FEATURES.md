@@ -83,7 +83,7 @@ still answer, and messages you on Telegram if one goes down or comes back.
 
 ## 3. The pages
 
-The sidebar holds Dashboard, Market Scan, Analysis, Calendar (§22), Portfolio, Market Terminal (§21), Smart Money (§20), Backtest Lab (§18), AI Committee (§25) and Settings, plus status
+The sidebar is grouped by what you are doing: Home (Dashboard), Discover (Market Scan, Screener, Smart Money, Calendar), Companies (Company, Portfolio), Lab (Market Terminal, Backtest Lab, AI Committee, Forecast Lab) and System (Settings), plus status
 pills (AI, Finnhub, Telegram) that expand when something is down, and a log-out button.
 
 ### Backtest Lab
@@ -146,7 +146,8 @@ and couldn't test.
 - A filter to show a single symbol.
 - **Auto-trade button:** runs the hold scan now (§27), at most once every 60 seconds. It buys only with auto-execute on.
 
-### Analysis
+### Company page (formerly Analysis)
+Every ticker in the app links to one page per company, `/stock/NVDA` (old `/analysis?symbol=` links still work). It holds the chart, technicals and tabs for Rating (its latest evidence rating and parts), Position (your paper trades in it), financials, news, options, valuation and smart money. The **Ratings** history and Rate now live in Market Scan's Ratings tab, and every scan row shows the stock's latest rating.
 - **Valuation tab:** see "Valuation tab (Analysis)" below.
 - **Options and TradingView tabs:** see "Options tab (Analysis)" and "TradingView widgets" below.
 - **Price chart** (candles) with EMA20, EMA50, Bollinger bands, support and resistance lines, RSI and

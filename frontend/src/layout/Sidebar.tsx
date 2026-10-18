@@ -31,20 +31,36 @@ const ICONS = {
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.14-1.44l2.02-1.57-2-3.46-2.38.96a7.5 7.5 0 0 0-2.5-1.44L14 2h-4l-.4 2.55a7.5 7.5 0 0 0-2.5 1.44l-2.38-.96-2 3.46 2.02 1.57A7.4 7.4 0 0 0 4.6 12c0 .49.05.97.14 1.44l-2.02 1.57 2 3.46 2.38-.96c.73.62 1.58 1.11 2.5 1.44L10 22h4l.4-2.55a7.5 7.5 0 0 0 2.5-1.44l2.38.96 2-3.46-2.02-1.57c.09-.47.14-.95.14-1.44Z',
 };
 
-const NAV_ITEMS: { to: string; label: string; end?: boolean; icon: keyof typeof ICONS }[] = [
-  { to: '/', label: 'Dashboard', end: true, icon: 'dashboard' },
-  { to: '/scan', label: 'Market Scan', icon: 'scan' },
-  { to: '/screener', label: 'Screener', icon: 'screener' },
-  { to: '/analysis', label: 'Analysis', icon: 'analysis' },
-  { to: '/calendar', label: 'Calendar', icon: 'calendar' },
-  { to: '/ratings', label: 'Ratings', icon: 'plans' },
-  { to: '/portfolio', label: 'Portfolio', icon: 'portfolio' },
-  { to: '/terminal', label: 'Market Terminal', icon: 'terminal' },
-  { to: '/smart-money', label: 'Smart Money', icon: 'smartMoney' },
-  { to: '/committee', label: 'AI Committee', icon: 'committee' },
-  { to: '/backtests', label: 'Backtest Lab', icon: 'backtest' },
-  { to: '/forecast-lab', label: 'Forecast Lab', icon: 'forecast' },
-  { to: '/settings', label: 'Settings', icon: 'settings' },
+type NavItem = { to: string; label: string; end?: boolean; icon: keyof typeof ICONS };
+// Grouped by what you are doing, not by feature. Ratings live inside Market Scan, one company has one page.
+const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
+  { title: 'Home', items: [{ to: '/', label: 'Dashboard', end: true, icon: 'dashboard' }] },
+  {
+    title: 'Discover',
+    items: [
+      { to: '/scan', label: 'Market Scan', icon: 'scan' },
+      { to: '/screener', label: 'Screener', icon: 'screener' },
+      { to: '/smart-money', label: 'Smart Money', icon: 'smartMoney' },
+      { to: '/calendar', label: 'Calendar', icon: 'calendar' },
+    ],
+  },
+  {
+    title: 'Companies',
+    items: [
+      { to: '/stock', label: 'Company', icon: 'analysis' },
+      { to: '/portfolio', label: 'Portfolio', icon: 'portfolio' },
+    ],
+  },
+  {
+    title: 'Lab',
+    items: [
+      { to: '/terminal', label: 'Market Terminal', icon: 'terminal' },
+      { to: '/committee', label: 'AI Committee', icon: 'committee' },
+      { to: '/backtests', label: 'Backtest Lab', icon: 'backtest' },
+      { to: '/forecast-lab', label: 'Forecast Lab', icon: 'forecast' },
+    ],
+  },
+  { title: 'System', items: [{ to: '/settings', label: 'Settings', icon: 'settings' }] },
 ];
 
 /**
@@ -100,9 +116,8 @@ function ServiceStatus({ status }: { status?: SettingsStatus }) {
 
 export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobileOpen?: boolean; onClose?: () => void; onOpenPalette?: () => void }) {
   const { data: status } = useSettingsStatus();
-  const navItems = NAV_ITEMS;
   const { mutate: logout, isPending: loggingOut } = useLogout();
-  const renderItem = (item: (typeof NAV_ITEMS)[number]) => (
+  const renderItem = (item: NavItem) => (
     <NavLink
       key={item.to}
       to={item.to}
@@ -162,10 +177,12 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
         </button>
       )}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-        <div className="sidebar-section">Menu</div>
-        {navItems.filter((i) => i.to !== '/settings').map(renderItem)}
-        <div className="sidebar-section">System</div>
-        {NAV_ITEMS.filter((i) => i.to === '/settings').map(renderItem)}
+        {NAV_SECTIONS.map((section) => (
+          <div key={section.title} style={{ display: 'contents' }}>
+            <div className="sidebar-section">{section.title}</div>
+            {section.items.map(renderItem)}
+          </div>
+        ))}
       </nav>
       {/* Service dots are real readings of GET /api/settings/status; they collapse into one row unless something needs attention. */}
       <div className="sidebar-footer">
