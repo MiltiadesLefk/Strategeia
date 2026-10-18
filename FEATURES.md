@@ -365,6 +365,7 @@ by the **quality gate** (`backend/app/analysis/quality_gate.py`), plain rules wi
 2. **Growth:** the latest year's revenue is up at least `hold_min_revenue_growth_pct` (default 5%; 0 = just not shrinking) on the prior year's. Optional (off): growth must also beat the year before's growth (`require_growth_acceleration`; needs three reported years).
 3. **Profit:** the company is profitable.
 4. **Valuation:** `score_valuation` (P/E, market size) does not call it expensive.
+   Optional volume check (all off): `block_on_distribution` fails a stock whose 20-day up-day volume is 1/1.3 of its down-day volume or less; `require_accumulation` needs 1.3x or more. `sell_on_distribution` makes the same distribution, while the price is under its 50-day average, one sell signal (never sells alone).
 5. **Dip flag** (price only, not a pass/fail check): the close is 10% or more under the highest close of the last 63
    trading days (`DIP_PCT`, `DIP_LOOKBACK`).
 

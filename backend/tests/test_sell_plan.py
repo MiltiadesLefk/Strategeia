@@ -19,6 +19,21 @@ def test_signal_rules():
     assert trail_stop(100, 95, 110, 10, 75) is None  # not in profit
 
 
+def test_distribution_under_pressure_is_one_signal_never_alone():
+    import pandas as pd
+
+    from app.services.sell_plan_service import distribution_under_pressure
+
+    closes = [100.0 + (i % 2) * 2 for i in range(60)]  # alternates 100, 102
+    heavy_down = pd.DataFrame({"close": closes, "volume": [1000.0 if i % 2 == 0 else 100.0 for i in range(60)]})  # down days (even) heavy
+    heavy_up = heavy_down.assign(volume=[100.0 if i % 2 == 0 else 1000.0 for i in range(60)])
+    assert distribution_under_pressure(heavy_down, 90.0)
+    assert not distribution_under_pressure(heavy_down, 120.0)  # not under its 50-day
+    assert not distribution_under_pressure(heavy_up, 90.0)  # accumulation
+    assert not distribution_under_pressure(heavy_down.iloc[:30], 90.0)  # too few bars
+    assert total_signals(1, False) == 1  # one signal alone never closes (needs 2)
+
+
 def test_rebuy_gate_drops_only_the_200_day_rule():
     falling = [100.0 - i * 0.1 for i in range(250)]
     assert not evaluate_quality_gate(70.0, falling, None, []).checks[0].ok

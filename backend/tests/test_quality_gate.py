@@ -40,6 +40,16 @@ def test_growth_bar_is_a_setting_and_acceleration_is_optional():
     assert verdict(require_acceleration=True).failed_reasons[0].startswith("acceleration")  # 2 years: missing data fails
 
 
+def test_volume_check_is_off_by_default_and_fails_missing_data_only_when_on():
+    assert [c.name for c in verdict(volume_ratio=0.2).checks] == ["trend", "growth", "profit", "valuation"]  # off: ignored
+    assert verdict(block_on_distribution=True, volume_ratio=1.0).passed  # neutral passes the veto
+    assert verdict(block_on_distribution=True, volume_ratio=0.7).failed_reasons[0].startswith("volume")  # <= 1/1.3
+    assert verdict(block_on_distribution=True, volume_ratio=None).failed_reasons[0].startswith("volume")
+    assert verdict(require_accumulation=True, volume_ratio=1.0).failed_reasons[0].startswith("volume")  # strict
+    assert verdict(require_accumulation=True, volume_ratio=1.3).passed
+    assert [c.name for c in verdict(price_only=True, block_on_distribution=True, volume_ratio=0.1).checks] == ["trend"]
+
+
 def test_missing_data_fails_never_guesses():
     r = verdict(closes=RISING[: MA_DAYS - 1], overview=None, financial_years=[])
     assert not r.passed and len(r.failed_reasons) == 4

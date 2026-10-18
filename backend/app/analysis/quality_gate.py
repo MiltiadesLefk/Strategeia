@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.analysis.price_evidence import ACCUMULATION_RATIO
 from app.analysis.valuation_scoring import score_valuation
 from app.data_providers.base import CompanyOverview, FinancialYear
 
@@ -56,6 +57,9 @@ def evaluate_quality_gate(
     min_growth_pct: float = 5.0,  # AppSettings.hold_min_revenue_growth_pct
     require_acceleration: bool = False,  # AppSettings.require_growth_acceleration
     price_only: bool = False,  # trend check only (+ the dip flag): what a backtest can know at T. Never a pass by default
+    volume_ratio: float | None = None,  # up_down_volume_ratio of the recent bars (None = unreadable)
+    block_on_distribution: bool = False,  # AppSettings.block_on_distribution
+    require_accumulation: bool = False,  # AppSettings.require_accumulation (stricter)
 ) -> GateResult:
     checks: list[GateCheck] = []
 
@@ -96,5 +100,13 @@ def evaluate_quality_gate(
     else:
         points, reasons = score_valuation("long", overview, financial_years)
         checks.append(GateCheck("valuation", points >= 0, "; ".join(reasons) or "not expensive on earnings"))
+
+    if block_on_distribution or require_accumulation:
+        if volume_ratio is None:
+            checks.append(GateCheck("volume", False, "up/down volume ratio unreadable"))
+        elif require_accumulation:
+            checks.append(GateCheck("volume", volume_ratio >= ACCUMULATION_RATIO, f"up-day volume {volume_ratio:.2f}x down-day volume (accumulation needs {ACCUMULATION_RATIO:g}x)"))
+        else:
+            checks.append(GateCheck("volume", volume_ratio > 1 / ACCUMULATION_RATIO, f"up-day volume {volume_ratio:.2f}x down-day volume (distribution at {1 / ACCUMULATION_RATIO:.2f}x or less)"))
 
     return GateResult(all(c.ok for c in checks), checks, dip=is_dip(closes))

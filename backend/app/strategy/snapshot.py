@@ -67,6 +67,9 @@ DECISION_SETTINGS: dict[str, str] = {
     "hold_failed_gate_size_pct": "hold failed-gate size %",
     "hold_min_revenue_growth_pct": "gate min revenue growth %",
     "require_growth_acceleration": "gate requires growth acceleration",
+    "block_on_distribution": "gate blocks on distribution",
+    "require_accumulation": "gate requires accumulation",
+    "sell_on_distribution": "sell plan counts distribution",
     "evidence_bonus_enabled": "evidence bonus",
     "big_news_buy_enabled": "big-news buys",
     "big_news_size_pct": "big-news size %",
@@ -96,6 +99,8 @@ DECISION_SETTINGS: dict[str, str] = {
 RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     # The hold gate's own rules (hold_stop_pct and hold_target_weight_pct are settings above).
     "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS"),
+    "app.analysis.price_evidence": ("ACCUMULATION_RATIO", "VOLUME_TREND_DAYS"),
+    "app.services.sell_plan_service": ("PRESSURE_MA_DAYS",),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),
     "app.analysis.evidence_bonus": (
         "BONUS_CAP", "BONUS_FLOOR", "INSIDER_CLUSTER_POINTS", "INSIDER_BUY_POINTS", "CONGRESS_BUY_POINTS", "BIG_NEWS_POINTS", "NEGATIVE_NEWS_POINTS",

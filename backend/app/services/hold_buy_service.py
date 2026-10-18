@@ -12,6 +12,7 @@ import math
 
 from sqlmodel import Session, select
 
+from app.analysis.price_evidence import up_down_volume_ratio
 from app.analysis.quality_gate import GateResult, evaluate_quality_gate
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
@@ -100,7 +101,8 @@ def check_quality(
     from the daily scan (best-effort, never changes the result)."""
     with fresh_data_only():
         price = float(data_provider.get_quote(symbol).price)
-        closes = [float(c) for c in data_provider.get_ohlcv(symbol, period="1y", interval="1d")["close"]]
+        bars = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
+        closes = [float(c) for c in bars["close"]]
         if price_only:
             return evaluate_quality_gate(price, closes, None, [], require_trend, price_only=True)
         try:
@@ -118,7 +120,12 @@ def check_quality(
     from app.config import load_app_settings
 
     s = load_app_settings()
+    try:
+        ratio = up_down_volume_ratio(bars)
+    except Exception:  # noqa: BLE001 - no volume column: unreadable, which fails only when a volume check is on
+        ratio = None
     return evaluate_quality_gate(
         price, closes, overview, years, require_trend,
         min_growth_pct=s.hold_min_revenue_growth_pct, require_acceleration=s.require_growth_acceleration,
+        volume_ratio=ratio, block_on_distribution=s.block_on_distribution, require_accumulation=s.require_accumulation,
     )

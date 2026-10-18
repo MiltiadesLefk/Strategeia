@@ -395,6 +395,10 @@ export interface AppSettings {
   /** Quality gate: minimum year-on-year revenue growth %, and whether growth must also accelerate. */
   hold_min_revenue_growth_pct: number;
   require_growth_acceleration: boolean;
+  /** Volume (all off): the gate fails on distribution / needs accumulation; the sell plan counts distribution under the 50-day. */
+  block_on_distribution: boolean;
+  require_accumulation: boolean;
+  sell_on_distribution: boolean;
   /** Big-news lane: buys without the quality gate at this % of a slice (off by default). */
   big_news_buy_enabled: boolean;
   big_news_size_pct: number;
@@ -489,6 +493,9 @@ export interface SettingsUpdateRequest {
   hold_failed_gate_size_pct?: number;
   hold_min_revenue_growth_pct?: number;
   require_growth_acceleration?: boolean;
+  block_on_distribution?: boolean;
+  require_accumulation?: boolean;
+  sell_on_distribution?: boolean;
   big_news_buy_enabled?: boolean;
   big_news_size_pct?: number;
   big_news_lookback_hours?: number;

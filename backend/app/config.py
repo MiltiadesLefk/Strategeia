@@ -658,6 +658,12 @@ class AppSettings(BaseModel):
     # optionally it must also beat the year before's growth (needs 3 reported years; missing data fails).
     hold_min_revenue_growth_pct: float = Field(default=5.0, ge=0, le=100)
     require_growth_acceleration: bool = False
+    # Volume checks (all off): the gate's "volume" check fails on distribution (up-day volume <= 1/1.3 of down-day
+    # volume over 20 days); require_accumulation is stricter (must show accumulation). The sell plan counts
+    # distribution while the price is under its 50-day average as one signal.
+    block_on_distribution: bool = False
+    require_accumulation: bool = False
+    sell_on_distribution: bool = False
     # Evidence bonus (analysis/evidence_bonus.py): insider/Congress buys and big news for the stock rank the scan's
     # candidates and skip one with negative news. Never overrides a failed fundamentals check.
     evidence_bonus_enabled: bool = True

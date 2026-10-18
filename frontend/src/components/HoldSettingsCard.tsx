@@ -16,6 +16,9 @@ type Draft = Pick<
   | 'hold_failed_gate_size_pct'
   | 'hold_min_revenue_growth_pct'
   | 'require_growth_acceleration'
+  | 'block_on_distribution'
+  | 'require_accumulation'
+  | 'sell_on_distribution'
   | 'big_news_buy_enabled'
   | 'big_news_size_pct'
   | 'big_news_lookback_hours'
@@ -56,6 +59,8 @@ function fromSettings(data: AppSettings): Draft {
     hold_max_per_sector: data.hold_max_per_sector, hold_max_new_per_scan: data.hold_max_new_per_scan,
     hold_failed_gate_size_pct: data.hold_failed_gate_size_pct,
     hold_min_revenue_growth_pct: data.hold_min_revenue_growth_pct, require_growth_acceleration: data.require_growth_acceleration,
+    block_on_distribution: data.block_on_distribution, require_accumulation: data.require_accumulation,
+    sell_on_distribution: data.sell_on_distribution,
     big_news_buy_enabled: data.big_news_buy_enabled, big_news_size_pct: data.big_news_size_pct,
     big_news_lookback_hours: data.big_news_lookback_hours, hold_stop_mode: data.hold_stop_mode,
     hold_add_on_dips: data.hold_add_on_dips, evidence_bonus_enabled: data.evidence_bonus_enabled, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
@@ -100,6 +105,18 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.require_growth_acceleration} onChange={(v) => set('require_growth_acceleration', v)} label="Growth must accelerate" />
         <span>The quality check also needs this year's revenue growth to beat last year's (three reported years; off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.block_on_distribution} onChange={(v) => set('block_on_distribution', v)} label="Block on distribution" />
+        <span>The quality check fails a stock whose up-day volume is 0.77x its down-day volume or less over 20 days (sellers heavier; off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.require_accumulation} onChange={(v) => set('require_accumulation', v)} label="Require accumulation" />
+        <span>Stricter: the quality check needs up-day volume at 1.3x down-day volume or more (off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.sell_on_distribution} onChange={(v) => set('sell_on_distribution', v)} label="Sell signal on distribution" />
+        <span>Sellers heavier on volume while the price is under its 50-day average counts as one sell signal; never sells alone (off by default)</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.evidence_bonus_enabled} onChange={(v) => set('evidence_bonus_enabled', v)} label="Evidence bonus" />

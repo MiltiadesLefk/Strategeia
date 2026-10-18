@@ -16,6 +16,7 @@ import pandas as pd
 from sqlmodel import Session, select
 
 from app.analysis.fundamental_scoring import score_news_sentiment
+from app.analysis.price_evidence import ACCUMULATION_RATIO, up_down_volume_ratio
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.data_providers.cache import fresh_data_only
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 SELL_WINDOW_DAYS = 30  # insider / Congress sells looked at
 NEGATIVE_NEWS_SCORE = -2  # score_news_sentiment at or below this is "clearly negative"
+PRESSURE_MA_DAYS = 50  # "price under pressure" = under its 50-day average
 SOLD_REASONS = ("disaster_stop", "sell_plan")
 
 
@@ -41,6 +43,16 @@ def days_under_ma(closes: list[float], days: int) -> bool:
     if len(closes) < MA_DAYS + days - 1:
         return False
     return all(closes[-i] < sum(closes[-i - MA_DAYS + 1 : len(closes) - i + 1]) / MA_DAYS for i in range(1, days + 1))
+
+
+def distribution_under_pressure(bars: pd.DataFrame, price: float) -> bool:
+    """Sellers heavier on volume (up_down_volume_ratio at 1/ACCUMULATION_RATIO or less) while the price is
+    under its PRESSURE_MA_DAYS average. Unreadable volume or too few bars = no signal."""
+    ratio = up_down_volume_ratio(bars)
+    closes = bars["close"].astype(float)
+    if ratio is None or len(closes) < PRESSURE_MA_DAYS:
+        return False
+    return ratio <= 1 / ACCUMULATION_RATIO and price < float(closes.iloc[-PRESSURE_MA_DAYS:].mean())
 
 
 def total_signals(core: int, negative_news: bool) -> int:
@@ -81,6 +93,8 @@ def evaluate_signals(
         members = {t.member_key for t in congress_trades_as_of(session, symbol, window_days=SELL_WINDOW_DAYS, side="sell")}
         if len(insiders) >= CLUSTER_MIN_INSIDERS or len(members) >= CLUSTER_MIN_INSIDERS:
             core.append("clustered_sells")
+        if settings.sell_on_distribution and distribution_under_pressure(bars, price):
+            core.append("distribution")
         try:
             news_bad = score_news_sentiment(data_provider.get_news(symbol), "long")[0] <= NEGATIVE_NEWS_SCORE
         except Exception:  # noqa: BLE001 - news is supporting only; no news is no signal
