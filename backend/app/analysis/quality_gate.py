@@ -15,6 +15,7 @@ from app.data_providers.base import CompanyOverview, FinancialYear
 
 # Close above the 200-day average (needs this many daily bars).
 MA_DAYS = 200
+MA_SLOPE_LOOKBACK = 20  # require_rising_ma200: the 200-day average must be >= its value this many bars ago
 
 
 # The dip rule (PORTOFOLIO_BUILDER O3): a good stock at least this % below its high of the last
@@ -60,6 +61,8 @@ def evaluate_quality_gate(
     volume_ratio: float | None = None,  # up_down_volume_ratio of the recent bars (None = unreadable)
     block_on_distribution: bool = False,  # AppSettings.block_on_distribution
     require_accumulation: bool = False,  # AppSettings.require_accumulation (stricter)
+    require_rising_ma200: bool = False,  # AppSettings.require_rising_ma200
+    max_extension_above_ma200_pct: float = 0.0,  # AppSettings.max_extension_above_ma200_pct (0 = off)
 ) -> GateResult:
     checks: list[GateCheck] = []
 
@@ -68,8 +71,19 @@ def evaluate_quality_gate(
     elif len(closes) >= MA_DAYS:
         ma = sum(closes[-MA_DAYS:]) / MA_DAYS
         checks.append(GateCheck("trend", price > ma, f"price {price:,.2f} vs 200-day average {ma:,.2f}"))
+        if max_extension_above_ma200_pct > 0:
+            ext = (price / ma - 1) * 100
+            checks.append(GateCheck("extension", ext <= max_extension_above_ma200_pct, f"price {ext:+.1f}% vs 200-day average (limit +{max_extension_above_ma200_pct:g}%)"))
     else:
         checks.append(GateCheck("trend", False, f"only {len(closes)} daily bars, {MA_DAYS} needed"))
+
+    if require_rising_ma200 and (require_trend or price_only):
+        if len(closes) >= MA_DAYS + MA_SLOPE_LOOKBACK:
+            now = sum(closes[-MA_DAYS:]) / MA_DAYS
+            before = sum(closes[-MA_DAYS - MA_SLOPE_LOOKBACK : -MA_SLOPE_LOOKBACK]) / MA_DAYS
+            checks.append(GateCheck("ma_slope", now >= before, f"200-day average {now:,.2f} vs {before:,.2f} {MA_SLOPE_LOOKBACK} bars ago"))
+        else:
+            checks.append(GateCheck("ma_slope", False, f"only {len(closes)} daily bars, {MA_DAYS + MA_SLOPE_LOOKBACK} needed for the 200-day slope"))
 
     if price_only:  # growth, profit and valuation are not run at all (not passed, not failed)
         return GateResult(all(c.ok for c in checks), checks, dip=is_dip(closes))

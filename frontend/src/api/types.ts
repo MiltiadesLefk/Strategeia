@@ -399,6 +399,9 @@ export interface AppSettings {
   block_on_distribution: boolean;
   require_accumulation: boolean;
   sell_on_distribution: boolean;
+  /** Trend (off): the 200-day must not be falling; max % the close may sit above it (0 = off). */
+  require_rising_ma200: boolean;
+  max_extension_above_ma200_pct: number;
   /** Big-news lane: buys without the quality gate at this % of a slice (off by default). */
   big_news_buy_enabled: boolean;
   big_news_size_pct: number;
@@ -496,6 +499,8 @@ export interface SettingsUpdateRequest {
   block_on_distribution?: boolean;
   require_accumulation?: boolean;
   sell_on_distribution?: boolean;
+  require_rising_ma200?: boolean;
+  max_extension_above_ma200_pct?: number;
   big_news_buy_enabled?: boolean;
   big_news_size_pct?: number;
   big_news_lookback_hours?: number;

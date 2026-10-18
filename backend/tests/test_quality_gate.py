@@ -40,6 +40,19 @@ def test_growth_bar_is_a_setting_and_acceleration_is_optional():
     assert verdict(require_acceleration=True).failed_reasons[0].startswith("acceleration")  # 2 years: missing data fails
 
 
+def test_ma200_slope_and_extension_are_optional_and_fail_on_missing_data():
+    assert [c.name for c in verdict().checks] == ["trend", "growth", "profit", "valuation"]  # defaults add no check
+    assert verdict(price_only=True).checks == verdict(price_only=True, max_extension_above_ma200_pct=0.0, require_rising_ma200=False).checks
+    falling = [float(i) for i in range(250, 0, -1)]
+    assert verdict(price=300.0, closes=falling, require_rising_ma200=True).failed_reasons[0].startswith("ma_slope")
+    assert verdict(require_rising_ma200=True).passed
+    assert verdict(closes=RISING[:210], require_rising_ma200=True).failed_reasons[0].startswith("ma_slope")  # < 220 bars
+    assert verdict(price_only=True, require_rising_ma200=True).passed
+    assert verdict(max_extension_above_ma200_pct=30).failed_reasons[0].startswith("extension")  # 260 vs avg 150
+    assert verdict(max_extension_above_ma200_pct=80).passed
+    assert verdict(price=100.0, max_extension_above_ma200_pct=30).failed_reasons[0].startswith("trend")
+
+
 def test_volume_check_is_off_by_default_and_fails_missing_data_only_when_on():
     assert [c.name for c in verdict(volume_ratio=0.2).checks] == ["trend", "growth", "profit", "valuation"]  # off: ignored
     assert verdict(block_on_distribution=True, volume_ratio=1.0).passed  # neutral passes the veto

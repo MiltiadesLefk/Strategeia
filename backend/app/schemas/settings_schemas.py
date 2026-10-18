@@ -79,6 +79,8 @@ class SettingsUpdateRequest(BaseModel):
     block_on_distribution: bool | None = None
     require_accumulation: bool | None = None
     sell_on_distribution: bool | None = None
+    require_rising_ma200: bool | None = None
+    max_extension_above_ma200_pct: float | None = Field(default=None, ge=0, le=500)
     big_news_buy_enabled: bool | None = None
     big_news_size_pct: float | None = Field(default=None, gt=0, le=100)
     big_news_lookback_hours: int | None = Field(default=None, ge=1, le=168)

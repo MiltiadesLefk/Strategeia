@@ -47,7 +47,7 @@ def hold_scan_symbol(
                 gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
                 rating_row = record_rating(session, run_id, "scan", symbol, "quality", gate) if run_id else None
             else:
-                gate = check_quality(data_provider, symbol, price_only=price_only, session=session)
+                gate = check_quality(data_provider, symbol, price_only=price_only, session=session, settings=settings)
             if not gate.passed or (settings.hold_buy_only_dips and not gate.dip):
                 return False
             dip = gate.dip

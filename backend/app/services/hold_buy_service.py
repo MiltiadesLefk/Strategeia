@@ -94,7 +94,8 @@ def hold_add(
 
 
 def check_quality(
-    data_provider: DataProvider, symbol: str, require_trend: bool = True, price_only: bool = False, session: Session | None = None
+    data_provider: DataProvider, symbol: str, require_trend: bool = True, price_only: bool = False, session: Session | None = None,
+    settings: AppSettings | None = None,
 ) -> GateResult:
     """Fetch what the gate reads (fresh data only) and run it. A failed fetch is a failed check.
     With a `session` the fundamentals fetched are saved to the dated archive, so net-income / P/E history builds up
@@ -104,7 +105,12 @@ def check_quality(
         bars = data_provider.get_ohlcv(symbol, period="1y", interval="1d")
         closes = [float(c) for c in bars["close"]]
         if price_only:
-            return evaluate_quality_gate(price, closes, None, [], require_trend, price_only=True)
+            # the caller's settings (a backtest never reads the saved ones); none = the two trend options off
+            return evaluate_quality_gate(
+                price, closes, None, [], require_trend, price_only=True,
+                require_rising_ma200=bool(settings and settings.require_rising_ma200),
+                max_extension_above_ma200_pct=settings.max_extension_above_ma200_pct if settings else 0.0,
+            )
         try:
             overview = data_provider.get_company_overview(symbol)
         except Exception:  # noqa: BLE001 - missing data fails the check instead of guessing
@@ -128,4 +134,5 @@ def check_quality(
         price, closes, overview, years, require_trend,
         min_growth_pct=s.hold_min_revenue_growth_pct, require_acceleration=s.require_growth_acceleration,
         volume_ratio=ratio, block_on_distribution=s.block_on_distribution, require_accumulation=s.require_accumulation,
+        require_rising_ma200=s.require_rising_ma200, max_extension_above_ma200_pct=s.max_extension_above_ma200_pct,
     )

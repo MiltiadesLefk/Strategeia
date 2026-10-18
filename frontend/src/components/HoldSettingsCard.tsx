@@ -19,6 +19,8 @@ type Draft = Pick<
   | 'block_on_distribution'
   | 'require_accumulation'
   | 'sell_on_distribution'
+  | 'require_rising_ma200'
+  | 'max_extension_above_ma200_pct'
   | 'big_news_buy_enabled'
   | 'big_news_size_pct'
   | 'big_news_lookback_hours'
@@ -41,6 +43,7 @@ const NUMBER_FIELDS: { key: keyof Draft; label: string; hint: string; step?: num
   { key: 'hold_max_per_sector', label: 'Max per sector', hint: 'Same-sector hold positions.' },
   { key: 'hold_max_new_per_scan', label: 'Max new buys per daily scan', hint: 'Keeps one scan from buying the whole list.' },
   { key: 'hold_failed_gate_size_pct', label: 'Size of a smart-money buy that fails the gate (% of a normal slice)', hint: 'Half a slice by default (50).' },
+  { key: 'max_extension_above_ma200_pct', label: 'Quality check: max % above the 200-day (0 = off)', hint: 'Skips a stock stretched far above its 200-day average; 30 is a common limit.', step: 1 },
   { key: 'hold_min_revenue_growth_pct', label: 'Quality check: minimum revenue growth (% year on year)', hint: '5 by default. 0 = only not shrinking.', step: 0.5 },
   { key: 'big_news_size_pct', label: 'Size of a big-news buy (% of a normal slice)', hint: 'Only used when big-news buys are on. Half a slice by default (50).' },
   { key: 'big_news_lookback_hours', label: 'Big news counts for (hours)', hint: 'A headline older than this is ignored; a bad headline in this window blocks the buy.' },
@@ -61,6 +64,7 @@ function fromSettings(data: AppSettings): Draft {
     hold_min_revenue_growth_pct: data.hold_min_revenue_growth_pct, require_growth_acceleration: data.require_growth_acceleration,
     block_on_distribution: data.block_on_distribution, require_accumulation: data.require_accumulation,
     sell_on_distribution: data.sell_on_distribution,
+    require_rising_ma200: data.require_rising_ma200, max_extension_above_ma200_pct: data.max_extension_above_ma200_pct,
     big_news_buy_enabled: data.big_news_buy_enabled, big_news_size_pct: data.big_news_size_pct,
     big_news_lookback_hours: data.big_news_lookback_hours, hold_stop_mode: data.hold_stop_mode,
     hold_add_on_dips: data.hold_add_on_dips, evidence_bonus_enabled: data.evidence_bonus_enabled, news_discovery_enabled: data.news_discovery_enabled, news_discovery_max_per_run: data.news_discovery_max_per_run,
@@ -105,6 +109,10 @@ export function HoldSettingsCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.require_growth_acceleration} onChange={(v) => set('require_growth_acceleration', v)} label="Growth must accelerate" />
         <span>The quality check also needs this year's revenue growth to beat last year's (three reported years; off by default)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ToggleSwitch checked={draft.require_rising_ma200} onChange={(v) => set('require_rising_ma200', v)} label="Rising 200-day" />
+        <span>The quality check also needs the 200-day average to be at or above its value 20 bars ago (off by default)</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ToggleSwitch checked={draft.block_on_distribution} onChange={(v) => set('block_on_distribution', v)} label="Block on distribution" />

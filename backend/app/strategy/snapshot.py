@@ -70,6 +70,8 @@ DECISION_SETTINGS: dict[str, str] = {
     "block_on_distribution": "gate blocks on distribution",
     "require_accumulation": "gate requires accumulation",
     "sell_on_distribution": "sell plan counts distribution",
+    "require_rising_ma200": "gate requires a rising 200-day",
+    "max_extension_above_ma200_pct": "gate max % above the 200-day",
     "evidence_bonus_enabled": "evidence bonus",
     "big_news_buy_enabled": "big-news buys",
     "big_news_size_pct": "big-news size %",
@@ -98,7 +100,7 @@ DECISION_SETTINGS: dict[str, str] = {
 # silently dropping out of the fingerprint.
 RULE_CONSTANTS: dict[str, tuple[str, ...]] = {
     # The hold gate's own rules (hold_stop_pct and hold_target_weight_pct are settings above).
-    "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS"),
+    "app.analysis.quality_gate": ("DIP_PCT", "DIP_LOOKBACK", "MA_DAYS", "MA_SLOPE_LOOKBACK"),
     "app.analysis.price_evidence": ("ACCUMULATION_RATIO", "VOLUME_TREND_DAYS"),
     "app.services.sell_plan_service": ("PRESSURE_MA_DAYS",),
     "app.portfolio.engine": ("EXIT_SCAN_PERIOD", "MAX_ENTRY_DRIFT_PCT"),

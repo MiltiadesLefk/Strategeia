@@ -664,6 +664,10 @@ class AppSettings(BaseModel):
     block_on_distribution: bool = False
     require_accumulation: bool = False
     sell_on_distribution: bool = False
+    # Trend sharpening (both off): the 200-day average must not be falling (vs 20 bars ago); the close must not be
+    # more than this % above the 200-day (0 = off, 30 is a sensible value). Both also run in a backtest's price-only gate.
+    require_rising_ma200: bool = False
+    max_extension_above_ma200_pct: float = Field(default=0.0, ge=0, le=500)
     # Evidence bonus (analysis/evidence_bonus.py): insider/Congress buys and big news for the stock rank the scan's
     # candidates and skip one with negative news. Never overrides a failed fundamentals check.
     evidence_bonus_enabled: bool = True
