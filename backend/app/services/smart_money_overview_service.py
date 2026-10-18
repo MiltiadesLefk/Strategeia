@@ -31,10 +31,15 @@ def overview(session: Session, settings: AppSettings, days: int = 30, limit: int
 
     insiders, house, owners = events(days)
     fsets = fund_sets_at(session, settings, now)
-    fund_moves = [
-        (c.symbol, c.status) for _, cs in fsets.values() for c in cs.changes
-        if c.symbol and c.share_type == "SH" and c.put_call is None and c.status in (STATUS_NEW, STATUS_ADDED)
-    ]
+
+    def moves(window: int) -> list[tuple[str, str]]:
+        """New or added positions in 13Fs filed inside the window (an older filing no longer scores)."""
+        return [
+            (c.symbol, c.status) for _, cs in fsets.values() if (now - cs.filed_at).days <= window for c in cs.changes
+            if c.symbol and c.share_type == "SH" and c.put_call is None and c.status in (STATUS_NEW, STATUS_ADDED)
+        ]
+
+    fund_moves, ranking_moves = moves(days), moves(WINDOW_DAYS)
     # Who gets scored comes from the scorer's own window, so the ranking never lists stocks whose evidence has aged out.
     r_ins, r_house, r_owners = (insiders, house, owners) if days == WINDOW_DAYS else events(WINDOW_DAYS)
     symbols: dict[str, int] = {}  # symbol -> how many source events point at it (to pick who gets scored first)
@@ -42,7 +47,7 @@ def overview(session: Session, settings: AppSettings, days: int = 30, limit: int
         [t.symbol for t in r_ins.trades if t.side == "buy"]
         + [t.symbol for t in r_house if t.side == "buy" and t.symbol]
         + [o.symbol for o in r_owners if o.symbol]
-        + [sym for sym, _ in fund_moves]
+        + [sym for sym, _ in ranking_moves]
     )
     for sym in pointed_at:
         symbols[sym.upper()] = symbols.get(sym.upper(), 0) + 1
