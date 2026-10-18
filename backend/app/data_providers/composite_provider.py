@@ -83,7 +83,38 @@ class CompositeDataProvider:
         return self._try_each("get_financials", symbol)
 
     def get_news(self, symbol: str, limit: int = 5) -> list[NewsItem]:
-        return self._try_each("get_news", symbol, limit=limit)
+        try:
+            items = self._try_each("get_news", symbol, limit=limit)
+        except AllProvidersFailedError:
+            items = []
+            error = True
+        else:
+            error = False
+        if items:
+            return items
+        # yfinance answers [] (not an error) when Yahoo withholds news, and no other provider has news: ask Google News.
+        found = self._google_news(symbol, limit)
+        if found or not error:
+            return found
+        raise AllProvidersFailedError(f"All providers failed for get_news({symbol!r}) and Google News had nothing")
+
+    def _google_news(self, symbol: str, limit: int) -> list[NewsItem]:
+        from app.knowledge.point_in_time import is_simulated
+        from app.services.company_news import build_query, google_news_enabled, _google
+
+        if is_simulated() or not google_news_enabled():
+            return []
+        try:
+            name = self.get_company_overview(symbol).name
+        except Exception:  # noqa: BLE001 - the name only sharpens the query; tickers alone still search
+            name = None
+        query = build_query(symbol, name)
+        if not query:
+            return []
+        try:
+            return list(_google.search(query, limit=limit, days=7))
+        except DataProviderError:
+            return []
 
     def get_earnings_date(self, symbol: str) -> date | None:
         try:

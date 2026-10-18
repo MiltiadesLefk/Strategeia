@@ -117,3 +117,22 @@ def test_composite_earnings_date_returns_none_instead_of_raising():
 
     composite = CompositeDataProvider([NoEarnings()])
     assert composite.get_earnings_date("AAPL") is None
+
+
+def test_composite_news_falls_back_to_google_when_yahoo_answers_empty(monkeypatch):
+    from app.data_providers.base import NewsItem
+    from app.services import company_news
+
+    class EmptyNews:
+        name = "empty"
+
+        def get_news(self, symbol, limit=5):
+            return []
+
+        def get_company_overview(self, symbol):
+            raise DataProviderError("no overview")
+
+    item = NewsItem(headline="Vistra wins $4.2 billion DOE loan", source="x", url="u", published_at="2026-10-17T00:00:00Z")
+    monkeypatch.setenv("GOOGLE_NEWS_ENABLED", "true")
+    monkeypatch.setattr(company_news._google, "search", lambda query, limit=5, days=7: [item])
+    assert CompositeDataProvider([EmptyNews()]).get_news("VST") == [item]
