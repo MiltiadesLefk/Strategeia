@@ -105,7 +105,10 @@ def get_smart_money_score(
 @router.get("/overview")
 def get_smart_money_overview(
     days: int = DaysQuery, limit: int = Query(30, ge=1, le=100),
+    side: Literal["all", "buys", "sells"] = "all", min_value: float = Query(0.0, ge=0),
+    symbol: str | None = Query(default=None, max_length=12),
     session: Session = Depends(get_session), settings: AppSettings = Depends(get_app_settings),
 ) -> dict:
-    """Totals of every source (insiders, Congress, funds, 5% owners, candidates) and the stocks ranked by combined score."""
-    return build_overview(session, settings, days, limit)
+    """Totals of every source (insiders, Congress, funds, 5% owners, candidates) and the stocks ranked by combined score.
+    Filters like the Insiders tab: side, minimum value, one symbol."""
+    return build_overview(session, settings, days, limit, side=side, min_value=min_value, symbol=symbol)

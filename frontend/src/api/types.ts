@@ -2788,7 +2788,7 @@ export interface SmartMoneyOverview {
   totals: {
     insider: { buys: number; buy_value: number; sells: number; sell_value: number };
     congress: { buys: number; sells: number; members: number };
-    funds: { followed_with_filings: number; new_positions: number; added: number };
+    funds: { followed_with_filings: number; new_positions: number; added: number; trimmed: number; sold_out: number };
     owners: { '13D': number; '13G': number };
     candidates: { new: number; needs_review: number; all: number };
   };

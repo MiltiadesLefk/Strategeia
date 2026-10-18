@@ -1414,9 +1414,11 @@ export function useSmartMoneyScore(symbol: string) {
   });
 }
 
-export function useSmartMoneyOverview(days: number) {
+export function useSmartMoneyOverview(params: { days: number; side: string; minValue: number; symbol: string }) {
+  const q = new URLSearchParams({ days: String(params.days), side: params.side, min_value: String(params.minValue) });
+  if (params.symbol) q.set('symbol', params.symbol);
   return useQuery({
-    queryKey: ['smart-money', 'overview', days],
-    queryFn: () => api.get<SmartMoneyOverview>(`/api/smart-money/overview?days=${days}`),
+    queryKey: ['smart-money', 'overview', params.days, params.side, params.minValue, params.symbol],
+    queryFn: () => api.get<SmartMoneyOverview>(`/api/smart-money/overview?${q}`),
   });
 }
