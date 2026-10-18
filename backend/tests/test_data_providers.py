@@ -136,3 +136,22 @@ def test_composite_news_falls_back_to_google_when_yahoo_answers_empty(monkeypatc
     monkeypatch.setenv("GOOGLE_NEWS_ENABLED", "true")
     monkeypatch.setattr(company_news._google, "search", lambda query, limit=5, days=7: [item])
     assert CompositeDataProvider([EmptyNews()]).get_news("VST") == [item]
+
+
+def test_yfinance_news_uses_search_when_ticker_news_is_empty(monkeypatch):
+    from app.data_providers import yfinance_provider as yp
+
+    class FakeTicker:
+        def __init__(self, symbol):
+            self.news = []
+
+    class FakeSearch:
+        def __init__(self, *a, **k):
+            self.news = [
+                {"title": "About VST", "publisher": "p", "link": "u", "providerPublishTime": 1792339170, "relatedTickers": ["vst"]},
+                {"title": "About others", "publisher": "p", "link": "u", "providerPublishTime": 1792339170, "relatedTickers": ["AAPL"]},
+            ]
+
+    monkeypatch.setattr(yp.yf, "Ticker", FakeTicker)
+    monkeypatch.setattr(yp.yf, "Search", FakeSearch)
+    assert [n.headline for n in yp.YFinanceProvider().get_news("VST")] == ["About VST"]

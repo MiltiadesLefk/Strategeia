@@ -198,6 +198,11 @@ class YFinanceProvider:
     def get_news(self, symbol: str, limit: int = 5) -> list[NewsItem]:
         try:
             raw_news = yf.Ticker(symbol).news or []
+            if not raw_news:
+                # Yahoo removed the endpoint behind Ticker.news (404, 2026-10); its search endpoint still carries news,
+                # tagged with the tickers each story is about.
+                found = yf.Search(symbol, news_count=max(limit, 10), max_results=1).news or []
+                raw_news = [n for n in found if symbol.upper() in [t.upper() for t in n.get("relatedTickers") or []]]
         except Exception as exc:
             raise DataProviderError(f"yfinance get_news({symbol}) failed: {exc}") from exc
 
