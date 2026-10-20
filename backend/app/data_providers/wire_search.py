@@ -55,6 +55,7 @@ class WireHeadline:
     title: str
     published_at: datetime
     source: str
+    url: str = ""
 
 
 def _tokens(text: str) -> list[str]:
@@ -122,7 +123,7 @@ def parse_results(xml_text: str) -> list[WireHeadline]:
         except (TypeError, ValueError, IndexError):
             continue
         if title and parsed is not None and parsed.tzinfo is not None:
-            out.append(WireHeadline(title, to_naive_utc(parsed), source))
+            out.append(WireHeadline(title, to_naive_utc(parsed), source, (item.findtext("link") or "").strip()))
     return out
 
 
@@ -140,7 +141,7 @@ def search_wire_headlines(lookback_hours: float) -> list[WireHeadline]:
     return list(found.values())
 
 
-def wire_ticker_headlines(lookback_hours: float, now: datetime) -> dict[str, str]:
+def wire_ticker_headlines(lookback_hours: float, now: datetime, urls: dict[str, str] | None = None) -> dict[str, str]:
     """{ticker: headline} for search results inside the window whose company name maps to one ticker."""
     name_map = _load_name_map()
     out: dict[str, str] = {}
@@ -150,4 +151,6 @@ def wire_ticker_headlines(lookback_hours: float, now: datetime) -> dict[str, str
         ticker = ticker_for_headline(h.title, name_map)
         if ticker:
             out.setdefault(ticker, h.title)
+            if urls is not None and h.url:
+                urls[h.title] = h.url
     return out

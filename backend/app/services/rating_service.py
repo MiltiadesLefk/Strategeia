@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.analysis.confidence import (
     ATR_PERIOD, MAX_SCORE_FOR_CONFIDENCE, TECHNICAL_SCORE_CAP, _confidence_score, clamp_points,
@@ -48,6 +48,44 @@ def _try(read, default=None):
     except Exception:  # noqa: BLE001
         logger.debug("rating input unavailable", exc_info=True)
         return default
+
+
+def _news_items(session: Session | None, symbol: str, news: list, ai_available: bool) -> list[dict]:
+    """The headlines the news part looked at, for the expandable row: the AI's labelled cards, else the raw headlines."""
+    if ai_available and session is not None:
+        from app.analysis.news_card_scoring import recent_cards
+
+        return [{"text": c.get("headline", ""), "meta": " · ".join(filter(None, [
+                    c.get("publisher"), (c.get("article") or c).get("materiality")])),
+                 "sentiment": (c.get("article") or c).get("sentiment"), "url": c.get("url", "")} for c in _try(lambda: recent_cards(session, symbol), [])]
+    return [{"text": n.headline, "meta": " · ".join(filter(None, [n.source, str(n.published_at)[:10]])), "url": n.url} for n in news or []]
+
+
+def _money(v) -> str:
+    return f"${v:,.0f}" if v else "n/a"
+
+
+def _smart_money_items(session: Session | None, symbol: str) -> dict[str, list[dict]]:
+    """Who bought and sold: the insider, Congress and fund records behind those parts, for the expandable rows."""
+    if session is None:
+        return {}
+    from app.knowledge.congress_trades import congress_trades_as_of
+    from app.knowledge.fund_holdings import fund_holders_of_symbol
+    from app.knowledge.insider_trades import OPEN_MARKET_BUY, OPEN_MARKET_SELL, insider_trades_as_of
+
+    out: dict[str, list[dict]] = {}
+    trades = _try(lambda: insider_trades_as_of(session, symbol, codes=(OPEN_MARKET_BUY, OPEN_MARKET_SELL)), [])
+    out["insiders"] = [{"text": f"{'BOUGHT' if t.code == OPEN_MARKET_BUY else 'SOLD'} {_money(t.value)} — {t.owner_name or 'insider'}"
+                               f"{' (' + t.officer_title + ')' if t.officer_title else ''}{' under a 10b5-1 plan' if t.is_10b5_1 else ''}",
+                        "meta": str(t.transaction_date or t.known_at.date()), "url": t.filing_url or ""} for t in trades[:25]]
+    cong = _try(lambda: congress_trades_as_of(session, symbol), [])
+    out["Congress"] = [{"text": f"{t.side.upper()} {t.amount_text} — {t.member}", "meta": f"traded {t.trade_date}, filed {t.filed_date}",
+                        "url": t.filing_url or ""} for t in cong[:25]]
+    funds = _try(lambda: fund_holders_of_symbol(session, symbol), [])
+    out["Funds (13F)"] = [{"text": f"{h.manager or h.cik}: {h.status.replace('_', ' ')} ({_money(h.value)}"
+                                  f"{'' if h.change_pct is None else f', {h.change_pct:+.0f}%'})",
+                           "meta": f"quarter {h.period}", "url": h.filing_url or ""} for h in funds[:25]]
+    return out
 
 
 def rate_stock(data_provider: DataProvider, symbol: str, bar_pct: int, session: Session | None = None) -> GateResult:
@@ -89,6 +127,7 @@ def rate_stock(data_provider: DataProvider, symbol: str, bar_pct: int, session: 
     # AI-labelled news (headline label, article read when it was positive/negative) when any exists, else the keyword scorer.
     ai_available, ai_points, ai_reasons = ai_news_score(session, symbol, DIRECTION, AI_NEWS_RATING_CAP)
     add("news", (ai_points, ai_reasons) if ai_available else score_news_sentiment(news, DIRECTION))
+    items = {"news": _news_items(session, symbol, news, ai_available), **_smart_money_items(session, symbol)}
     add("confluence", score_market_confirmation(DIRECTION, weekly, market_chart))
     add("vix", score_vix_regime(vix))
     add("options", score_options_positioning(DIRECTION, options))
@@ -117,17 +156,20 @@ def rate_stock(data_provider: DataProvider, symbol: str, bar_pct: int, session: 
         why["technical"] = "; ".join(filter(None, [why.get("technical"), f"price {price:,.2f} is {(price / ma200 - 1) * 100:+.1f}% vs its 200-day average {ma200:,.2f}"]))
     detail = {"points": total, "max": MAX_SCORE_FOR_CONFIDENCE, "percent": percent, "bar_pct": bar_pct,
               "parts": {labels.get(k, k): v for k, v in parts.items()},
-              "why": {labels.get(k, k): w for k, w in why.items()}}
+              "why": {labels.get(k, k): w for k, w in why.items()},
+              "items": {labels.get(k, k): v for k, v in items.items() if v}}
     return GateResult(passed, [GateCheck("rating", passed, note)], dip=is_dip(closes), detail=detail)
 
 
-def record_rating(session: Session, run_id: str, source: str, symbol: str, lane: str, gate: GateResult) -> RatingRecord | None:
-    """Save one rating for the history page. Best-effort: a database problem never changes a buy decision."""
-    d = gate.detail or {}
+def record_rating(session: Session, run_id: str, source: str, symbol: str, lane: str, gate: GateResult | None, note: str | None = None) -> RatingRecord | None:
+    """Save one rating for the history page. Best-effort: a database problem never changes a buy decision.
+    `gate` None = a stock saved without a rating (zero score); `note` overrides the gate's note."""
+    d = (gate.detail if gate else None) or {}
     try:
         row = RatingRecord(run_id=run_id, source=source, symbol=symbol, lane=lane, points=d.get("points", 0),
-                           max_points=d.get("max", MAX_SCORE_FOR_CONFIDENCE), percent=d.get("percent", 0), passed=gate.passed,
-                           dip=gate.dip, note=gate.checks[0].note if gate.checks else "", detail_json=json.dumps(d))
+                           max_points=d.get("max", MAX_SCORE_FOR_CONFIDENCE), percent=d.get("percent", 0), passed=bool(gate and gate.passed),
+                           dip=bool(gate and gate.dip),
+                           note=note if note is not None else (gate.checks[0].note if gate and gate.checks else ""), detail_json=json.dumps(d))
         session.add(row)
         session.commit()
         session.refresh(row)
@@ -138,12 +180,48 @@ def record_rating(session: Session, run_id: str, source: str, symbol: str, lane:
         return None
 
 
-def rate_universe(settings, data_provider: DataProvider, session: Session, run_id: str, source: str = "manual") -> int:
-    """Rate every watchlist stock and save the results; buys nothing. Returns how many were rated."""
+def record_market_news(session: Session, run_id: str, source: str, found: dict[str, str]) -> None:
+    """The market-wide wire headlines the news reader labelled (tickers outside the watchlist), with the AI's labels."""
+    from app.analysis.news_card_scoring import recent_cards
+
+    from app.services.big_news_service import WIRE_URLS
+
+    for ticker, headline in (found or {}).items():
+        cards = _try(lambda: recent_cards(session, ticker), [])
+        # a headline stored by an earlier scan has no url; this scan's wire fetch knows it
+        items = [{"text": c.get("headline", ""), "meta": " · ".join(filter(None, [c.get("event_type"), c.get("materiality")])),
+                  "sentiment": c.get("sentiment"), "url": c.get("url") or WIRE_URLS.get(c.get("headline", ""), "")} for c in cards] \
+            or [{"text": headline, "meta": "wire", "url": WIRE_URLS.get(headline, "")}]
+        record_report_item(session, run_id, source, ticker, "market news", f"Wire headline read: {headline}", items)
+
+
+REPORT_LANES = ("market news", "smart money trades")  # daily-report rows about stocks outside the universe; not ratings
+
+
+def record_report_item(session: Session, run_id: str, source: str, symbol: str, lane: str, note: str, items: list[dict]) -> None:
+    """One market-wide thing the scan analysed (a wire headline, a smart-money trade), listed under the day's report."""
+    record_rating(session, run_id, source, symbol, lane, None, note=note)
+    row = session.exec(select(RatingRecord).where(RatingRecord.run_id == run_id, RatingRecord.symbol == symbol,
+                                                   RatingRecord.lane == lane).order_by(RatingRecord.id.desc())).first()
+    if row is not None:
+        row.detail_json = json.dumps({"items": {lane: items}})
+        session.add(row)
+        session.commit()
+
+
+def rate_universe(settings, data_provider: DataProvider, session: Session, run_id: str, source: str = "manual", llm_provider=None) -> int:
+    """Rate every watchlist stock and save the results; buys nothing. Returns how many were rated.
+    With an AI provider the news reader labels the headlines first, exactly as the morning scan does."""
     from app.data_providers.universe import get_default_watchlist
 
     done = 0
-    for symbol in get_default_watchlist(settings.scan_universe_size):
+    watchlist = get_default_watchlist(settings.scan_universe_size)
+    if llm_provider is not None:
+        from app.services.news_reader_service import read_news
+
+        found = _try(lambda: read_news(settings, data_provider, llm_provider, session, list(watchlist), market=settings.big_news_buy_enabled), {})
+        record_market_news(session, run_id, source, found)
+    for symbol in watchlist:
         try:
             gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
         except Exception:  # noqa: BLE001 - one stock with no data must not stop the run

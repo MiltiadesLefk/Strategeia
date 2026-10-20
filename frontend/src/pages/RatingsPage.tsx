@@ -1,3 +1,4 @@
+import { EvidenceItems, SentimentSummary } from '../components/EvidenceItems';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -10,6 +11,51 @@ import { tickerHref } from '../components/TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner } from '../components/common';
 
 const LATEST = 'latest';
+const REPORT_LANES: Record<string, string> = {
+  'market news': 'Market news read (stocks outside the universe)',
+  'smart money trades': 'Smart money trades analysed',
+};
+
+/** What the day's scan looked at beyond the universe's ratings: each item expands to what was read. */
+function ReportSections({ rows }: { rows: RatingRow[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <>
+      {Object.entries(REPORT_LANES).map(([lane, title]) => {
+        const mine = rows.filter((r) => r.lane === lane);
+        if (mine.length === 0) return null;
+        return (
+          <div key={lane} style={{ marginTop: 16 }}>
+            <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>{title} ({mine.length})</h3>
+            {mine.map((r) => {
+              const id = `${lane}:${r.symbol}`;
+              // shortcut: wire headlines are stored without their article url, so link a Google News search for the headline; replace with the real url once the wire fetch keeps it
+              const items = (r.detail.items?.[lane] ?? []).map((it) => ({
+                ...it, url: it.url || `https://news.google.com/search?q=${encodeURIComponent(it.text)}`,
+              }));
+              return (
+                <div key={id} style={{ borderTop: '1px solid var(--border, #2a2d33)', padding: '6px 0', fontSize: 13 }}>
+                  <strong>{r.symbol}</strong>{' '}
+                  <Link to={tickerHref(r.symbol)} className="text-muted" style={{ fontSize: 12 }}>company →</Link>{' '}
+                  <span className="text-muted">{r.note}</span>{' '}
+                  <SentimentSummary items={items} />{' '}
+                  {items.length > 0 && (
+                    <button className="btn btn-secondary" style={{ padding: '0 6px', fontSize: 11 }} onClick={() => setOpen(open === id ? null : id)}>
+                      {open === id ? 'close' : `${items.length} items`}
+                    </button>
+                  )}
+                  {open === id && (
+                    <EvidenceItems items={items} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 function when(iso: string): string {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).toLocaleString();
@@ -33,6 +79,9 @@ function RatingRows({ rows, onRate, rating }: { rows: RatingRow[]; onRate?: (sym
                 <td>
                   <strong>{r.symbol}</strong>{' '}
                   <Link to={tickerHref(r.symbol)} onClick={(e) => e.stopPropagation()} className="text-muted" style={{ fontSize: 12 }}>company →</Link>
+                  {r.note.startsWith('Added to universe') && (
+                    <div style={{ fontSize: 12, marginTop: 2, color: 'var(--accent, #5b9cff)', fontWeight: 600 }}>{r.note}</div>
+                  )}
                 </td>
                 <td style={{ textAlign: 'right' }}>{r.percent}</td>
                 <td>{r.bought ? 'Bought' : r.passed ? 'Passed' : 'Below bar'}</td>
@@ -127,7 +176,7 @@ export function RatingsPage() {
               >
                 <div>{when(r.run_at)}{r.running ? ' · running' : ''}</div>
                 <div className="text-muted" style={{ fontSize: 12 }}>
-                  {r.source === 'scan' ? 'Morning scan' : r.source === 'replay' ? 'As-if replay' : 'Manual'} · {r.rated} rated · {r.passed} passed · {r.bought} bought
+                  {r.source === 'scan' ? 'Morning scan' : r.source === 'replay' ? 'As-if replay' : r.source === 'find' ? 'Added to universe' : 'Manual'} · {r.rated} rated · {r.passed} passed · {r.bought} bought
                 </div>
               </button>
             ))
@@ -144,8 +193,11 @@ export function RatingsPage() {
             <ErrorBanner message="Could not load this run" onRetry={() => run.refetch()} />
           ) : (
             <>
-              <RatingRows key={view} rows={run.data?.ratings ?? []} />
-              {run.data?.running && <div className="text-muted" style={{ padding: 8 }}>Still rating… rows appear as they finish.</div>}
+              <RatingRows key={view} rows={(run.data?.ratings ?? []).filter((r) => !(r.lane in REPORT_LANES))} />
+              <ReportSections rows={run.data?.ratings ?? []} />
+              {run.data?.running && <div className="text-muted" style={{ padding: 8 }}>{(run.data.ratings ?? []).length === 0
+                ? 'Reading the news with the AI first (one call per batch of headlines, can take a few minutes); the ratings appear once that is done.'
+                : 'Still rating… rows appear as they finish.'}</div>}
             </>
           )}
         </div>

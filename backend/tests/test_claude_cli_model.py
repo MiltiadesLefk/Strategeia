@@ -144,8 +144,8 @@ def test_non_object_json_output_does_not_crash(monkeypatch):
 # --- settings validation ----------------------------------------------------
 
 
-def test_default_pin_is_the_sonnet_alias():
-    assert AppSettings().claude_cli_model == "sonnet"
+def test_default_pin_is_the_haiku_alias():
+    assert AppSettings().claude_cli_model == "haiku"
 
 
 @pytest.mark.parametrize(
@@ -227,7 +227,7 @@ def test_factory_passes_the_setting_to_the_provider():
     unpinned = get_llm_provider(AppSettings(llm_provider="claude_code_cli", claude_cli_model=""))
     assert unpinned.model == ""
 
-    assert get_llm_provider(AppSettings(llm_provider="claude_code_cli")).model == "sonnet"
+    assert get_llm_provider(AppSettings(llm_provider="claude_code_cli")).model == "haiku"
 
 
 # --- status + test-connection ----------------------------------------------

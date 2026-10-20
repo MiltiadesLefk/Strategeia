@@ -1,3 +1,6 @@
+import { EvidenceItems, type EvidenceItem } from './EvidenceItems';
+import { Fragment, useState } from 'react';
+
 export interface ScorePart {
   label: string;
   value: number;
@@ -9,6 +12,8 @@ export interface ScorePart {
   unsigned?: boolean;
   /** Caution flags can only subtract; a 0 means "nothing flagged", not "neutral". */
   penaltyOnly?: boolean;
+  /** What the part looked at (e.g. the headlines); shown when the row is expanded. */
+  items?: EvidenceItem[];
 }
 
 /** Zero has two meanings: the part found nothing, or it had no data to look at. */
@@ -35,6 +40,7 @@ function rating(part: ScorePart): { text: string; cls: string; why: string } {
 /** Every part of a rating: its points, a verdict, and what it measures, so a number is never a mystery. */
 export function ScoreTable({ parts, summary }: { parts: ScorePart[]; summary?: string }) {
   // Strongest evidence first: against and supporting parts above the neutral ones.
+  const [open, setOpen] = useState<string | null>(null);
   const sorted = [...parts].sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
   const total = parts.reduce((sum, p) => sum + p.value, 0);
   return (
@@ -52,8 +58,20 @@ export function ScoreTable({ parts, summary }: { parts: ScorePart[]; summary?: s
           {sorted.map((p) => {
             const r = rating(p);
             return (
-              <tr key={p.label} className={p.value === 0 ? 'score-row-quiet' : undefined}>
-                <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{p.label}</td>
+              <Fragment key={p.label}>
+              <tr className={p.value === 0 ? 'score-row-quiet' : undefined}>
+                <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  {p.label}
+                  {p.items?.length ? (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ marginLeft: 8, padding: '0 6px', fontSize: 11 }}
+                      onClick={() => setOpen(open === p.label ? null : p.label)}
+                    >
+                      {open === p.label ? 'close' : `${p.items.length} items`}
+                    </button>
+                  ) : null}
+                </td>
                 <td
                   className={`tabular-nums ${p.value > 0 && !p.unsigned ? 'text-green' : p.value < 0 ? 'text-red' : ''}`}
                   style={{ textAlign: 'right', fontWeight: 600 }}
@@ -68,6 +86,14 @@ export function ScoreTable({ parts, summary }: { parts: ScorePart[]; summary?: s
                   <span style={{ color: 'var(--text)' }}>{r.why}</span> {p.help}
                 </td>
               </tr>
+              {open === p.label && p.items && (
+                <tr>
+                  <td colSpan={4}>
+                    <EvidenceItems items={p.items} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>

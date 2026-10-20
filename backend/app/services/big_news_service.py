@@ -36,6 +36,9 @@ def market_8k_symbols(session: Session, settings: AppSettings, now: datetime | N
 MAX_WIRE_PER_RUN = 30  # wire-feed tickers looked at per scan
 
 
+WIRE_URLS: dict[str, str] = {}  # headline -> article url of the last wire fetch, so the news reader can link and read it
+
+
 def wire_news_headlines(settings: AppSettings, now: datetime | None = None, only_big: bool = True) -> dict[str, str]:
     """{ticker: headline} for market-wide press releases (wire RSS feeds, plus a Google News search of the four big wires) that carry an exchange tag, sit inside
     the lookback window and match a big-news pattern with no negative one. Any ticker, universe or not. A feed that fails is
@@ -59,10 +62,11 @@ def wire_news_headlines(settings: AppSettings, now: datetime | None = None, only
                 continue
             for ticker in tickers_in_text(f"{r.title} {r.summary}"):
                 found.setdefault(ticker, r.title)
+                WIRE_URLS[r.title] = r.url
     try:  # whole market: GlobeNewswire / Business Wire / PR Newswire / ACCESS Newswire releases via Google News RSS
         from app.data_providers.wire_search import wire_ticker_headlines
 
-        for ticker, title in wire_ticker_headlines(settings.big_news_lookback_hours, now).items():
+        for ticker, title in wire_ticker_headlines(settings.big_news_lookback_hours, now, WIRE_URLS).items():
             if not only_big or (classify_headline(title) is not None and not is_negative(title)):
                 found.setdefault(ticker, title)
     except Exception:  # noqa: BLE001 - the SEC map or Google may be down; the other sources still count

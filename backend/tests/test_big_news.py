@@ -114,6 +114,9 @@ def test_found_stock_is_adopted_once_and_alerted(session, monkeypatch):
     symbols = [s.symbol for s in universe_store.read_store().watchlist.symbols]
     assert symbols.count("ZZNEW") == 1
     assert "failed the quality gate" in sent[0] and "ZZNEW" in sent[0]
+    from app.portfolio.models import RatingRecord
+    rows = session.exec(select(RatingRecord).where(RatingRecord.symbol == "ZZNEW")).all()
+    assert len(rows) == 1 and rows[0].source == "find" and rows[0].note.startswith("Added to universe (big news)")
     from app.services.watchlist_service import add_to_universe
     assert add_to_universe("ZZNEW", NewsProvider()) is False  # idempotent
 

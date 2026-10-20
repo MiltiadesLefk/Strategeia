@@ -11,13 +11,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.api.deps import get_app_settings, get_data_provider, get_session, require_auth
+from app.api.deps import get_app_settings, get_data_provider, get_llm_provider, get_session, require_auth
+from app.llm_providers.base import LLMProvider
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.database import engine
 from app.portfolio.models import RatingRecord
 from app.timeutil import utcnow_naive
-from app.services.rating_service import rate_stock, rate_universe, record_rating
+from app.services.rating_service import REPORT_LANES, rate_stock, rate_universe, record_rating
 
 router = APIRouter(prefix="/api/ratings", tags=["ratings"], dependencies=[Depends(require_auth)])
 
@@ -31,7 +32,7 @@ def list_runs(limit: int = 30, session: Session = Depends(get_session)) -> list[
         select(
             RatingRecord.run_id, func.min(RatingRecord.run_at), func.min(RatingRecord.source), func.count(RatingRecord.id),
             func.sum(RatingRecord.passed), func.sum(RatingRecord.bought),
-        ).where(RatingRecord.source != "single").group_by(RatingRecord.run_id).order_by(func.min(RatingRecord.run_at).desc()).limit(min(max(limit, 1), 200))
+        ).where(RatingRecord.source != "single", RatingRecord.lane.notin_(REPORT_LANES)).group_by(RatingRecord.run_id).order_by(func.min(RatingRecord.run_at).desc()).limit(min(max(limit, 1), 200))
     ).all()
     out = [
         {"run_id": r[0], "run_at": r[1], "source": r[2], "rated": r[3], "passed": int(r[4] or 0), "bought": int(r[5] or 0),
@@ -55,23 +56,29 @@ def _row_json(r: RatingRecord) -> dict:
 def latest_per_symbol(session: Session = Depends(get_session)) -> dict[str, dict]:
     """The newest rating of every stock (a single-stock re-rate counts), for the scan table's Rating column."""
     out: dict[str, dict] = {}
-    for r in session.exec(select(RatingRecord).order_by(RatingRecord.run_at.desc())).all():
+    for r in session.exec(select(RatingRecord).where(RatingRecord.lane.notin_(REPORT_LANES)).order_by(RatingRecord.run_at.desc())).all():
         out.setdefault(r.symbol, _row_json(r))
     return out
 
 
 @router.get("/stock/{symbol}")
 def stock_history(symbol: str, limit: int = 10, session: Session = Depends(get_session)) -> list[dict]:
-    rows = session.exec(select(RatingRecord).where(RatingRecord.symbol == symbol.upper())
+    rows = session.exec(select(RatingRecord).where(RatingRecord.symbol == symbol.upper(), RatingRecord.lane.notin_(REPORT_LANES))
                         .order_by(RatingRecord.run_at.desc()).limit(min(max(limit, 1), 100))).all()
     return [_row_json(r) for r in rows]
 
 
 @router.post("/stock/{symbol}")
 def rate_one(symbol: str, session: Session = Depends(get_session), settings: AppSettings = Depends(get_app_settings),
-             data_provider: DataProvider = Depends(get_data_provider)) -> dict:
+             data_provider: DataProvider = Depends(get_data_provider), llm_provider: LLMProvider = Depends(get_llm_provider)) -> dict:
     """Re-rate one stock now and save it (source "single", so it stays out of the run history). Buys nothing."""
     symbol = symbol.upper()
+    from app.services.news_reader_service import read_news
+
+    try:  # the same AI news read the morning scan does first; a failure only means keyword news
+        read_news(settings, data_provider, llm_provider, session, [symbol])
+    except Exception:  # noqa: BLE001
+        pass
     try:
         gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
     except Exception as exc:  # noqa: BLE001 - no quote or history means no rating, like the gate
@@ -99,7 +106,8 @@ def run_detail(run_id: str, session: Session = Depends(get_session)) -> dict:
 
 
 @router.post("/run", status_code=202)
-def start_run(settings: AppSettings = Depends(get_app_settings), data_provider: DataProvider = Depends(get_data_provider)) -> dict:
+def start_run(settings: AppSettings = Depends(get_app_settings), data_provider: DataProvider = Depends(get_data_provider),
+              llm_provider: LLMProvider = Depends(get_llm_provider)) -> dict:
     with _lock:
         if any(_running.values()):
             raise HTTPException(status_code=429, detail="A rating run is already going; wait for it to finish.")
@@ -109,7 +117,7 @@ def start_run(settings: AppSettings = Depends(get_app_settings), data_provider: 
     def work() -> None:
         try:
             with Session(engine) as session:
-                rate_universe(settings, data_provider, session, run_id, "manual")
+                rate_universe(settings, data_provider, session, run_id, "manual", llm_provider)
         finally:
             _running[run_id] = False
 

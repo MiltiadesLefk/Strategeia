@@ -2737,7 +2737,7 @@ export interface RebuyWatchItem {
 export interface RatingRunSummary {
   run_id: string;
   run_at: string;
-  source: 'scan' | 'manual' | 'replay';
+  source: 'scan' | 'manual' | 'replay' | 'find';
   rated: number;
   passed: number;
   bought: number;
@@ -2751,6 +2751,8 @@ export interface RatingDetail {
   bar_pct: number;
   parts: Record<string, number>;
   why: Record<string, string>;
+  /** What a part looked at (headlines, trades), by part label. */
+  items: Record<string, { text: string; meta?: string; url?: string; sentiment?: string | null }[]>;
 }
 
 export interface RatingRow {

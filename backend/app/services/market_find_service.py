@@ -47,6 +47,10 @@ def adopt_found_stock(
         added = add_to_universe(symbol, data_provider)
     except Exception:  # noqa: BLE001
         logger.exception("Could not add %s to the universe", symbol)
+    if added:  # shows on the Ratings page as that day's "Added to universe" list, highlighted
+        from app.services.rating_service import record_rating
+
+        record_rating(session, f"find:{now:%Y-%m-%d}", "find", symbol, lane, gate, note=f"Added to universe ({lane}): {detail}")
     verdict = "no quality check" if gate is None else "passed the quality gate" if passed else "failed the quality gate (" + "; ".join(failed) + ")"
     notify(settings.telegram_bot_token, settings.telegram_chat_id,
            f"{lane} found {symbol}: {detail}. It {verdict}." + (" Added to the universe." if added else ""))

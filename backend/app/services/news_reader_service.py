@@ -65,7 +65,7 @@ def read_news(
 
     found: dict[str, str] = {}
     if market:
-        from app.services.big_news_service import wire_news_headlines
+        from app.services.big_news_service import WIRE_URLS, wire_news_headlines
 
         try:
             wire = wire_news_headlines(settings, only_big=False)
@@ -77,7 +77,7 @@ def read_news(
             if ticker in symbols or calls >= MAX_LLM_CALLS_PER_SCAN:
                 continue
             try:
-                archive_news(session, ticker, [NewsItem(headline=title, source="wire", url="", published_at=now)], SOURCE)
+                archive_news(session, ticker, [NewsItem(headline=title, source="wire", url=WIRE_URLS.get(title, ""), published_at=now)], SOURCE)
                 label(ticker, None)
                 found[ticker] = title
             except Exception:  # noqa: BLE001

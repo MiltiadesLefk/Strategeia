@@ -453,11 +453,11 @@ class AppSettings(BaseModel):
     # interactive session (or the account default), so narratives and the AI
     # overlay's objections would silently change model between runs, an
     # invisible variable in a system whose decisions are meant to be measured.
-    # "sonnet" is the CLI's own alias for the latest Sonnet: stable across
-    # releases (no dated id to go stale) and the cost/quality middle ground.
-    # It still moves when a newer Sonnet ships; use a full id for an exact
-    # version. Blank means "do not pin" (whatever the CLI is set to).
-    claude_cli_model: str = "sonnet"
+    # "haiku" is the CLI's own alias for the latest Haiku: stable across
+    # releases (no dated id to go stale), cheap and fast enough for headline
+    # labelling and narration. It still moves when a newer Haiku ships; use a
+    # full id for an exact version. Blank means "do not pin" (whatever the CLI is set to).
+    claude_cli_model: str = "haiku"
 
     @field_validator("claude_cli_model", mode="before")
     @classmethod

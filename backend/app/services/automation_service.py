@@ -97,7 +97,7 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
     try:  # smart-money buys (Congress, insiders, funds, 5% owners) join the universe even when too small to buy
         from app.services.smart_money_adopt_service import adopt_smart_money_finds
 
-        adopted = adopt_smart_money_finds(settings, data_provider, session)
+        adopted = adopt_smart_money_finds(settings, data_provider, session, run_id=run_id)
         if adopted:
             logger.info("Hold scan: smart-money finds added to the universe: %s", ", ".join(adopted))
     except Exception:
@@ -108,6 +108,9 @@ def run_hold_scan(settings: AppSettings, data_provider: DataProvider, session: S
 
         try:  # the AI labels the morning's headlines first; the rating and the big-news lane read the labels
             market_found = read_news(settings, data_provider, llm_provider, session, list(candidates), market=settings.big_news_buy_enabled)
+            from app.services.rating_service import record_market_news
+
+            record_market_news(session, run_id, "scan", market_found)
         except Exception:
             logger.exception("Hold scan: the news reader failed; the rating falls back to keywords")
     evidence: dict = {}

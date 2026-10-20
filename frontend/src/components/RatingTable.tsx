@@ -38,6 +38,7 @@ export function RatingTable({ row }: { row: RatingRow }) {
     value,
     note: why[label],
     help: HELP[label] ?? '',
+    items: row.detail.items?.[label],
     unsigned: label === 'technical',
     penaltyOnly: PENALTY_ONLY.has(label),
   }));
