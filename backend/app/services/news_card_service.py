@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 from sqlmodel import Session
 
+from app.config import AppSettings
 from app.knowledge import KnownFact, is_simulated
 from app.knowledge.news_cards import (
     NewsCard,
@@ -185,6 +186,13 @@ def _entries_for_batch(parsed_cards: list[NewsCardEntry], batch_size: int) -> di
     return by_index
 
 
+def article_sentiments(settings: AppSettings) -> tuple[str, ...]:
+    """The headline labels whose article is also read, from the two Settings switches."""
+    return tuple(
+        s for s, on in (("positive", settings.news_read_positive_articles), ("negative", settings.news_read_negative_articles)) if on
+    )
+
+
 def label_new_items(
     session: Session,
     symbol: str,
@@ -194,6 +202,7 @@ def label_new_items(
     company_name: str | None = None,
     max_calls: int = MAX_LLM_CALLS_PER_RUN,
     max_articles: int = MAX_ARTICLE_READS_PER_RUN,
+    article_sentiments: tuple[str, ...] = ("positive", "negative"),
 ) -> LabelRunResult:
     """Label up to `limit` headlines of `symbol` that have no card, in batches.
 
@@ -239,7 +248,7 @@ def label_new_items(
         for index, entry in by_index.items():
             fact = batch[index - 1]
             article = None
-            if entry.sentiment in ("positive", "negative") and result.articles_read < max_articles:
+            if entry.sentiment in article_sentiments and result.articles_read < max_articles:
                 read = read_article(llm_provider, str(fact.payload.get("url", "")),
                                     str(fact.payload.get("headline", "")), symbol, company_name)
                 if read is not None:

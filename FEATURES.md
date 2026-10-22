@@ -1128,6 +1128,8 @@ Every call the app makes to a source is counted once, in one place, since the se
 | Scan universe size | 50 | How many symbols from the top of the watchlist to scan (25, 50, 100 or 200 in the app) |
 | News cards on / off (`news_cards_enabled`) | on | The AI labels each new headline and the labels score the news part (§5, §11). Spends up to 3 AI calls per symbol evaluated, only for unlabelled headlines. Off = keyword news scoring |
 | Most headlines labelled per run (`news_card_batch_limit`) | 20 | 1 to 30. A run also never makes more than 3 AI calls |
+| Read articles of positive headlines (`news_read_positive_articles`) | on | A positive headline's article is also read by the AI (one more call each, at most 6 per run) |
+| Read articles of negative headlines (`news_read_negative_articles`) | off | Same for negative headlines. Both off = headlines only, the cheapest |
 | Watchlist | the bundled list | The symbols to scan, saved separately in `runtime/universe.json` (§11), not in `settings.json` |
 | Starting cash | $100,000 | Only applies to a fresh or reset account |
 | Exit-check interval | 15 minutes | How often positions are checked |

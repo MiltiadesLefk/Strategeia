@@ -368,6 +368,8 @@ export interface AppSettings {
   scan_universe_size: number;
   news_cards_enabled: boolean;
   news_card_batch_limit: number;
+  news_read_positive_articles: boolean;
+  news_read_negative_articles: boolean;
   paper_starting_cash: number;
   default_risk_pct: number;
   mark_to_market_interval_minutes: number;
@@ -484,6 +486,8 @@ export interface SettingsUpdateRequest {
   scan_universe_size?: number;
   news_cards_enabled?: boolean;
   news_card_batch_limit?: number;
+  news_read_positive_articles?: boolean;
+  news_read_negative_articles?: boolean;
   paper_starting_cash?: number;
   default_risk_pct?: number;
   mark_to_market_interval_minutes?: number;

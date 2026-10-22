@@ -19,7 +19,7 @@ from app.data_providers.base import DataProvider, NewsItem
 from app.knowledge import is_simulated
 from app.llm_providers.base import LLMProvider
 from app.services.archive_service import archive_news
-from app.services.news_card_service import MAX_LLM_CALLS_PER_RUN, label_new_items, llm_is_usable
+from app.services.news_card_service import MAX_LLM_CALLS_PER_RUN, article_sentiments, label_new_items, llm_is_usable
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +38,14 @@ def read_news(
     if is_simulated() or not settings.news_cards_enabled or not llm_is_usable(llm_provider):
         return {}
     calls = articles = 0
+    sentiments = article_sentiments(settings)
 
     def label(symbol: str, name: str | None) -> None:
         nonlocal calls, articles
         done = label_new_items(
             session, symbol, llm_provider, settings.news_card_batch_limit, company_name=name,
             max_calls=min(MAX_LLM_CALLS_PER_RUN, MAX_LLM_CALLS_PER_SCAN - calls),
-            max_articles=MAX_ARTICLE_READS_PER_SCAN - articles,
+            max_articles=MAX_ARTICLE_READS_PER_SCAN - articles, article_sentiments=sentiments,
         )
         calls += done.llm_calls
         articles += done.articles_read

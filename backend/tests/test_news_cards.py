@@ -490,6 +490,19 @@ def test_only_positive_or_negative_headlines_have_their_article_read(session, mo
     assert sorted(a is not None for a in articles) == [False, True]
 
 
+def test_the_two_switches_choose_which_articles_are_read(session, monkeypatch):
+    from app.services.news_card_service import article_sentiments
+
+    assert article_sentiments(AppSettings()) == ("positive",)  # default: positive only
+    assert article_sentiments(AppSettings(news_read_positive_articles=False, news_read_negative_articles=True)) == ("negative",)
+    assert article_sentiments(AppSettings(news_read_positive_articles=False)) == ()
+    monkeypatch.setattr("app.services.article_read_service.fetch_article_text", lambda url: "Guidance was cut. " * 30)
+    _seed_news(session, count=2)
+    llm = FakeLLM(answer=_article_answer)  # one positive headline, one neutral
+    result = label_new_items(session, "AAPL", llm, 10, article_sentiments=())
+    assert result.labelled == 2 and result.articles_read == 0
+
+
 def test_an_unreadable_article_leaves_the_headline_card_alone(session):
     _seed_news(session, count=1)
     result = label_new_items(session, "AAPL", FakeLLM(), 10)

@@ -21,7 +21,7 @@ from app.schemas.news_schemas import (
     NewsLabelResponse,
 )
 from app.services.archive_service import archived_news
-from app.services.news_card_service import label_new_items, llm_is_usable, names_company, unlabelled_news
+from app.services.news_card_service import article_sentiments, label_new_items, llm_is_usable, names_company, unlabelled_news
 
 router = APIRouter(prefix="/api/news", tags=["news"], dependencies=[Depends(require_auth)])
 
@@ -155,7 +155,8 @@ def label_news(
     _last_news_label_monotonic[symbol] = now
     name = _company_name(symbol)
     result = label_new_items(
-        session, symbol, llm_provider, limit or settings.news_card_batch_limit, company_name=name
+        session, symbol, llm_provider, limit or settings.news_card_batch_limit, company_name=name,
+        article_sentiments=article_sentiments(settings),
     )
     return NewsLabelResponse(
         symbol=symbol,

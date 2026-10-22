@@ -9,19 +9,26 @@ export function NewsCardsSettingsCard() {
   const update = useUpdateSettings();
   const [enabled, setEnabled] = useState(false);
   const [limit, setLimit] = useState(20);
+  const [readPositive, setReadPositive] = useState(true);
+  const [readNegative, setReadNegative] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
     setEnabled(settings.news_cards_enabled);
     setLimit(settings.news_card_batch_limit);
+    setReadPositive(settings.news_read_positive_articles);
+    setReadNegative(settings.news_read_negative_articles);
   }, [settings]);
 
   const limitValid = Number.isInteger(limit) && limit >= 1 && limit <= 30;
 
   function save() {
     update.mutate(
-      { news_cards_enabled: enabled, news_card_batch_limit: limit },
+      {
+        news_cards_enabled: enabled, news_card_batch_limit: limit,
+        news_read_positive_articles: readPositive, news_read_negative_articles: readNegative,
+      },
       {
         onSuccess: () => {
           setSaved(true);
@@ -44,6 +51,12 @@ export function NewsCardsSettingsCard() {
         keyword matching.
       </div>
       <ToggleSwitch checked={enabled} onChange={setEnabled} label="News cards" />
+      <div className="text-muted" style={{ fontSize: 13, maxWidth: 640 }}>
+        Besides the headline, the AI can read the full article (one more AI call each, at most 6 per run). Choose
+        which labelled headlines get that. Positive only is the default, to save usage.
+      </div>
+      <ToggleSwitch checked={readPositive} onChange={setReadPositive} label="Read articles of positive headlines" />
+      <ToggleSwitch checked={readNegative} onChange={setReadNegative} label="Read articles of negative headlines" />
       <div>
         <label>Most headlines labelled per run</label>
         <input type="number" value={limit} min={1} max={30} onChange={(e) => setLimit(Number(e.target.value))} />

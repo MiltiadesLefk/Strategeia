@@ -565,6 +565,10 @@ class AppSettings(BaseModel):
     # button press); AI calls per run are separately capped at three.
     news_cards_enabled: bool = True
     news_card_batch_limit: int = 20
+    # Which labelled headlines also get their article read (one more AI call each). Positive only by default
+    # to save tokens; headline labels are unaffected.
+    news_read_positive_articles: bool = True
+    news_read_negative_articles: bool = False
 
     paper_starting_cash: float = 100_000.0
     default_risk_pct: float = 1.0
