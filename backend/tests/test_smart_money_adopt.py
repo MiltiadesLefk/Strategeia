@@ -57,3 +57,10 @@ def test_rate_all_rates_a_find_and_adds_it_only_when_it_reaches_the_bar(session,
     assert adopt.adopt_smart_money_finds(AppSettings(), object(), session, run_id="r1", rate=True) == []  # under the bar
     passed["AAA"] = True
     assert "AAA" in adopt.adopt_smart_money_finds(AppSettings(), object(), session, run_id="r2", rate=True)
+
+
+def test_the_dev_ticker_list_is_the_universe_when_set(monkeypatch):
+    from app.services.watchlist_service import in_saved_universe
+
+    monkeypatch.setenv("STRATEGEIA_DEV_TICKERS", "NVDA,AAPL")
+    assert in_saved_universe("AAPL") and not in_saved_universe("META")

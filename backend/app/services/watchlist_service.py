@@ -150,8 +150,12 @@ def save_watchlist(raw: list[str], provider: DataProvider) -> None:
 
 
 def in_saved_universe(raw: str) -> bool:
-    """Whether the saved list (the bundled one when none is saved) already holds this symbol."""
+    """Whether the universe the app works with already holds this symbol: the `STRATEGEIA_DEV_TICKERS` list when set,
+    else the saved list (the bundled one when none is saved)."""
     symbol = normalize_symbol(raw)
+    dev = universe.dev_ticker_filter()
+    if dev is not None:
+        return symbol is not None and symbol in {normalize_symbol(d) for d in dev}
     previous = universe_store.read_store().watchlist
     symbols = {s.symbol for s in previous.symbols} if previous else {e.symbol for e in universe.load_bundled_universe()}
     return symbol is not None and symbol in symbols
