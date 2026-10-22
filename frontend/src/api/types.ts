@@ -2757,6 +2757,8 @@ export interface RatingDetail {
   why: Record<string, string>;
   /** What a part looked at (headlines, trades), by part label. */
   items: Record<string, { text: string; meta?: string; url?: string; sentiment?: string | null }[]>;
+  /** Why a stock outside the universe was rated (market news or smart money). */
+  found: string;
 }
 
 export interface RatingRow {

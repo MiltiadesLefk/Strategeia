@@ -11,6 +11,7 @@ import { tickerHref } from '../components/TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner } from '../components/common';
 
 const LATEST = 'latest';
+const OUTSIDE_LANES = ['big news', 'smart money'];
 const REPORT_LANES: Record<string, string> = {
   'market news': 'Market news read (stocks outside the universe)',
   'smart money trades': 'Smart money trades analysed',
@@ -54,6 +55,46 @@ function ReportSections({ rows }: { rows: RatingRow[] }) {
         );
       })}
     </>
+  );
+}
+
+/** Stocks outside the universe that the run rated, and why; a highlighted row reached the bar and joins the universe. */
+function OutsideRows({ rows }: { rows: RatingRow[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (rows.length === 0) return null;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Scanned outside the universe ({rows.length})</h3>
+      <div className="score-table-wrap">
+        <table className="score-table">
+          <thead>
+            <tr><th>Stock</th><th style={{ textAlign: 'right' }}>Score /100</th><th>Result</th><th>Why scanned</th><th /></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const id = `${r.lane}:${r.symbol}`;
+              return (
+                <Fragment key={id}>
+                  <tr onClick={() => setOpen(open === id ? null : id)} style={{ cursor: 'pointer', background: r.passed ? 'rgba(91, 156, 255, 0.12)' : undefined }}>
+                    <td>
+                      <strong>{r.symbol}</strong>{' '}
+                      <Link to={tickerHref(r.symbol)} onClick={(e) => e.stopPropagation()} className="text-muted" style={{ fontSize: 12 }}>company →</Link>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{r.percent}</td>
+                    <td>
+                      {r.passed ? <span style={{ color: 'var(--accent, #5b9cff)', fontWeight: 600 }}>Joins the universe</span> : 'Below bar'}
+                    </td>
+                    <td className="text-muted" style={{ fontSize: 13 }}>{r.detail.found ?? r.note}</td>
+                    <td className="text-muted">{open === id ? 'hide table' : 'show table'}</td>
+                  </tr>
+                  {open === id && <tr><td colSpan={5}><RatingTable row={r} /></td></tr>}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -193,7 +234,8 @@ export function RatingsPage() {
             <ErrorBanner message="Could not load this run" onRetry={() => run.refetch()} />
           ) : (
             <>
-              <RatingRows key={view} rows={(run.data?.ratings ?? []).filter((r) => !(r.lane in REPORT_LANES))} />
+              <RatingRows key={view} rows={(run.data?.ratings ?? []).filter((r) => !(r.lane in REPORT_LANES) && !OUTSIDE_LANES.includes(r.lane))} />
+              <OutsideRows rows={(run.data?.ratings ?? []).filter((r) => OUTSIDE_LANES.includes(r.lane))} />
               <ReportSections rows={run.data?.ratings ?? []} />
               {run.data?.running && <div className="text-muted" style={{ padding: 8 }}>{(run.data.ratings ?? []).length === 0
                 ? 'Reading the news with the AI first (one call per batch of headlines, can take a few minutes); the ratings appear once that is done.'

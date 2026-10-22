@@ -161,10 +161,14 @@ def rate_stock(data_provider: DataProvider, symbol: str, bar_pct: int, session: 
     return GateResult(passed, [GateCheck("rating", passed, note)], dip=is_dip(closes), detail=detail)
 
 
-def record_rating(session: Session, run_id: str, source: str, symbol: str, lane: str, gate: GateResult | None, note: str | None = None) -> RatingRecord | None:
+def record_rating(session: Session, run_id: str, source: str, symbol: str, lane: str, gate: GateResult | None, note: str | None = None,
+                  found: str | None = None) -> RatingRecord | None:
     """Save one rating for the history page. Best-effort: a database problem never changes a buy decision.
-    `gate` None = a stock saved without a rating (zero score); `note` overrides the gate's note."""
-    d = (gate.detail if gate else None) or {}
+    `gate` None = a stock saved without a rating (zero score); `note` overrides the gate's note;
+    `found` says why a stock outside the universe was rated (shown on the Ratings page)."""
+    d = dict((gate.detail if gate else None) or {})
+    if found:
+        d["found"] = found
     try:
         row = RatingRecord(run_id=run_id, source=source, symbol=symbol, lane=lane, points=d.get("points", 0),
                            max_points=d.get("max", MAX_SCORE_FOR_CONFIDENCE), percent=d.get("percent", 0), passed=bool(gate and gate.passed),
@@ -210,7 +214,7 @@ def rate_market_finds(settings, data_provider: DataProvider, session: Session, r
         except Exception:  # noqa: BLE001 - no data for one ticker must not stop the run
             logger.info("Market news: %s could not be rated", ticker, exc_info=True)
             continue
-        record_rating(session, run_id, source, ticker, LANE_BIG_NEWS, gate, note=f"Bullish wire headline ({headline}): {gate.checks[0].note}")
+        record_rating(session, run_id, source, ticker, LANE_BIG_NEWS, gate, note=gate.checks[0].note, found=f'New: bullish headline "{headline}"')
         if gate.passed and adopt_found_stock(session, settings, data_provider, ticker, LANE_BIG_NEWS, f'headline: "{headline}"', gate):
             added.append(ticker)
     return added

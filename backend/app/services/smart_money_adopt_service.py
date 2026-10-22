@@ -71,7 +71,8 @@ def adopt_smart_money_finds(
         if rate and run_id:
             from app.services.rating_service import record_rating
 
-            record_rating(session, run_id, "scan", symbol, LANE_SMART_MONEY, gate, note=f"{detail}: {gate.checks[0].note}")
+            record_rating(session, run_id, "scan", symbol, LANE_SMART_MONEY, gate, note=gate.checks[0].note,
+                          found=f"Smart money: {row['reasons'][0] if row['reasons'] else 'buy reported'}")
         if rate and not gate.passed:
             continue  # rated and listed above; under the bar, so it does not join
         if adopt_found_stock(session, settings, data_provider, symbol, LANE_SMART_MONEY, detail, gate):
