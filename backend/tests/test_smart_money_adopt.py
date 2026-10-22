@@ -46,3 +46,14 @@ def test_overview_filters_by_side_symbol_and_value(client, seeded):  # noqa: F81
     assert [r["symbol"] for r in one["ranked"]] == ["AAA"]
     big = client.get("/api/smart-money/overview?days=30&min_value=100000000").json()
     assert big["totals"]["insider"]["buys"] == 0
+
+
+def test_rate_all_rates_a_find_and_adds_it_only_when_it_reaches_the_bar(session, seeded, wired, monkeypatch):  # noqa: F811
+    from app.analysis.quality_gate import GateCheck
+
+    passed = {"AAA": False}
+    monkeypatch.setattr("app.services.rating_service.rate_stock",
+                        lambda dp, s, bar, sess=None: GateResult(passed[s], [GateCheck("rating", passed[s], "x")]))
+    assert adopt.adopt_smart_money_finds(AppSettings(), object(), session, run_id="r1", rate=True) == []  # under the bar
+    passed["AAA"] = True
+    assert "AAA" in adopt.adopt_smart_money_finds(AppSettings(), object(), session, run_id="r2", rate=True)

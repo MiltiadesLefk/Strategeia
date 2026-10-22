@@ -33,9 +33,12 @@ def _report(session: Session, run_id: str | None, row: dict, outcome: str) -> No
         logger.info("Could not list the smart-money stock %s in the report", row.get("symbol"), exc_info=True)
 
 
-def adopt_smart_money_finds(settings: AppSettings, data_provider: DataProvider, session: Session, run_id: str | None = None) -> list[str]:
+def adopt_smart_money_finds(
+    settings: AppSettings, data_provider: DataProvider, session: Session, run_id: str | None = None, rate: bool = False,
+) -> list[str]:
     """The symbols newly added to the universe, best score first, at most `smart_money_adopt_max_per_run`.
-    With `run_id`, every top-ranked stock looked at is listed in that day's report with what happened to it."""
+    With `run_id`, every top-ranked stock looked at is listed in that day's report with what happened to it.
+    With `rate` (Rate all) the stock gets the full rating, is saved on the Ratings page, and joins only if it reaches the bar."""
     if settings.smart_money_adopt_max_per_run <= 0 or is_simulated():
         return []
     from app.services.hold_buy_service import check_quality
@@ -54,12 +57,23 @@ def adopt_smart_money_finds(settings: AppSettings, data_provider: DataProvider, 
             _report(session, run_id, row, "already in the universe" if in_saved_universe(symbol) else "score under the minimum to add")
             continue  # ranked best first, but a sell-heavy or already-known stock is skipped, not a stop
         try:
-            gate = check_quality(data_provider, symbol, session=session)
+            if rate:
+                from app.services.rating_service import rate_stock
+
+                gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
+            else:
+                gate = check_quality(data_provider, symbol, session=session)
         except Exception:  # noqa: BLE001 - no live quote or price history: not analysable, so not adopted
             logger.info("Smart-money find %s skipped: no usable data", symbol, exc_info=True)
             _report(session, run_id, row, "skipped, no live quote or price history")
             continue
         detail = f"smart-money score {row['total']:.1f} ({row['reasons'][0] if row['reasons'] else 'buy reported'})"
+        if rate and run_id:
+            from app.services.rating_service import record_rating
+
+            record_rating(session, run_id, "scan", symbol, LANE_SMART_MONEY, gate, note=f"{detail}: {gate.checks[0].note}")
+        if rate and not gate.passed:
+            continue  # rated and listed above; under the bar, so it does not join
         if adopt_found_stock(session, settings, data_provider, symbol, LANE_SMART_MONEY, detail, gate):
             added.append(symbol)
             continue  # adopt_found_stock already listed it as added to the universe

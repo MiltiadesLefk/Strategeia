@@ -195,6 +195,27 @@ def record_market_news(session: Session, run_id: str, source: str, found: dict[s
         record_report_item(session, run_id, source, ticker, "market news", f"Wire headline read: {headline}", items)
 
 
+def rate_market_finds(settings, data_provider: DataProvider, session: Session, run_id: str, source: str, found: dict[str, str]) -> list[str]:
+    """Rate each market-wide ticker with a positive (bullish) headline as if it were in the universe; one that
+    reaches the bar joins the universe. Returns the tickers added. A ticker that cannot be rated is skipped."""
+    from app.analysis.news_card_scoring import recent_cards
+    from app.services.market_find_service import LANE_BIG_NEWS, adopt_found_stock
+
+    added: list[str] = []
+    for ticker, headline in (found or {}).items():
+        if not any(c.get("sentiment") == "positive" for c in _try(lambda: recent_cards(session, ticker), [])):
+            continue
+        try:
+            gate = rate_stock(data_provider, ticker, settings.min_confidence_for_trade, session)
+        except Exception:  # noqa: BLE001 - no data for one ticker must not stop the run
+            logger.info("Market news: %s could not be rated", ticker, exc_info=True)
+            continue
+        record_rating(session, run_id, source, ticker, LANE_BIG_NEWS, gate, note=f"Bullish wire headline ({headline}): {gate.checks[0].note}")
+        if gate.passed and adopt_found_stock(session, settings, data_provider, ticker, LANE_BIG_NEWS, f'headline: "{headline}"', gate):
+            added.append(ticker)
+    return added
+
+
 REPORT_LANES = ("market news", "smart money trades")  # daily-report rows about stocks outside the universe; not ratings
 
 
@@ -214,13 +235,17 @@ def rate_universe(settings, data_provider: DataProvider, session: Session, run_i
     With an AI provider the news reader labels the headlines first, exactly as the morning scan does."""
     from app.data_providers.universe import get_default_watchlist
 
+    from app.services.smart_money_adopt_service import adopt_smart_money_finds
+
     done = 0
     watchlist = get_default_watchlist(settings.scan_universe_size)
     if llm_provider is not None:
         from app.services.news_reader_service import read_news
 
-        found = _try(lambda: read_news(settings, data_provider, llm_provider, session, list(watchlist), market=settings.big_news_buy_enabled), {})
+        found = _try(lambda: read_news(settings, data_provider, llm_provider, session, list(watchlist), market=True), {})
         record_market_news(session, run_id, source, found)
+        rate_market_finds(settings, data_provider, session, run_id, source, found)
+    _try(lambda: adopt_smart_money_finds(settings, data_provider, session, run_id=run_id, rate=True))
     for symbol in watchlist:
         try:
             gate = rate_stock(data_provider, symbol, settings.min_confidence_for_trade, session)
