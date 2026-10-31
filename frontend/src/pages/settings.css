@@ -1,0 +1,20 @@
+/* Settings page (Stitch look). Scoped to .settings-page so no other screen changes. */
+.settings-page.settings-columns { column-width: 460px; column-gap: 16px; }
+.settings-head { column-span: all; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.settings-head .page-title { margin: 2px 0 0; }
+.settings-tabbar { column-span: all; margin-bottom: 18px; }
+.settings-tabs { display: flex; gap: 6px; padding: 4px; background: var(--canvas); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; }
+.settings-tab { flex: 0 0 auto; border: 0; background: transparent; color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 7px 14px; border-radius: 4px; cursor: pointer; }
+.settings-tab:hover { color: var(--text); background: var(--card); }
+.settings-tab.active { color: var(--accent-light); background: var(--surface-elevated); box-shadow: inset 0 -2px 0 var(--accent); }
+
+.settings-page .card > h3 { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.settings-page .card { padding: 16px 18px; }
+.settings-sub { border-top: 1px solid var(--border); padding-top: 12px; color: var(--accent-light); }
+.settings-page input[type='number'], .settings-page input[type='text'], .settings-page input[type='password'] { font-family: var(--font-mono); }
+.settings-page input:focus, .settings-page select:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); outline: none; }
+
+.provider-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-top: 6px; }
+.provider-tile { text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); color: var(--text-muted); font-size: 12px; line-height: 1.35; cursor: pointer; }
+.provider-tile:hover { border-color: var(--border-strong); color: var(--text); }
+.provider-tile.active { border-color: var(--accent); background: rgba(14, 165, 233, .08); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }

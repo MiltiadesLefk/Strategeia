@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Tabs } from '../components/Tabs';
+import './settings.css';
 import { TimeZoneCard } from '../components/TimeZoneCard';
 import { useSettings, useTestConnection, useUpdateSettings, useWatchlist } from '../api/hooks';
 import { useAutoSave } from '../api/useAutoSave';
@@ -25,8 +25,8 @@ import type { ResearchMode, TestConnectionOverrides } from '../api/types';
 
 const SETTINGS_TABS = [
   { value: 'general', label: 'General', help: 'How the app shows times.' },
-  { value: 'ai', label: 'AI', help: 'Which AI writes the commentary, the optional AI veto, headline labels and the committee.' },
-  { value: 'trading', label: 'Trading', help: 'Paper account, risk, entries and exits, auto-scan and the kill switches.' },
+  { value: 'ai', label: 'AI', help: 'Which AI writes the commentary, headline labels and the committee.' },
+  { value: 'trading', label: 'Trading', help: 'Paper account, hold-mode buying and selling, auto-scan and the kill switches.' },
   { value: 'universe', label: 'Universe & Data', help: 'Which symbols are scanned and where the market data comes from.' },
   { value: 'alerts', label: 'Alerts', help: 'Telegram, scheduled notes, thesis alerts and background watchers.' },
   { value: 'smart', label: 'Smart Money', help: 'Whose Congress trades and fund filings to follow.' },
@@ -428,12 +428,33 @@ export function SettingsPage() {
   if (isLoading) return <LoadingSpinner label="Loading settings…" />;
 
   return (
-    <div className="settings-columns">
-      <h1>Settings</h1>
+    <div className="settings-columns settings-page">
+      <div className="settings-head">
+        <div>
+          <div className="label-mono">System / Configuration</div>
+          <h1 className="page-title">Settings</h1>
+        </div>
+        <span className="chip chip-green" title="Switches and fields save themselves; cards with a Save button save on click.">
+          {saving ? 'SAVING…' : 'AUTOSAVE ON'}
+        </span>
+      </div>
 
-      <div style={{ columnSpan: 'all', marginBottom: 20 }}>
-        <Tabs tabs={SETTINGS_TABS} value={tab} onChange={selectTab} />
-        <div className="text-muted" style={{ fontSize: 13, marginTop: 8 }}>{SETTINGS_TABS.find((t) => t.value === tab)?.help}</div>
+      <div className="settings-tabbar">
+        <div role="tablist" className="settings-tabs">
+          {SETTINGS_TABS.map((t) => (
+            <button
+              key={t.value}
+              role="tab"
+              type="button"
+              aria-selected={tab === t.value}
+              className={`settings-tab${tab === t.value ? ' active' : ''}`}
+              onClick={() => selectTab(t.value)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>{SETTINGS_TABS.find((t) => t.value === tab)?.help}</div>
       </div>
 
       {tab === 'general' && <TimeZoneCard />}
@@ -444,34 +465,36 @@ export function SettingsPage() {
         <h3>AI Narrative Provider</h3>
         <div className="text-muted" style={{ fontSize: 13 }}>
           <strong>One choice for the whole app.</strong> This provider and its models power every AI feature on this tab
-          and elsewhere: chart and research commentary, trade-plan write-ups, the morning note, trade lessons, headline
-          labels, the AI Trading Overlay and the AI Committee. The everyday model does the writing; the optional decision
-          model answers the overlay and committee verdicts. "None" is fully supported: every screen falls back to
+          and elsewhere: chart and research commentary, the morning note, trade lessons, headline
+          labels and the AI Committee. The everyday model does the writing; the optional decision
+          model is used for committee verdicts. "None" is fully supported: every screen falls back to
           rule-based wording. The AI never picks a direction, entry, stop or size, and backtests never call it.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, alignItems: 'start' }}>
-        <div>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label>Provider</label>
           <div className="text-muted" style={{ fontSize: 12, marginBottom: 4 }}>
             <code>Claude Code CLI</code> shells out to the <code>claude</code> command already installed on this
             machine — no API key and no metered billing. The others are REST APIs and need a key below.
           </div>
-          <select
-            value={llmProvider}
-            onChange={(e) => {
-              setLlmProvider(e.target.value);
-              // A stale "claude_code_cli is not configured" left over from
-              // testing the *previous* provider must not linger under a
-              // now-different selection — it reads as describing this one.
-              resetLlmTest();
-            }}
-          >
+          <div className="provider-tiles" role="radiogroup" aria-label="Provider">
             {LLM_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={llmProvider === o.value}
+                className={`provider-tile${llmProvider === o.value ? ' active' : ''}`}
+                onClick={() => {
+                  setLlmProvider(o.value);
+                  // A stale test result for the previous provider must not linger under a new selection.
+                  resetLlmTest();
+                }}
+              >
                 {o.label}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
         {llmProvider === 'openrouter' && (
           <>
@@ -692,7 +715,7 @@ export function SettingsPage() {
           Simulated money only. Positions are priced against real market data, but no broker is connected and no
           order is ever placed anywhere.
         </div>
-        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Account &amp; sizing</div>
+        <div className="label-mono settings-sub">Account &amp; sizing</div>
         <div>
           <label>Starting Cash ($)</label>
           <input type="number" value={startingCash} onChange={(e) => setStartingCash(Number(e.target.value))} />
@@ -724,7 +747,7 @@ export function SettingsPage() {
             fingerprint and read by old-style backtest runs.
           </div>
         </div>
-        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Scanning</div>
+        <div className="label-mono settings-sub">Scanning</div>
         <div>
           <label>Scan Universe Size</label>
           <select value={scanSize} onChange={(e) => setScanSize(Number(e.target.value))}>
@@ -752,7 +775,7 @@ export function SettingsPage() {
             )}
           </div>
         </div>
-        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Exits</div>
+        <div className="label-mono settings-sub">Exits</div>
         <div>
           <label>Mark-to-Market Interval (minutes)</label>
           <input
@@ -768,7 +791,7 @@ export function SettingsPage() {
             market hours.
           </div>
         </div>
-        <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 12 }}>Execution</div>
+        <div className="label-mono settings-sub">Execution</div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <ToggleSwitch checked={liquiditySlippage} onChange={setLiquiditySlippage} label="Liquidity-Aware Slippage" />
