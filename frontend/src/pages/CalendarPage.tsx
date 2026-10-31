@@ -4,23 +4,21 @@ import type { ApiError } from '../api/client';
 import type { CalendarItem, CalendarPositionCatalysts, CalendarResponse, CalendarSourceStatus } from '../api/types';
 import { TickerLink } from '../components/TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatRelativeTime } from '../components/common';
+import './calendar.css';
 
 type View = 'week' | 'month';
 
 const KIND_CHIP: Record<string, { label: string; className: string }> = {
-  economic: { label: 'Economic', className: 'badge badge-amber' },
-  macro: { label: 'Fed / CPI / jobs', className: 'badge badge-amber' },
-  earnings: { label: 'Earnings', className: 'badge badge-green' },
+  economic: { label: 'Economic', className: 'chip chip-amber' },
+  macro: { label: 'Fed / CPI / jobs', className: 'chip chip-amber' },
+  earnings: { label: 'Earnings', className: 'chip chip-green' },
 };
 
-// Today's card and weekday chip: an accent border and a faint accent tint.
-const TODAY_STYLE = { borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' };
-
 const IMPACT_CLASS: Record<string, string> = {
-  High: 'badge badge-red',
-  Medium: 'badge badge-amber',
-  Low: 'badge badge-neutral',
-  Holiday: 'badge badge-neutral',
+  High: 'chip chip-red',
+  Medium: 'chip chip-amber',
+  Low: 'chip',
+  Holiday: 'chip',
 };
 
 // Dates are handled as plain YYYY-MM-DD strings (the server's US Eastern days).
@@ -79,13 +77,7 @@ function dayHeading(iso: string): string {
 
 function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
   return (
-    <button
-      type="button"
-      className={active ? 'btn' : 'btn btn-secondary'}
-      aria-pressed={active}
-      onClick={onClick}
-      style={{ padding: '6px 12px', fontSize: 13 }}
-    >
+    <button type="button" className="cal-tog" aria-pressed={active} onClick={onClick}>
       {children}
     </button>
   );
@@ -95,7 +87,7 @@ function SourceNotes({ sources }: { sources: CalendarSourceStatus[] }) {
   const problems = sources.filter((s) => s.status !== 'ok');
   if (problems.length === 0) return null;
   return (
-    <div className="card" style={{ borderColor: 'var(--amber, var(--border))' }}>
+    <div className="card" style={{ borderColor: 'var(--amber)' }}>
       {problems.map((s) => (
         <div key={s.key} style={{ fontSize: 13, marginBottom: 4 }}>
           <strong>{s.label}</strong> ({s.status}): <span className="text-muted">{s.detail}</span>
@@ -109,13 +101,13 @@ function PositionCatalystsCard({ groups }: { groups: CalendarPositionCatalysts[]
   if (groups.length === 0) return null;
   return (
     <div className="card">
-      <h3 style={{ marginBottom: 4 }}>Coming up for your open positions</h3>
-      <div className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-        Earnings dates and Fed / CPI / jobs-report days in the next two weeks.
+      <div className="panel-header">
+        <span>Coming up for your open positions</span>
+        <span className="label-mono">next 2 weeks</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {groups.map((g) => (
-          <div key={g.symbol} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <div key={g.symbol} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ minWidth: 110 }}>
               <TickerLink symbol={g.symbol} />
               <span className="text-muted" style={{ fontSize: 12 }}>
@@ -144,27 +136,18 @@ function EventRow({ item }: { item: CalendarItem }) {
   const chip = KIND_CHIP[item.kind] ?? KIND_CHIP.economic;
   const hasNumbers = item.forecast || item.previous || item.actual;
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '64px minmax(0, 1fr)',
-        gap: 12,
-        padding: '10px 0',
-        borderTop: '1px solid var(--border)',
-        opacity: item.days_until < 0 ? 0.65 : 1,
-      }}
-    >
-      <div className="tabular-nums text-muted" style={{ fontSize: 13 }} title="US Eastern time">
+    <div className="cal-row" style={{ opacity: item.days_until < 0 ? 0.65 : 1 }}>
+      <div className="mono text-muted" style={{ fontSize: 12 }} title="US Eastern time">
         {item.time_et ? `${item.time_et} ET` : 'all day'}
       </div>
       <div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="cal-evt-line">
           <span className={chip.className}>{chip.label}</span>
-          {item.impact && item.kind === 'economic' && <span className={IMPACT_CLASS[item.impact] ?? 'badge badge-neutral'}>{item.impact}</span>}
+          {item.impact && item.kind === 'economic' && <span className={IMPACT_CLASS[item.impact] ?? 'chip'}>{item.impact}</span>}
           {item.symbol ? <TickerLink symbol={item.symbol} /> : <span style={{ fontWeight: 600 }}>{item.title}</span>}
           {item.symbol && <span className="text-muted">earnings</span>}
           {item.my_position && (
-            <span className="badge badge-green" title={item.position_symbols.join(', ')}>
+            <span className="chip chip-green" title={item.position_symbols.join(', ')}>
               My position{item.position_symbols.length > 1 ? 's' : ''}
             </span>
           )}
@@ -173,7 +156,7 @@ function EventRow({ item }: { item: CalendarItem }) {
           </span>
         </div>
         {hasNumbers && (
-          <div className="tabular-nums text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+          <div className="mono text-muted" style={{ fontSize: 12, marginTop: 4 }}>
             Forecast {item.forecast ?? '—'} · Previous {item.previous ?? '—'} · Actual {item.actual ?? 'not in this feed'}
           </div>
         )}
@@ -187,26 +170,40 @@ function EventRow({ item }: { item: CalendarItem }) {
   );
 }
 
-// Mon-Sun of the shown week, so today is visible even on a day with no events.
-function WeekStrip({ from, today }: { from: string; today: string }) {
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// Week: Mon-Sun cells, so today shows even on a day with no events. Month: the whole month padded to full weeks.
+function CalendarGrid({ view, from, to, data }: { view: View; from: string; to: string; data: CalendarResponse }) {
+  const start = addDays(from, -((parseDay(from).getDay() + 6) % 7));
+  const span = Math.round((parseDay(to).getTime() - parseDay(start).getTime()) / 864e5) + 1;
+  const count = view === 'week' ? 7 : Math.ceil(span / 7) * 7;
+  const byDay = new Map<string, CalendarItem[]>();
+  for (const i of data.items) byDay.set(i.date, [...(byDay.get(i.date) ?? []), i]);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
-      {Array.from({ length: 7 }, (_, i) => addDays(from, i)).map((day) => {
-        const date = parseDay(day);
-        return (
-          <div
-            key={day}
-            className="card"
-            aria-current={day === today ? 'date' : undefined}
-            style={{ padding: '8px 4px', textAlign: 'center', ...(day === today ? TODAY_STYLE : {}) }}
-          >
-            <div className="text-muted" style={{ fontSize: 12 }}>
-              {date.toLocaleDateString(undefined, { weekday: 'short' })}
+    <div className="card" style={{ padding: 8 }}>
+      <div className="cal-dow label-mono" style={{ marginBottom: 4 }}>
+        {DOW.map((d) => (
+          <div key={d}>{d}</div>
+        ))}
+      </div>
+      <div className="cal-grid">
+        {Array.from({ length: count }, (_, i) => addDays(start, i)).map((day) => {
+          const evs = byDay.get(day) ?? [];
+          const shown = evs.slice(0, view === 'week' ? 6 : 3);
+          const cls = `cal-cell${day === data.today ? ' today' : ''}${day < from || day > to ? ' out' : ''}`;
+          return (
+            <div key={day} className={cls} aria-current={day === data.today ? 'date' : undefined}>
+              <span className="d">{parseDay(day).getDate()}</span>
+              {shown.map((e) => (
+                <div key={e.id} className={`cal-ev ${e.kind === 'earnings' ? 'earn' : 'macro'}`} title={e.symbol ? `${e.symbol} earnings` : e.title}>
+                  {e.symbol ?? e.title}
+                </div>
+              ))}
+              {evs.length > shown.length && <span className="label-mono">+{evs.length - shown.length} more</span>}
             </div>
-            <div style={{ fontWeight: 600 }}>{date.getDate()}</div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -221,12 +218,12 @@ function Timeline({ data, showMacro, showEarnings, onlyMine }: { data: CalendarR
 
   if (groups.length === 0) return <EmptyState>Nothing matches these filters in this range.</EmptyState>;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {groups.map(([day, items]) => (
-        <div className="card" key={day} style={day === data.today ? TODAY_STYLE : undefined}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <h3 style={{ fontSize: 15 }}>{dayHeading(day)}</h3>
-            {day === data.today && <span className="badge badge-green">Today</span>}
+        <div className={day === data.today ? 'card cal-today' : 'card'} key={day}>
+          <div className="panel-header">
+            <span>{dayHeading(day)}</span>
+            {day === data.today && <span className="chip chip-accent">Today</span>}
           </div>
           {items.map((item) => (
             <EventRow key={item.id} item={item} />
@@ -248,37 +245,46 @@ export function CalendarPage() {
   const { data, isLoading, error, refetch } = useCalendar(range.from, range.to);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="page-header">
-        <div>
-          <h1>Calendar</h1>
-          <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
-            Scheduled economic releases, Fed / CPI / jobs-report dates and earnings for your watchlist and open positions. Times are US Eastern.
-          </div>
+    <div className="cal">
+      <div className="cal-head">
+        <span className="label-mono cal-eyebrow">Macro &amp; earnings</span>
+        <h1 className="page-title">Calendar</h1>
+        <div className="text-muted" style={{ fontSize: 13 }}>
+          Scheduled economic releases, Fed / CPI / jobs-report dates and earnings for your watchlist and open positions. Times are US Eastern.
+        </div>
+        <div className="text-muted" style={{ fontSize: 12 }}>
+          Hold-only: these dates are context for holding, not trade triggers.
         </div>
       </div>
 
-      <div className="card" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" className="btn btn-secondary" aria-label="Previous" onClick={() => setAnchor(shiftAnchor(view, anchor, -1))}>
-            ‹
-          </button>
-          <strong style={{ minWidth: 170, textAlign: 'center' }}>{range.label}</strong>
-          <button type="button" className="btn btn-secondary" aria-label="Next" onClick={() => setAnchor(shiftAnchor(view, anchor, 1))}>
-            ›
-          </button>
+      <div className="card cal-bar">
+        <div className="cal-group">
+          <div className="cal-nav">
+            <button type="button" className="btn btn-secondary" aria-label="Previous" onClick={() => setAnchor(shiftAnchor(view, anchor, -1))}>
+              ‹
+            </button>
+            <span className="cal-range">{range.label}</span>
+            <button type="button" className="btn btn-secondary" aria-label="Next" onClick={() => setAnchor(shiftAnchor(view, anchor, 1))}>
+              ›
+            </button>
+          </div>
           <button type="button" className="btn btn-secondary" onClick={() => setAnchor(isoDay(new Date()))}>
             Today
           </button>
+          <div className="cal-seg">
+            <button type="button" aria-pressed={view === 'week'} onClick={() => setView('week')}>
+              Week
+            </button>
+            <button type="button" aria-pressed={view === 'month'} onClick={() => setView('month')}>
+              Month
+            </button>
+          </div>
+          <span className="chip" title="Every time on this page is US Eastern">
+            All times ET
+          </span>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <FilterChip active={view === 'week'} onClick={() => setView('week')}>
-            Week
-          </FilterChip>
-          <FilterChip active={view === 'month'} onClick={() => setView('month')}>
-            Month
-          </FilterChip>
-          <span style={{ width: 8 }} />
+        <div className="cal-group">
+          <span className="label-mono">Filters</span>
           <FilterChip active={showMacro} onClick={() => setShowMacro(!showMacro)}>
             Macro
           </FilterChip>
@@ -295,7 +301,7 @@ export function CalendarPage() {
       {error && <ErrorBanner message={(error as ApiError).message} onRetry={() => refetch()} />}
       {data && (
         <>
-          {view === 'week' && <WeekStrip from={range.from} today={data.today} />}
+          <CalendarGrid view={view} from={range.from} to={range.to} data={data} />
           <SourceNotes sources={data.sources} />
           <PositionCatalystsCard groups={data.position_catalysts} />
           <Timeline data={data} showMacro={showMacro} showEarnings={showEarnings} onlyMine={onlyMine} />

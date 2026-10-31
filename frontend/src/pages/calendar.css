@@ -1,0 +1,25 @@
+.cal { display: flex; flex-direction: column; gap: 12px; }
+.cal-head { display: flex; flex-direction: column; gap: 4px; }
+.cal-eyebrow { color: var(--accent-light); }
+.cal-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 10px; }
+.cal-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cal-seg { display: inline-flex; padding: 2px; border-radius: 4px; background: var(--canvas); border: 1px solid var(--border); }
+.cal-seg button, .cal-tog { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); background: transparent; border: 0; border-radius: 3px; padding: 4px 10px; cursor: pointer; }
+.cal-seg button[aria-pressed='true'] { background: var(--surface-elevated); color: var(--text); }
+.cal-tog { border: 1px solid var(--border); color: var(--text-muted); }
+.cal-tog[aria-pressed='true'] { background: rgba(14, 165, 233, 0.12); border-color: transparent; color: var(--accent-light); }
+.cal-nav { display: inline-flex; align-items: center; gap: 4px; }
+.cal-nav .btn { padding: 4px 10px; }
+.cal-range { min-width: 170px; text-align: center; font-family: var(--font-mono); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.cal-dow, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-dow > div { text-align: center; padding: 4px 0; background: var(--canvas); border-radius: 4px; }
+.cal-cell { min-height: 84px; padding: 6px; border-radius: 4px; background: var(--card-alt); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cal-cell.out { opacity: 0.35; }
+.cal-cell.today { box-shadow: inset 0 0 0 1px var(--accent); background: rgba(14, 165, 233, 0.08); }
+.cal-cell .d { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.cal-ev { font-size: 10px; padding: 1px 4px; border-radius: 3px; background: var(--surface-elevated); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-ev.macro { background: var(--amber-bg); color: var(--amber); }
+.cal-ev.earn { background: var(--green-bg); color: var(--green); }
+.cal-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
+.cal-evt-line { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.cal-today { border-color: var(--accent); background: rgba(14, 165, 233, 0.06); }
