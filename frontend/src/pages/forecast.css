@@ -1,0 +1,24 @@
+.fc-page { display: flex; flex-direction: column; gap: 16px; }
+.fc-sub { color: var(--text-muted); font-size: 13px; max-width: 760px; margin-top: 4px; }
+.fc-body { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; }
+.fc-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.fc-cohorts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.fc-cohort { background: var(--card); border: 1px solid var(--border); border-top: 3px solid var(--text-faint); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.fc-cohort.keep { border-top-color: var(--green); }
+.fc-cohort.stop { border-top-color: var(--red); }
+.fc-cohort-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; }
+.fc-cohort.keep .fc-cohort-value { color: var(--green); }
+.fc-cohort.stop .fc-cohort-value { color: var(--red); }
+.fc-cohort-sub { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.fc-shap { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 56px; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 4px; }
+.fc-shap-bar { background: var(--accent); height: 6px; border-radius: 2px; }
+.fc-table { width: 100%; border-collapse: collapse; }
+.fc-table th { text-align: left; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-faint); font-weight: 500; padding: 8px 12px; background: var(--card-alt); border-bottom: 1px solid var(--border); }
+.fc-table td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.fc-table td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.fc-table tr.sel td { background: var(--card-alt); }
+.fc-actions { display: flex; gap: 6px; }
+.fc-scroll { overflow-x: auto; }
+.fc-detail { border-top: 1px solid var(--border); }
+@media (max-width: 900px) { .fc-cohorts { grid-template-columns: 1fr; } }
+.fc-page .panel-header { padding: 10px 16px; margin: 0; } .fc-page .fc-body { padding-top: 12px; }

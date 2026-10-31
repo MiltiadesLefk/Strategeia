@@ -12,13 +12,14 @@ import {
   useTrainForecastModel,
 } from '../api/forecastHooks';
 import type { ForecastMean, ForecastModelSummary } from '../api/forecastTypes';
+import './forecast.css';
 import { EmptyState, ErrorBanner, LoadingSpinner, ToggleSwitch, formatRelativeTime } from '../components/common';
 
 const VERDICT_TEXT: Record<string, { label: string; cls: string }> = {
-  edge_out_of_sample: { label: 'Out-of-sample edge', cls: 'badge badge-green' },
-  no_clear_edge: { label: 'No clear edge', cls: 'badge badge-amber' },
-  inverted: { label: 'Inverted', cls: 'badge badge-red' },
-  not_enough_data: { label: 'Not enough data', cls: 'badge badge-neutral' },
+  edge_out_of_sample: { label: 'Out-of-sample edge', cls: 'chip chip-green' },
+  no_clear_edge: { label: 'No clear edge', cls: 'chip chip-amber' },
+  inverted: { label: 'Inverted', cls: 'chip chip-red' },
+  not_enough_data: { label: 'Not enough data', cls: 'chip' },
 };
 
 function VerdictBadge({ verdict }: { verdict: string }) {
@@ -28,20 +29,15 @@ function VerdictBadge({ verdict }: { verdict: string }) {
 
 const fmt = (v: number | null | undefined, digits = 2) => (v == null ? 'n/a' : v.toFixed(digits));
 
-function MeanCell({ label, m }: { label: string; m?: ForecastMean }) {
+function MeanCell({ label, m, tone }: { label: string; m?: ForecastMean; tone?: 'keep' | 'stop' }) {
   return (
-    <div>
-      <div className="text-muted" style={{ fontSize: 12 }}>
-        {label}
-      </div>
-      <div style={{ fontWeight: 600 }}>
-        {m ? `${fmt(m.mean)}R` : 'n/a'} <span className="text-muted" style={{ fontWeight: 400, fontSize: 12 }}>n={m?.n ?? 0}</span>
-      </div>
-      {m && m.low != null && m.high != null && (
-        <div className="text-muted" style={{ fontSize: 12 }}>
-          95% interval {fmt(m.low)} to {fmt(m.high)}
-        </div>
-      )}
+    <div className={`fc-cohort ${tone ?? ''}`}>
+      <span className="label-mono">{label}</span>
+      <span className="fc-cohort-value">{m ? `${fmt(m.mean)}R` : 'n/a'}</span>
+      <span className="fc-cohort-sub">
+        n={m?.n ?? 0}
+        {m && m.low != null && m.high != null && ` · 95% interval ${fmt(m.low)} to ${fmt(m.high)}`}
+      </span>
     </div>
   );
 }
@@ -53,42 +49,36 @@ function ModelDetail({ id }: { id: number }) {
   const m = model.metrics;
   const maxShap = Math.max(...model.importance.map((i) => i.mean_abs_shap), 1e-9);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }} data-testid="forecast-model-detail">
+    <div className="fc-body fc-detail" data-testid="forecast-model-detail">
       <div className="text-muted" style={{ fontSize: 13 }}>
         {model.split.n_train} train, {model.split.n_validation} validation, {model.split.n_test} test trades (validation from{' '}
         {String(model.split.validation_start)}, test from {String(model.split.test_start)}; {model.split.purged_rows} dropped
         because their result was not yet known when the next window began). The test window was used once, after the model was
         chosen.
       </div>
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-        <div>
-          <div className="text-muted" style={{ fontSize: 12 }}>
-            Rank correlation (IC) of prediction and result
-          </div>
-          <div style={{ fontWeight: 600 }}>
-            {fmt(m.ic?.ic)} <span className="text-muted" style={{ fontWeight: 400, fontSize: 12 }}>n={m.ic?.n ?? 0}</span>
-          </div>
-          {m.ic?.low != null && m.ic?.high != null && (
-            <div className="text-muted" style={{ fontSize: 12 }}>
-              95% interval {fmt(m.ic.low)} to {fmt(m.ic.high)}
-            </div>
-          )}
-        </div>
+      <div className="fc-cohorts">
         <MeanCell label="All test trades" m={m.all_test_trades} />
-        <MeanCell label="Model would keep" m={m.kept_by_model} />
-        <MeanCell label="Model would stop" m={m.stopped_by_model} />
+        <MeanCell label="Model would keep" m={m.kept_by_model} tone="keep" />
+        <MeanCell label="Model would stop" m={m.stopped_by_model} tone="stop" />
+      </div>
+      <div className="fc-row">
+        <span className="label-mono">Rank correlation (IC)</span>
+        <span className="mono">
+          {fmt(m.ic?.ic)} n={m.ic?.n ?? 0}
+          {m.ic?.low != null && m.ic?.high != null && ` · 95% interval ${fmt(m.ic.low)} to ${fmt(m.ic.high)}`}
+        </span>
       </div>
       <div className="text-muted" style={{ fontSize: 12 }}>
         Test error {fmt(m.test_l2, 3)} against {fmt(m.test_baseline_l2, 3)} for always guessing the training average (lower is
         better).
       </div>
       <div>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>What the model leans on (mean absolute SHAP, test window)</div>
+        <div className="label-mono" style={{ marginBottom: 8 }}>What the model leans on (mean absolute SHAP, test window)</div>
         {model.importance.map((i) => (
-          <div key={i.feature} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 3 }}>
-            <span style={{ width: 200 }}>{i.feature}</span>
-            <div style={{ background: 'var(--accent, #3b82f6)', height: 8, borderRadius: 4, width: `${(i.mean_abs_shap / maxShap) * 200}px` }} />
-            <span className="text-muted">{i.mean_abs_shap.toFixed(3)}</span>
+          <div key={i.feature} className="fc-shap">
+            <span>{i.feature}</span>
+            <div className="fc-shap-bar" style={{ width: `${(i.mean_abs_shap / maxShap) * 100}%` }} />
+            <span className="text-muted mono">{i.mean_abs_shap.toFixed(3)}</span>
           </div>
         ))}
       </div>
@@ -114,8 +104,8 @@ function ModelRow({
   const deactivate = useDeactivateForecastModel();
   const remove = useDeleteForecastModel();
   return (
-    <tr style={selected ? { background: 'var(--bg-hover, rgba(127,127,127,0.1))' } : undefined}>
-      <td>#{model.id}</td>
+    <tr className={selected ? 'sel' : undefined}>
+      <td className="num">#{model.id}</td>
       <td>{formatRelativeTime(model.created_at)}</td>
       <td>runs {model.run_ids.join(', ')}</td>
       <td>
@@ -124,8 +114,9 @@ function ModelRow({
       <td>
         <VerdictBadge verdict={model.verdict} />
       </td>
-      <td>{model.active ? <span className="badge badge-green">active</span> : ''}</td>
-      <td style={{ display: 'flex', gap: 6 }}>
+      <td>{model.active ? <span className="chip chip-green">active</span> : ''}</td>
+      <td>
+        <div className="fc-actions">
         <button type="button" className="btn" onClick={onSelect}>
           Details
         </button>
@@ -141,6 +132,7 @@ function ModelRow({
         <button type="button" className="btn" disabled={remove.isPending || model.active} onClick={() => remove.mutate(model.id)}>
           Delete
         </button>
+        </div>
       </td>
     </tr>
   );
@@ -175,11 +167,11 @@ export function ForecastLabPage() {
   const pickedRows = status.runs.filter((r) => picked.includes(r.id)).reduce((a, r) => a + r.closed_trades, 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="fc-page">
       <div className="page-header">
         <div>
-          <h2 style={{ margin: 0, fontSize: 20 }}>Forecast Lab</h2>
-          <div className="text-muted" style={{ fontSize: 13, maxWidth: 720 }}>
+          <h1 className="page-title">Forecast Lab</h1>
+          <div className="fc-sub">
             A small gradient-boosted model learns, from finished backtest trades, which setups ended well in R. SHAP shows what
             drove each opinion. It is an opinion only: the rules still choose direction, entry, stop and size, and the model can
             only stop a trade the rules approved, in the ML sleeve. Nothing trains by itself.
@@ -188,16 +180,17 @@ export function ForecastLabPage() {
       </div>
 
       {!status.extras_available && (
-        <div className="card" data-testid="forecast-extras-missing">
-          <h3>ML extras not installed</h3>
-          <div className="text-muted" style={{ fontSize: 13 }}>
+        <div className="card card-flush" data-testid="forecast-extras-missing">
+          <div className="panel-header"><span className="label-mono">ML extras not installed</span></div>
+          <div className="fc-body text-muted" style={{ fontSize: 13 }}>
             {status.extras_message} The rest of the app works without them; training and predictions need them.
           </div>
         </div>
       )}
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>ML style</h3>
+      <div className="card card-flush">
+        <div className="panel-header"><span className="label-mono">ML style</span></div>
+        <div className="fc-body">
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <ToggleSwitch
             checked={status.enabled}
@@ -241,10 +234,12 @@ export function ForecastLabPage() {
             {(update.error ?? createSleeve.error)?.message}
           </span>
         )}
+        </div>
       </div>
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>Train from backtests</h3>
+      <div className="card card-flush">
+        <div className="panel-header"><span className="label-mono">Train from backtests</span></div>
+        <div className="fc-body">
         <div className="text-muted" style={{ fontSize: 13 }}>
           Pick finished backtest runs. Training reads their stored trades only (no market data) and needs at least{' '}
           {status.min_rows} closed trades. Backtests are price-only, so fundamentals, news and options points are always zero in
@@ -279,14 +274,16 @@ export function ForecastLabPage() {
             {train.error.message}
           </span>
         )}
+        </div>
       </div>
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>Models</h3>
+      <div className="card card-flush">
+        <div className="panel-header"><span className="label-mono">Models</span></div>
+        <div className="fc-body">
         {!models || models.length === 0 ? (
           <EmptyState>No models yet. A new model is saved but never activated for you.</EmptyState>
         ) : (
-          <table className="table">
+          <div className="fc-scroll"><table className="fc-table">
             <thead>
               <tr>
                 <th>Model</th>
@@ -303,17 +300,19 @@ export function ForecastLabPage() {
                 <ModelRow key={m.id} model={m} selected={selected === m.id} onSelect={() => setSelected(m.id)} />
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {selected !== null && <ModelDetail id={selected} />}
+        </div>
       </div>
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h3>Recent opinions</h3>
+      <div className="card card-flush">
+        <div className="panel-header"><span className="label-mono">Recent opinions</span></div>
+        <div className="fc-body">
         {!predictions || predictions.length === 0 ? (
           <EmptyState>Nothing yet. Opinions are recorded when the ML sleeve evaluates a trade the rules approved.</EmptyState>
         ) : (
-          <table className="table">
+          <div className="fc-scroll"><table className="fc-table">
             <thead>
               <tr>
                 <th>When</th>
@@ -331,11 +330,11 @@ export function ForecastLabPage() {
                   <td>{p.available ? fmt(p.expected_r) : 'n/a'}</td>
                   <td>
                     {!p.available ? (
-                      <span className="badge badge-neutral">no opinion</span>
+                      <span className="chip">no opinion</span>
                     ) : p.stopped_trade ? (
-                      <span className="badge badge-red">stopped</span>
+                      <span className="chip chip-red">stopped</span>
                     ) : (
-                      <span className="badge badge-green">allowed</span>
+                      <span className="chip chip-green">allowed</span>
                     )}
                   </td>
                   <td style={{ fontSize: 13 }}>
@@ -346,8 +345,9 @@ export function ForecastLabPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
+        </div>
       </div>
     </div>
   );
