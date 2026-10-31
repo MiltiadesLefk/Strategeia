@@ -1,0 +1,19 @@
+.ratings-layout { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 16px; align-items: start; }
+.ratings-runs { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.run-item { display: block; width: 100%; text-align: left; padding: 8px 10px; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); cursor: pointer; font: inherit; }
+.run-item:hover { background: var(--card-alt); }
+.run-item.active { background: rgba(14, 165, 233, 0.08); border-color: var(--accent); }
+.run-item .run-title { font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+.run-item .run-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); }
+.run-item .run-ai { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; font-family: var(--font-mono); }
+.ratings-table { width: 100%; border-collapse: collapse; }
+.ratings-table th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.ratings-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ratings-table th.num, .ratings-table td.num { text-align: right; }
+.ratings-table tr.row-click { cursor: pointer; }
+.ratings-table tr.row-click:hover { background: var(--card-alt); }
+.ratings-table tr.row-joined { background: rgba(14, 165, 233, 0.1); box-shadow: inset 2px 0 0 var(--accent); }
+.ratings-table .sym { font-weight: 600; font-size: 14px; }
+.ratings-section { padding: 12px 12px 4px; }
+.report-row { border-top: 1px solid var(--border); padding: 8px 0; font-size: 13px; }
+@media (max-width: 900px) { .ratings-layout { grid-template-columns: 1fr; } }

@@ -8,6 +8,7 @@ import type { RatingRow, RunUsage } from '../api/types';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { RatingTable } from '../components/RatingTable';
 import { tickerHref } from '../components/TickerLink';
+import './ratings.css';
 import { EmptyState, ErrorBanner, LoadingSpinner } from '../components/common';
 
 const LATEST = 'latest';
@@ -26,8 +27,8 @@ function ReportSections({ rows }: { rows: RatingRow[] }) {
         const mine = rows.filter((r) => r.lane === lane);
         if (mine.length === 0) return null;
         return (
-          <div key={lane} style={{ marginTop: 16 }}>
-            <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>{title} ({mine.length})</h3>
+          <div key={lane} className="ratings-section">
+            <div className="panel-header"><span>{title}</span><span className="chip">{mine.length}</span></div>
             {mine.map((r) => {
               const id = `${lane}:${r.symbol}`;
               // shortcut: wire headlines are stored without their article url, so link a Google News search for the headline; replace with the real url once the wire fetch keeps it
@@ -35,8 +36,8 @@ function ReportSections({ rows }: { rows: RatingRow[] }) {
                 ...it, url: it.url || `https://news.google.com/search?q=${encodeURIComponent(it.text)}`,
               }));
               return (
-                <div key={id} style={{ borderTop: '1px solid var(--border, #2a2d33)', padding: '6px 0', fontSize: 13 }}>
-                  <strong>{r.symbol}</strong>{' '}
+                <div key={id} className="report-row">
+                  <strong className="mono">{r.symbol}</strong>{' '}
                   <Link to={tickerHref(r.symbol)} className="text-muted" style={{ fontSize: 12 }}>company →</Link>{' '}
                   <span className="text-muted">{r.note}</span>{' '}
                   <SentimentSummary items={items} />{' '}
@@ -64,25 +65,25 @@ function OutsideRows({ rows }: { rows: RatingRow[] }) {
   if (rows.length === 0) return null;
   return (
     <div style={{ marginTop: 16 }}>
-      <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Scanned outside the universe ({rows.length})</h3>
+      <div className="panel-header" style={{ padding: '12px 12px 8px', marginBottom: 0 }}><span>Scanned outside the universe</span><span className="chip">{rows.length}</span></div>
       <div className="score-table-wrap">
-        <table className="score-table">
+        <table className="ratings-table">
           <thead>
-            <tr><th>Stock</th><th style={{ textAlign: 'right' }}>Score /100</th><th>Result</th><th>Why scanned</th><th /></tr>
+            <tr><th>Stock</th><th className="num">Score /100</th><th>Result</th><th>Why scanned</th><th /></tr>
           </thead>
           <tbody>
             {rows.map((r) => {
               const id = `${r.lane}:${r.symbol}`;
               return (
                 <Fragment key={id}>
-                  <tr onClick={() => setOpen(open === id ? null : id)} style={{ cursor: 'pointer', background: r.passed ? 'rgba(91, 156, 255, 0.12)' : undefined }}>
+                  <tr onClick={() => setOpen(open === id ? null : id)} className={`row-click${r.passed ? ' row-joined' : ''}`}>
                     <td>
-                      <strong>{r.symbol}</strong>{' '}
+                      <span className="sym mono">{r.symbol}</span>{' '}
                       <Link to={tickerHref(r.symbol)} onClick={(e) => e.stopPropagation()} className="text-muted" style={{ fontSize: 12 }}>company →</Link>
                     </td>
-                    <td style={{ textAlign: 'right' }}>{r.percent}</td>
+                    <td className="num mono">{r.percent}</td>
                     <td>
-                      {r.passed ? <span style={{ color: 'var(--accent, #5b9cff)', fontWeight: 600 }}>Joins the universe</span> : 'Below bar'}
+                      {r.passed ? <span className="chip chip-accent">Joins the universe</span> : <span className="chip">Below bar</span>}
                     </td>
                     <td className="text-muted" style={{ fontSize: 13 }}>{r.detail.found ?? r.note}</td>
                     <td className="text-muted">{open === id ? 'hide table' : 'show table'}</td>
@@ -114,28 +115,28 @@ function RatingRows({ rows, onRate, rating }: { rows: RatingRow[]; onRate?: (sym
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="score-table-wrap">
-      <table className="score-table">
+      <table className="ratings-table">
         <thead>
           <tr>
-            <th>Stock</th><th style={{ textAlign: 'right' }}>Score /100</th><th>Result</th><th>Dip</th>
+            <th>Stock</th><th className="num">Score /100</th><th>Result</th><th>Dip</th>
             {onRate && <th>Rated</th>}<th />{onRate && <th />}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <Fragment key={r.symbol}>
-              <tr onClick={() => setOpen(open === r.symbol ? null : r.symbol)} style={{ cursor: 'pointer' }}>
+              <tr onClick={() => setOpen(open === r.symbol ? null : r.symbol)} className="row-click">
                 <td>
-                  <strong>{r.symbol}</strong>{' '}
+                  <span className="sym mono">{r.symbol}</span>{' '}
                   <Link to={tickerHref(r.symbol)} onClick={(e) => e.stopPropagation()} className="text-muted" style={{ fontSize: 12 }}>company →</Link>
                   {r.note.startsWith('Added to universe') && (
-                    <div style={{ fontSize: 12, marginTop: 2, color: 'var(--accent, #5b9cff)', fontWeight: 600 }}>{r.note}</div>
+                    <div className="chip chip-accent" style={{ marginTop: 4 }}>{r.note}</div>
                   )}
                 </td>
-                <td style={{ textAlign: 'right' }}>{r.percent}</td>
-                <td>{r.bought ? 'Bought' : r.passed ? 'Passed' : 'Below bar'}</td>
-                <td>{r.dip ? 'dip' : ''}</td>
-                {onRate && <td className="text-muted" style={{ fontSize: 12 }}>{when(r.run_at)}</td>}
+                <td className="num mono">{r.percent}</td>
+                <td>{r.bought ? <span className="chip chip-accent">Bought</span> : r.passed ? <span className="chip chip-green">Passed</span> : <span className="chip chip-red">Below bar</span>}</td>
+                <td>{r.dip ? <span className="chip chip-amber">dip</span> : ''}</td>
+                {onRate && <td className="text-muted mono" style={{ fontSize: 11 }}>{when(r.run_at)}</td>}
                 <td className="text-muted">{open === r.symbol ? 'hide table' : 'show table'}</td>
                 {onRate && (
                   <td onClick={(e) => e.stopPropagation()}>
@@ -189,9 +190,9 @@ export function RatingsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
-          <h1>Ratings</h1>
+          <h1 className="page-title">Ratings</h1>
           <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
-            The 32-point evidence rating, explained part by part. Pick a day on the left to see that day&apos;s table. Rating only rates; it buys nothing.
+            The evidence rating, explained part by part. Pick a day on the left to see that day&apos;s table. Rating only rates; it buys nothing.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -203,15 +204,12 @@ export function RatingsPage() {
       </div>
       {rateOne.isPending && <div className="text-muted" style={{ fontSize: 13 }}>Rating {rateOne.variables}…</div>}
       {error && <ErrorBanner message={error.message ?? 'Could not rate'} />}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 280px) 1fr', gap: 16, alignItems: 'start' }}>
-        <div className="card" style={{ padding: 8 }}>
-          <button
-            onClick={() => select(LATEST)}
-            className="btn btn-secondary"
-            style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 6, opacity: view === LATEST ? 1 : 0.7 }}
-          >
-            <div>Latest per company</div>
-            <div className="text-muted" style={{ fontSize: 12 }}>{latestRows.length} companies · rate one by one here</div>
+      <div className="ratings-layout">
+        <div className="card ratings-runs">
+          <div className="panel-header"><span>Ratings runs</span></div>
+          <button onClick={() => select(LATEST)} className={`run-item${view === LATEST ? ' active' : ''}`}>
+            <div className="run-title">Latest per company <span className="chip chip-accent">aggregate</span></div>
+            <div className="run-sub">{latestRows.length} companies · rate one by one here</div>
           </button>
           {runs.isLoading ? <LoadingSpinner /> : runs.error ? (
             <ErrorBanner message="Could not load the rating history" onRetry={() => runs.refetch()} />
@@ -220,19 +218,18 @@ export function RatingsPage() {
               <button
                 key={r.run_id}
                 onClick={() => select(r.run_id)}
-                className="btn btn-secondary"
-                style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 6, opacity: r.run_id === view ? 1 : 0.7 }}
+                className={`run-item${r.run_id === view ? ' active' : ''}`}
               >
-                <div>{when(r.run_at)}{r.running ? ' · running' : ''}</div>
-                <div className="text-muted" style={{ fontSize: 12 }}>
+                <div className="run-title">{when(r.run_at)}{r.running ? ' · running' : ''}</div>
+                <div className="run-sub">
                   {r.source === 'scan' ? 'Morning scan' : r.source === 'replay' ? 'As-if replay' : r.source === 'find' ? 'Added to universe' : 'Manual'} · {r.rated} rated · {r.passed} passed · {r.bought} bought
                 </div>
-                {usageText(r.usage) && <div className="text-muted" style={{ fontSize: 12 }}>{usageText(r.usage)}</div>}
+                {usageText(r.usage) && <div className="run-ai">{usageText(r.usage)}</div>}
               </button>
             ))
           )}
         </div>
-        <div className="card">
+        <div className="card card-flush">
           {view === LATEST ? (
             latest.isLoading ? <LoadingSpinner /> : latestRows.length === 0 ? (
               <EmptyState>No ratings yet. Choose a company above, press Rate all, or turn on the daily scan (Settings).</EmptyState>
