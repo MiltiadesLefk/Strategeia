@@ -1,0 +1,12 @@
+.scan-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 900px) { .scan-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.scan-bar { height: 4px; border-radius: 2px; background: var(--card-alt); overflow: hidden; margin-top: 8px; }
+.scan-bar > i { display: block; height: 100%; background: var(--accent); }
+.scan-table { overflow-x: auto; }
+.scan-table table { width: 100%; border-collapse: collapse; }
+.scan-table th { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; background: var(--card-alt); color: var(--text-faint); white-space: nowrap; }
+.scan-table td, .scan-table th { padding: 6px 12px; }
+.scan-table td { border-bottom: 1px solid var(--border); }
+.scan-table tbody tr:hover { background: var(--card-alt); }
+.scan-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.scan-controls select { height: 32px; width: 220px; }
