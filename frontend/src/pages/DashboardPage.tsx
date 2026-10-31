@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SleeveSwitcher, useSelectedSleeve } from '../components/SleeveSwitcher';
 import { useDashboardSummary, useEquityCurve, useAnalysis } from '../api/hooks';
-import { StatCard } from '../components/StatCard';
+import { Sparkline } from '../components/Sparkline';
+import { EquityCurveChart } from '../components/chart/EquityCurveChart';
+import './dashboard.css';
 import { SignalBadge, TrendBadge } from '../components/Badge';
 import { CompanyIcon } from '../components/CompanyIcon';
 import { TickerLink, tickerHref } from '../components/TickerLink';
-import { IconBadge } from '../components/IconBadge';
 import { RangeTabs } from '../components/RangeTabs';
-import { MarketStatus } from '../components/MarketStatus';
 import { DataFreshness } from '../components/DataFreshness';
 import { Flash } from '../components/Flash';
 import { CandlestickChart } from '../components/chart/CandlestickChart';
-import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR, sampleSizeNote } from '../components/common';
+import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, sampleSizeNote } from '../components/common';
 import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
 import type { ApiError } from '../api/client';
 
@@ -30,25 +30,24 @@ function TopPickChart({ symbol }: { symbol: string }) {
   const breakout = !!data && isPotentialBreakout(data);
 
   return (
-    <div className="card" style={{ height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-        <Link to={tickerHref(symbol)} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text)' }}>
-          <CompanyIcon symbol={symbol} size={28} />
-          <div>
-            <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-              {symbol}
-              {breakout && <span className="badge badge-amber">Potential Breakout</span>}
-            </div>
-            {data && (
-              <div className="tabular-nums text-muted" style={{ fontSize: 12 }}>
-                <Flash value={data.price} scope={symbol}>
-                  {formatMoney(data.price)}
-                </Flash>
-              </div>
-            )}
-          </div>
-        </Link>
+    <div className="card">
+      <div className="panel-header">
+        <span>Top pick chart</span>
         <RangeTabs value={range} onChange={setRange} />
+      </div>
+      <div className="dash-pick">
+        <Link to={tickerHref(symbol)} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text)' }}>
+          <CompanyIcon symbol={symbol} size={26} />
+          <span style={{ fontWeight: 600 }}>{symbol}</span>
+          {data && (
+            <span className="mono text-muted">
+              <Flash value={data.price} scope={symbol}>
+                {formatMoney(data.price)}
+              </Flash>
+            </span>
+          )}
+        </Link>
+        {breakout && <span className="chip chip-amber">Potential breakout</span>}
       </div>
       {isLoading || !data ? (
         <LoadingSpinner label={`Loading ${symbol}…`} />
@@ -71,140 +70,147 @@ export function DashboardPage() {
   const { stats, markets_scanned, potential_setups, top_setups } = data;
   const equityTrend = equity?.map((p) => p.equity_value);
   const topPick = top_setups[0];
+  const ret = stats.total_return;
+  const retClass = ret > 0 ? 'delta-up' : ret < 0 ? 'delta-down' : 'chip';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="dash">
       <div className="page-header">
         <div>
-          <h1>Dashboard</h1>
-          {/* Was prefixed by a hardcoded green dot implying "healthy" — the
-              sidebar's Services indicator is the real reading of that. This
-              line is scan activity, so it states scan activity. */}
-          <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
+          <h1 className="page-title">Dashboard</h1>
+          <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
             {markets_scanned} market{markets_scanned === 1 ? '' : 's'} scanned · {potential_setups} potential setup
             {potential_setups === 1 ? '' : 's'}
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          <MarketStatus />
-          <DataFreshness updatedAt={dataUpdatedAt} isFetching={isFetching} />
-        </div>
+        <DataFreshness updatedAt={dataUpdatedAt} isFetching={isFetching} />
       </div>
 
       <SleeveSwitcher selected={sleeve} onSelect={selectSleeve} />
 
-      {/* Two tiers, because these are not peers. Account performance leads;
-          win rate / expectancy / exposure follow at normal weight. The
-          scan-activity counters that used to sit in this grid at the same
-          size as Total Return are gone — they're activity, not performance,
-          and the page header already states both. */}
-      <div className="grid hero-stat-grid">
-        <StatCard
-          label="Portfolio Value"
-          value={formatMoney(stats.portfolio_value)}
-          trend={equityTrend}
-          size="hero"
-          note={`from ${formatMoney(stats.starting_cash)} starting cash`}
-        />
-        <StatCard
-          label="Total Return"
-          value={formatPct(stats.total_return)}
-          positive={stats.total_return > 0 ? true : stats.total_return < 0 ? false : null}
-          trend={equityTrend}
-          size="hero"
-          note={`${formatMoney(stats.portfolio_value - stats.starting_cash)} vs starting cash`}
-        />
-      </div>
-
-      <div className="grid stat-grid">
-        <StatCard label="Win Rate" value={`${formatNumber(stats.win_rate, 0)}%`} note={sampleSizeNote(stats.total_trades)} />
-        <StatCard
-          label="Avg R"
-          value={formatR(stats.avg_rr)}
-          positive={stats.avg_rr === null ? null : stats.avg_rr > 0}
-          note="expectancy per closed trade"
-        />
-        <StatCard label="Total Trades" value={String(stats.total_trades)} />
-        <StatCard label="Active Positions" value={String(stats.active_positions)} />
-      </div>
-
-      <div className="split-row">
-       <div className="plan-col">
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3>Top Setups Today</h3>
-            <Link to="/scan" className="text-muted" style={{ fontSize: 13 }}>
-              View All →
-            </Link>
+      <div className="dash-tiles">
+        <div className="stat-tile">
+          <div className="stat-tile-label">Portfolio value</div>
+          <div className="stat-tile-value">{formatMoney(stats.portfolio_value)}</div>
+          <div className="dash-tile-foot">
+            <span className="stat-tile-sub" style={{ margin: 0 }}>
+              from {formatMoney(stats.starting_cash)}
+            </span>
+            {equityTrend && equityTrend.length >= 2 && <Sparkline values={equityTrend} width={48} height={16} />}
           </div>
-          {top_setups.length === 0 ? (
-            <EmptyState>No setups flagged in the current scan.</EmptyState>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Price</th>
-                  <th>24h</th>
-                  <th>Signal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {top_setups.map((r) => (
-                  <tr key={r.symbol}>
-                    <td style={{ fontWeight: 600 }}>
-                      <TickerLink symbol={r.symbol} iconSize={26} />
-                    </td>
-                    <td className="tabular-nums">
-                      <Flash value={r.price}>{formatMoney(r.price)}</Flash>
-                    </td>
-                    <td className={`tabular-nums ${r.change_pct_24h >= 0 ? 'text-green' : 'text-red'}`}>{formatPct(r.change_pct_24h)}</td>
-                    <td>
-                      <SignalBadge signal={r.signal} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
-
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h3>Top Pick</h3>
+        <div className="stat-tile">
+          <div className="stat-tile-label">Total return</div>
+          <div className="stat-tile-value" style={{ color: ret > 0 ? 'var(--green)' : ret < 0 ? 'var(--red)' : undefined }}>
+            {formatPct(ret)}
           </div>
-          {!topPick ? (
-            <EmptyState>No scan data yet to summarize.</EmptyState>
+          <div className="dash-tile-foot">
+            <span className={retClass}>{formatMoney(stats.portfolio_value - stats.starting_cash)}</span>
+          </div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-tile-label">Win rate</div>
+          <div className="stat-tile-value">{formatNumber(stats.win_rate, 0)}%</div>
+          <div className="stat-tile-sub">{sampleSizeNote(stats.total_trades)}</div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-tile-label">Total trades</div>
+          <div className="stat-tile-value">{stats.total_trades}</div>
+          <div className="stat-tile-sub">closed</div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-tile-label">Active positions</div>
+          <div className="stat-tile-value">{stats.active_positions}</div>
+          <div className="stat-tile-sub">open holds</div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-tile-label">Cash</div>
+          <div className="stat-tile-value">{formatMoney(stats.current_cash)}</div>
+          <div className="stat-tile-sub">uninvested</div>
+        </div>
+      </div>
+
+      <div className="dash-main">
+        <div className="dash-col">
+          <div className="card">
+            <div className="panel-header">
+              <span>Portfolio equity curve</span>
+              <span className="chip">Simulated</span>
+            </div>
+            {equity && equity.length >= 2 ? (
+              <div className="dash-curve">
+                <EquityCurveChart points={equity} />
+              </div>
+            ) : (
+              <EmptyState>The equity curve builds up as the portfolio is marked to market.</EmptyState>
+            )}
+          </div>
+          {topPick ? (
+            <TopPickChart symbol={topPick.symbol} />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {topPick && (
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <IconBadge variant={topPick.trend === 'Bullish' ? 'up' : topPick.trend === 'Bearish' ? 'down' : 'info'} size={34} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      Technical <TrendBadge trend={topPick.trend} />
-                    </div>
-                    <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-                      <Link to={tickerHref(topPick.symbol)}>{topPick.symbol}</Link> is showing {topPick.momentum.toLowerCase()} momentum on a{' '}
-                      {topPick.trend.toLowerCase()} trend — scanner score {topPick.score}/6.
-                    </div>
-                  </div>
-                </div>
-              )}
+            <div className="card">
+              <EmptyState>No top-ranked setup to chart yet.</EmptyState>
             </div>
           )}
         </div>
-       </div>
-       <div className="plan-col">
-        {topPick ? (
-          <TopPickChart symbol={topPick.symbol} />
-        ) : (
-          <div className="card" style={{ height: '100%' }}>
-            <EmptyState>No top-ranked setup to chart yet.</EmptyState>
-          </div>
-        )}
-       </div>
 
+        <div className="dash-col">
+          <div className="card card-flush">
+            <div className="panel-header" style={{ padding: '10px 12px 8px', marginBottom: 0 }}>
+              <span>Top setups today</span>
+              <Link to="/scan" className="text-muted" style={{ fontSize: 12 }}>
+                View all →
+              </Link>
+            </div>
+            {top_setups.length === 0 ? (
+              <EmptyState>No setups flagged in the current scan.</EmptyState>
+            ) : (
+              <table className="dash-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Price</th>
+                    <th>24h</th>
+                    <th>Signal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top_setups.map((r) => (
+                    <tr key={r.symbol}>
+                      <td style={{ fontWeight: 600 }}>
+                        <TickerLink symbol={r.symbol} iconSize={22} />
+                      </td>
+                      <td className="mono">
+                        <Flash value={r.price}>{formatMoney(r.price)}</Flash>
+                      </td>
+                      <td>
+                        <span className={r.change_pct_24h >= 0 ? 'delta-up' : 'delta-down'}>{formatPct(r.change_pct_24h)}</span>
+                      </td>
+                      <td>
+                        <SignalBadge signal={r.signal} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="panel-header">
+              <span>Top pick</span>
+              {topPick && <TrendBadge trend={topPick.trend} />}
+            </div>
+            {!topPick ? (
+              <EmptyState>No scan data yet to summarize.</EmptyState>
+            ) : (
+              <div className="text-muted" style={{ fontSize: 13 }}>
+                <Link to={tickerHref(topPick.symbol)}>{topPick.symbol}</Link> is showing {topPick.momentum.toLowerCase()} momentum on a{' '}
+                {topPick.trend.toLowerCase()} trend. Scanner score <span className="mono">{topPick.score}/6</span>.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
