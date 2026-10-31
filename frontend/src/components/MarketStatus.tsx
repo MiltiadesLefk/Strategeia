@@ -31,8 +31,8 @@ export function MarketStatus() {
 
   if (!session) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span className="badge badge-neutral">{isError ? 'Market status unavailable' : 'Market status…'}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span className="chip">{isError ? 'Market status unavailable' : 'Market status…'}</span>
       </div>
     );
   }
@@ -40,8 +40,8 @@ export function MarketStatus() {
   const tone = TONE[session.state];
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-      <span className="badge" style={{ background: tone.bg, color: tone.color }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span className="chip" style={{ background: tone.bg, color: tone.color, borderColor: tone.color }}>
         <span
           style={{
             width: 6,
@@ -53,7 +53,7 @@ export function MarketStatus() {
         />
         {marketStateLabel(session)}
       </span>
-      <span className="text-muted" style={{ fontSize: 12 }}>
+      <span className="text-muted mono" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
         {timeUntilNextTransition(session, now)}
       </span>
     </div>

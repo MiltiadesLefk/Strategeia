@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ActivityToasts } from '../components/ActivityToasts';
 import { CommandPalette } from '../components/CommandPalette';
+import { MarketStatus } from '../components/MarketStatus';
 import { RouteBoundary } from '../components/RouteBoundary';
-import { usePaletteShortcut } from '../lib/paletteShortcut';
+import { paletteShortcutLabel, usePaletteShortcut } from '../lib/paletteShortcut';
 import { prefetchAllWhenIdle } from '../routePages';
 import { Sidebar } from './Sidebar';
 
@@ -50,6 +51,16 @@ export function DashboardLayout() {
             </svg>
           </button>
         </div>
+        <header className="topbar">
+          <div className="topbar-group">
+            <span className="paper-pill">PAPER TRADING - SIMULATED, NO REAL MONEY</span>
+            <MarketStatus />
+          </div>
+          <button type="button" className="topbar-search" onClick={() => setPaletteOpen(true)} aria-label="Search symbols and pages" aria-keyshortcuts="Control+K Meta+K">
+            Search symbols, pages
+            <kbd>{paletteShortcutLabel()}</kbd>
+          </button>
+        </header>
         <main className="app-main">
           <RouteBoundary>
             <Outlet />

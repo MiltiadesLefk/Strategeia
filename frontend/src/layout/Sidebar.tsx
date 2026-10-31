@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useLogout, useSettingsStatus } from '../api/hooks';
+import { useLogout, useSessionUsage, useSettingsStatus } from '../api/hooks';
 import type { SettingsStatus } from '../api/types';
 import logo from '../assets/logo.png';
 import { paletteShortcutLabel } from '../lib/paletteShortcut';
@@ -115,6 +115,18 @@ function ServiceStatus({ status }: { status?: SettingsStatus }) {
   );
 }
 
+/** The Claude subscription's 5-hour and 7-day windows (Anthropic's usage endpoint); hidden when it cannot be read. */
+function ClaudeUsage() {
+  const { data } = useSessionUsage();
+  if (!data?.available) return null;
+  const resets = data.five_hour_resets_at ? new Date(data.five_hour_resets_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+  return (
+    <div className="text-muted" style={{ padding: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: 11 }} title={`Display only: read from your Claude login, refreshed every minute${resets ? `. The 5-hour window resets at ${resets}` : ''}`}>
+      Claude 5h: {data.five_hour_pct}% · 7d: {data.seven_day_pct}%
+    </div>
+  );
+}
+
 export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobileOpen?: boolean; onClose?: () => void; onOpenPalette?: () => void }) {
   const { data: status } = useSettingsStatus();
   const { mutate: logout, isPending: loggingOut } = useLogout();
@@ -136,18 +148,21 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
     <aside
       className={`sidebar${mobileOpen ? ' open' : ''}`}
       style={{
-        width: 224,
+        width: 240,
         flexShrink: 0,
         color: 'var(--text)',
         display: 'flex',
         flexDirection: 'column',
-        padding: '16px 10px 12px',
+        padding: '12px 8px 12px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 6px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src={logo} alt="Strategeia" style={{ width: 24, height: 24, flexShrink: 0, objectFit: 'contain' }} />
-          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Strategeia</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 6px 14px', marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
+        <div className="brand">
+          <img src={logo} alt="Strategeia" style={{ width: 28, height: 28, flexShrink: 0, objectFit: 'contain' }} />
+          <div style={{ minWidth: 0 }}>
+            <div className="brand-name">Strategeia</div>
+            <div className="brand-sub">Paper workstation</div>
+          </div>
         </div>
         <button
           onClick={onClose}
@@ -188,12 +203,13 @@ export function Sidebar({ mobileOpen = false, onClose, onOpenPalette }: { mobile
       {/* Service dots are real readings of GET /api/settings/status; they collapse into one row unless something needs attention. */}
       <div className="sidebar-footer">
         <ServiceStatus status={status} />
+        <ClaudeUsage />
         <button type="button" className="sidebar-action" onClick={() => logout()} disabled={loggingOut}>
           <Icon path="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
           Log out
         </button>
         {/* Required attribution for Elbstream's free ticker-logo API (CompanyIcon.tsx) */}
-        <a href="https://elbstream.com/logos" target="_blank" rel="noreferrer" className="text-muted" style={{ fontSize: 11, padding: '4px 10px' }}>
+        <a href="https://elbstream.com/logos" target="_blank" rel="noreferrer" className="text-muted" style={{ fontSize: 10, padding: '4px 8px', fontFamily: 'var(--font-mono)' }}>
           Logos by Elbstream
         </a>
       </div>
