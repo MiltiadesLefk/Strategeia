@@ -1,0 +1,9 @@
+/* Backtest Lab: Stitch layout (dense tiles, 9/3 split of detail). Tokens come from index.css. */
+.bt-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px; }
+.bt-cols { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.bt-main, .bt-aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bt-aside .split-row { grid-template-columns: 1fr; display: grid; }
+.bt-aside table { font-size: 11px; }
+.bt-aside th, .bt-aside td { padding: 6px 8px; white-space: normal; }
+.bt-aside ul { font-size: 12px; }
+@media (max-width: 1280px) { .bt-cols { grid-template-columns: minmax(0, 1fr); } }

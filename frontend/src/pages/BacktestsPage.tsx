@@ -25,12 +25,22 @@ import type {
   BacktestScorecard,
   BacktestTrade,
 } from '../api/types';
-import { StatCard } from '../components/StatCard';
+import './backtests.css';
 import { DirectionBadge } from '../components/Badge';
 import { TickerLink } from '../components/TickerLink';
 import { BaselineHistogram, DrawdownChart, EquityVsBenchmarkChart } from '../components/backtest/BacktestCharts';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, formatNumber, formatPct, formatR } from '../components/common';
 import { ValidationTab } from '../components/backtest/ValidationTab';
+
+function StatCard({ label, value, note, positive }: { label: string; value: string; note?: string; positive?: boolean | null }) {
+  return (
+    <div className="stat-tile">
+      <div className="stat-tile-label">{label}</div>
+      <div className="stat-tile-value" style={{ color: positive === true ? 'var(--green)' : positive === false ? 'var(--red)' : undefined }}>{value}</div>
+      {note && <div className="stat-tile-sub">{note}</div>}
+    </div>
+  );
+}
 
 const MACHINERY_CHECK_SYMBOLS = ['NVDA', 'AAPL'];
 const DEFAULT_RUN_YEARS = 3;
@@ -68,8 +78,8 @@ const signed = (v: number | null | undefined, digits = 2) => (v === null || v ==
 const plain = (v: number | null | undefined, digits = 2) => formatNumber(v, digits);
 
 function statusBadge(run: BacktestRun) {
-  const cls = run.status === 'done' ? 'badge-green' : run.status === 'failed' ? 'badge-red' : run.status === 'cancelled' ? 'badge-neutral' : 'badge-amber';
-  return <span className={`badge ${cls}`}>{run.status}</span>;
+  const cls = run.status === 'done' ? 'chip-green' : run.status === 'failed' ? 'chip-red' : run.status === 'cancelled' ? '' : 'chip-amber';
+  return <span className={`chip ${cls}`}>{run.status}</span>;
 }
 
 function addYears(iso: string, years: number): string {
@@ -150,7 +160,7 @@ function NewRunForm({ onStarted }: { onStarted: (id: number) => void }) {
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 18 }}>New run</h2>
+        <div className="panel-header" style={{ border: 0, margin: 0, padding: 0 }}><span>New run</span></div>
         <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
           Runs the live hold rules and the paper engine over past days using only price history already stored on this machine. Nothing is downloaded when a run starts.
         </div>
@@ -334,7 +344,7 @@ function RunsList({ selected, onSelect }: { selected: number | null; onSelect: (
   if (!runs.data || runs.data.length === 0) return <EmptyState>No backtests yet. Start one above.</EmptyState>;
   return (
     <div className="card" style={{ overflowX: 'auto' }}>
-      <h2 style={{ margin: '0 0 8px', fontSize: 18 }}>Runs</h2>
+      <div className="panel-header"><span>Runs</span></div>
       <table>
         <thead>
           <tr>
@@ -417,7 +427,7 @@ function Cards({ m }: { m: BacktestMetrics }) {
   const sample = `${t.closed_trades} closed trade${t.closed_trades === 1 ? '' : 's'}`;
   const annualNote = m.period.annualised ? undefined : 'run too short to annualise';
   return (
-    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
+    <div className="bt-tiles">
       <StatCard label="Total return" value={formatPct(r.total_return_pct)} positive={r.total_return_pct === null ? null : r.total_return_pct > 0} note={`${formatMoney(r.starting_equity)} to ${formatMoney(r.final_equity)}`} />
       <StatCard label="CAGR" value={formatPct(r.cagr_pct)} positive={r.cagr_pct === null ? null : r.cagr_pct > 0} note={annualNote ?? (years ? `over ${years.toFixed(2)} years` : undefined)} />
       <StatCard label="Max drawdown" value={`-${m.drawdown.max_drawdown_pct.toFixed(1)}%`} positive={m.drawdown.max_drawdown_pct === 0 ? null : false} note={`${m.drawdown.max_drawdown_days} days peak to trough, daily closes`} />
@@ -451,7 +461,7 @@ function PeriodTables({ m }: { m: BacktestMetrics }) {
   return (
     <div className="split-row">
       <div className="card" style={{ overflowX: 'auto' }}>
-        <h3 style={{ margin: '0 0 8px' }}>Return by calendar year</h3>
+        <div className="panel-header"><span>Return by calendar year</span></div>
         {m.yearly_returns.length === 0 ? (
           <EmptyState>No days simulated.</EmptyState>
         ) : (
@@ -483,7 +493,7 @@ function PeriodTables({ m }: { m: BacktestMetrics }) {
         )}
       </div>
       <div className="card" style={{ overflowX: 'auto' }}>
-        <h3 style={{ margin: '0 0 8px' }}>Return by month</h3>
+        <div className="panel-header"><span>Return by month</span></div>
         {monthsByYear.size === 0 ? (
           <EmptyState>No days simulated.</EmptyState>
         ) : (
@@ -562,7 +572,7 @@ function TradesTable({ trades }: { trades: BacktestTrade[] }) {
   if (trades.length === 0) return <EmptyState>The run made no trades.</EmptyState>;
   return (
     <div className="card" style={{ overflowX: 'auto' }}>
-      <h3 style={{ margin: '0 0 8px' }}>Trades ({trades.length})</h3>
+      <div className="panel-header"><span>Trades ({trades.length})</span></div>
       <table>
         <thead>
           <tr>
@@ -624,7 +634,7 @@ function MixAndSplit({ m }: { m: BacktestMetrics }) {
   return (
     <div className="split-row">
       <div className="card" style={{ overflowX: 'auto' }}>
-        <h3 style={{ margin: '0 0 8px' }}>How trades ended</h3>
+        <div className="panel-header"><span>How trades ended</span></div>
         {m.exit_reasons.length === 0 ? (
           <EmptyState>No trades.</EmptyState>
         ) : (
@@ -653,7 +663,7 @@ function MixAndSplit({ m }: { m: BacktestMetrics }) {
         )}
       </div>
       <div className="card" style={{ overflowX: 'auto' }}>
-        <h3 style={{ margin: '0 0 8px' }}>Long versus short</h3>
+        <div className="panel-header"><span>Long versus short</span></div>
         <table>
           <thead>
             <tr>
@@ -687,7 +697,7 @@ function ScorecardPanel({ card }: { card: BacktestScorecard }) {
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
-        <h3 style={{ margin: 0 }}>Scorecard</h3>
+        <div className="panel-header"><span>Scorecard</span></div>
         <div className="text-muted" style={{ fontSize: 13 }}>
           {card.note} {card.counts.pass} pass, {card.counts.fail} fail, {card.counts.insufficient_data} not enough data.
         </div>
@@ -731,7 +741,7 @@ function BaselinePanel({ baseline, running }: { baseline: BacktestBaseline | und
   if (!baseline.available) {
     return (
       <div className="card">
-        <h3 style={{ margin: '0 0 6px' }}>Random-entry baseline</h3>
+        <div className="panel-header"><span>Random-entry baseline</span></div>
         <div className="text-muted" style={{ fontSize: 13 }}>
           {running ? 'The first random run has not finished yet.' : baseline.reason ?? 'No baseline for this run.'}
         </div>
@@ -747,7 +757,7 @@ function BaselinePanel({ baseline, running }: { baseline: BacktestBaseline | und
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
-        <h3 style={{ margin: 0 }}>Random-entry baseline</h3>
+        <div className="panel-header"><span>Random-entry baseline</span></div>
         <div className="text-muted" style={{ fontSize: 13 }}>
           The same run {baseline.seeds?.length ?? 0} times with entries chosen at random (same symbols, days, sizing, stops, targets and exit rules). The green bar holds the real run.
           {baseline.status === 'cancelled' && ' Cancelled: only the finished random runs are counted.'}
@@ -821,10 +831,10 @@ function CoveragePanel({ run }: { run: BacktestRun }) {
   const skipped = s && typeof s.symbols_skipped === 'object' && s.symbols_skipped !== null && Object.keys(s.symbols_skipped as object).length > 0 ? ` Skipped symbols: ${Object.keys(s.symbols_skipped as object).join(', ')}.` : '';
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <h3 style={{ margin: 0 }}>What this run tested</h3>
+      <div className="panel-header"><span>What this run tested</span></div>
       <div style={{ fontSize: 13 }}>{c.summary}</div>
       {hold && c.optimistic && (
-        <div className="badge badge-amber" style={{ alignSelf: 'flex-start', whiteSpace: 'normal' }} data-testid="optimistic-warning">
+        <div className="chip chip-amber" style={{ alignSelf: 'flex-start', whiteSpace: 'normal' }} data-testid="optimistic-warning">
           Optimistic result: today&apos;s index members only (survivors), daily bars, no costs beyond slippage. Read it as an upper bound.
         </div>
       )}
@@ -910,7 +920,7 @@ function RunDetail({ id }: { id: number }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
-          <h2 style={{ margin: 0, fontSize: 20 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
             Run #{data.id} {statusBadge(data)}
           </h2>
           <div className="text-muted" style={{ fontSize: 13 }}>
@@ -932,10 +942,12 @@ function RunDetail({ id }: { id: number }) {
         <>
           {metrics.data.partial && <div className="card text-muted" style={{ fontSize: 13 }}>Partial run: statistics cover the days simulated before the cancel.</div>}
           <Cards m={metrics.data} />
+          <div className="bt-cols">
+          <div className="bt-main">
 
           <div className="card">
             <div className="page-header" style={{ marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Equity versus SPY</h3>
+              <h3 className="label-mono" style={{ margin: 0 }}>Equity versus SPY</h3>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
                 <input type="checkbox" checked={logScale} onChange={(e) => setLogScale(e.target.checked)} />
                 Log scale
@@ -956,7 +968,7 @@ function RunDetail({ id }: { id: number }) {
           </div>
 
           <div className="card">
-            <h3 style={{ margin: '0 0 8px' }}>Drawdown</h3>
+            <div className="panel-header"><span>Drawdown</span></div>
             {metrics.data.drawdown_series.length > 0 ? <DrawdownChart series={metrics.data.drawdown_series} /> : <EmptyState>No days simulated.</EmptyState>}
             <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
               Worst: -{metrics.data.drawdown.max_drawdown_pct.toFixed(1)}% (peak {metrics.data.drawdown.peak_date ?? '—'}, trough {metrics.data.drawdown.trough_date ?? '—'},{' '}
@@ -966,14 +978,17 @@ function RunDetail({ id }: { id: number }) {
 
           <PeriodTables m={metrics.data} />
           <MixAndSplit m={metrics.data} />
-        </>
-      )}
-
       {hasResults && (trades.isLoading ? <LoadingSpinner /> : trades.isError ? <ErrorBanner message={(trades.error as ApiError).message} /> : trades.data && <TradesTable trades={trades.data} />)}
       {hasResults && scorecard.data && <ScorecardPanel card={scorecard.data} />}
       {scorecard.isError && <ErrorBanner message={(scorecard.error as ApiError).message} onRetry={() => scorecard.refetch()} />}
       {hasResults && <BaselinePanel baseline={baseline.data} running={baselineRunning} />}
+          </div>
+          <div className="bt-aside">
       {hasResults && <CoveragePanel run={data} />}
+          </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1054,7 +1069,7 @@ export function BacktestsPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="page-header">
           <div>
-            <h1 style={{ margin: 0 }}>Backtest Lab</h1>
+            <h1 className="page-title" style={{ margin: 0 }}>Backtest Lab</h1>
             <div className="text-muted" style={{ fontSize: 14 }}>
               Walk-forward validation: does the strategy hold up on days it was not tuned on, and how much of its Sharpe ratio could be luck? Paper trading only; nothing here places an order.
             </div>
@@ -1069,7 +1084,7 @@ export function BacktestsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div>
-          <h1 style={{ margin: 0 }}>Backtest Lab</h1>
+          <h1 className="page-title" style={{ margin: 0 }}>Backtest Lab</h1>
           <div className="text-muted" style={{ fontSize: 14 }}>
             Run the live hold rules over past years on stored prices, then compare the result with SPY and with random entries. Paper trading only; nothing here places an order.
           </div>
