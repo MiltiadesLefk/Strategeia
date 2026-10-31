@@ -1,0 +1,20 @@
+/* Company page: header strip, metric ribbon, tiles. Tokens come from index.css. */
+.co-head { padding: 12px 14px; }
+.co-head-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.co-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.co-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.co-sym { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+.co-name { color: var(--text-muted); font-size: 14px; }
+.co-fresh { margin-top: 2px; }
+.co-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.co-ribbon { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 12px; padding: 10px 12px; background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius); }
+.co-metric { display: flex; flex-direction: column; gap: 3px; min-width: 120px; }
+.co-metric-val { font-size: 15px; font-weight: 500; display: flex; align-items: baseline; gap: 8px; }
+.co-metric-lg { font-size: 20px; }
+.co-delta { font-size: 11px; }
+.co-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.co-tiles > .card { padding: 10px 12px; }
+.co-tiles > .card > :first-child { font-family: var(--font-mono); font-size: 10px !important; text-transform: uppercase; letter-spacing: 0.04em; }
+.co-tiles > .card > :last-child { font-family: var(--font-mono); margin-top: 4px; }
+.co-tabs { padding: 0 8px; }
+.co-ai-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

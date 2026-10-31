@@ -11,7 +11,7 @@ import { TrendBadge } from '../components/Badge';
 import { CompanyIcon } from '../components/CompanyIcon';
 import { CandlestickChart } from '../components/chart/CandlestickChart';
 import { RevenueChart } from '../components/chart/RevenueChart';
-import { AiNoteCard, ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatRelativeTime, isSafeHttpUrl } from '../components/common';
+import { ErrorBanner, EmptyState, LoadingSpinner, formatMoney, formatNumber, formatPct, formatRelativeTime, isSafeHttpUrl } from '../components/common';
 import { supportResistanceLevels, isPotentialBreakout } from '../lib/priceLevels';
 import { DataFreshness } from '../components/DataFreshness';
 import { Flash } from '../components/Flash';
@@ -27,6 +27,7 @@ import { LibraryPanel } from '../components/library/LibraryPanel';
 import { EarningsPreviewPanel } from '../components/EarningsPreviewPanel';
 import { CompanyRatingPanel } from '../components/CompanyRatingPanel';
 import { CompanyPositionPanel } from '../components/CompanyPositionPanel';
+import './company.css';
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
@@ -260,6 +261,19 @@ function UpcomingEarningsCard({ data }: { data: ResearchResponse }) {
   );
 }
 
+function CompanyAiNote({ label, provider, text, error }: { label: string; provider?: string | null; text: string; error?: string | null }) {
+  return (
+    <div className="ai-note">
+      <div className="co-ai-head">
+        <span className="chip chip-ai">{provider === 'none' ? 'RULE-BASED' : 'AI NOTE'}</span>
+        <span className="label-mono">{provider && provider !== 'none' ? provider : label}</span>
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.6 }}>{text}</div>
+      {error && <div className="ai-note-disclaimer" style={{ marginTop: 6 }}>({error})</div>}
+    </div>
+  );
+}
+
 function ChartSection({ symbol, companyName, sector, range, setRange }: { symbol: string; companyName: string | undefined; sector: string | undefined; range: string; setRange: (r: string) => void }) {
   const { data, isLoading, error, refetch, dataUpdatedAt, isFetching } = useAnalysis(symbol, range);
   const { data: research } = useResearch(symbol); // same query the tabs below use, so no extra request
@@ -295,15 +309,31 @@ function ChartSection({ symbol, companyName, sector, range, setRange }: { symbol
 
   return (
     <>
-      <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <CompanyIcon symbol={symbol} size={36} />
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {symbol}
-              {companyName && <span className="text-muted" style={{ fontWeight: 400, fontSize: 14 }}> · {companyName}</span>}
+      <div className="card co-head">
+        <div className="co-head-row">
+          <div className="co-id">
+            <CompanyIcon symbol={symbol} size={40} />
+            <div>
+              <div className="co-title">
+                <span className="co-sym mono">{symbol}</span>
+                {companyName && <span className="co-name">{companyName}</span>}
+                {sector && sector !== 'Unknown' && <span className="chip">{sector}</span>}
+              </div>
+              <div className="co-fresh">
+                <DataFreshness updatedAt={dataUpdatedAt} isFetching={isFetching} alwaysOpen={isAlwaysOpenSymbol(symbol)} />
+              </div>
             </div>
-            <div className="tabular-nums" style={{ fontSize: 15 }}>
+          </div>
+          <div className="co-actions">
+            {breakout && <span className="chip chip-amber">Potential Breakout</span>}
+            {data && <TrendBadge trend={data.trend} />}
+            <AlertMeButton symbol={symbol} />
+          </div>
+        </div>
+        <div className="co-ribbon">
+          <div className="co-metric">
+            <span className="label-mono">Last price</span>
+            <span className="co-metric-val co-metric-lg mono">
               {data ? (
                 <Flash value={data.price} scope={`${symbol}|${range}`}>
                   {formatMoney(data.price)}
@@ -312,30 +342,34 @@ function ChartSection({ symbol, companyName, sector, range, setRange }: { symbol
                 '—'
               )}
               {research?.change_pct != null && (
-                <span className={research.change_pct >= 0 ? 'text-green' : 'text-red'} style={{ marginLeft: 8, fontSize: 13 }}>
+                <span className={`${research.change_pct >= 0 ? 'delta-up' : 'delta-down'} co-delta`}>
                   {research.change_pct >= 0 ? '▲' : '▼'} {formatPct(research.change_pct)}
                   {research.change != null && ` (${formatMoney(research.change)})`}
                 </span>
               )}
-            </div>
-            <div className="text-muted" style={{ fontSize: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-              {sector && sector !== 'Unknown' && <span className="badge">{sector}</span>}
-              {research?.market_cap != null && <span>Market cap {formatMoney(research.market_cap, { compact: true })}</span>}
-              {research?.earnings_date && (
-                <span>· Next earnings {new Date(research.earnings_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              )}
-            </div>
-            <div style={{ marginTop: 2 }}>
-              <DataFreshness updatedAt={dataUpdatedAt} isFetching={isFetching} alwaysOpen={isAlwaysOpenSymbol(symbol)} />
-            </div>
+            </span>
           </div>
+          <div className="co-metric">
+            <span className="label-mono">Market cap</span>
+            <span className="co-metric-val mono">{formatMoney(research?.market_cap, { compact: true })}</span>
+          </div>
+          <div className="co-metric">
+            <span className="label-mono">P/E (TTM)</span>
+            <span className="co-metric-val mono">{research?.pe_ratio?.toFixed(1) ?? '—'}</span>
+          </div>
+          <div className="co-metric">
+            <span className="label-mono">52-week range</span>
+            {research && data ? <Range52WBar low={research.week52_low} high={research.week52_high} price={data.price} /> : <span className="co-metric-val mono">—</span>}
+          </div>
+          {research?.earnings_date && (
+            <div className="co-metric">
+              <span className="label-mono">Next earnings</span>
+              <span className="co-metric-val mono">
+                {new Date(research.earnings_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+          )}
         </div>
-        {data && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {breakout && <span className="badge badge-amber">Potential Breakout</span>}
-            <TrendBadge trend={data.trend} />
-          </div>
-        )}
       </div>
 
       {isLoading && <LoadingSpinner label={`Loading ${symbol}…`} />}
@@ -371,7 +405,7 @@ function ChartSection({ symbol, companyName, sector, range, setRange }: { symbol
             />
           </div>
 
-          <div className="grid stat-grid">
+          <div className="co-tiles">
             <div className="card">
               <div className="text-muted" style={{ fontSize: 12 }}>
                 Trend
@@ -462,7 +496,7 @@ function ChartSection({ symbol, companyName, sector, range, setRange }: { symbol
             </div>
           </div>
 
-          <AiNoteCard label={data.ai_provider === 'none' ? 'Chart summary' : 'AI Insight'} provider={data.ai_provider} text={data.insight_text} error={data.ai_error} />
+          <CompanyAiNote label={data.ai_provider === 'none' ? 'Chart summary' : 'AI note'} provider={data.ai_provider} text={data.insight_text} error={data.ai_error} />
         </>
       )}
     </>
@@ -476,7 +510,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
   // the minimum height keeps the page as tall as the tallest tab needs, so a tab click never moves the view.
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '90vh' }}>
-      <div className="card">
+      <div className="card co-tabs">
         <Tabs tabs={TABS} value={tab} onChange={setTab} />
       </div>
 
@@ -487,52 +521,6 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
         <>
           {tab === 'overview' && (
             <>
-              <div className="grid stat-grid">
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    Market Cap
-                  </div>
-                  <div className="tabular-nums" style={{ fontWeight: 600 }}>
-                    {formatMoney(data.market_cap, { compact: true })}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    P/E Ratio
-                  </div>
-                  <div className="tabular-nums" style={{ fontWeight: 600 }}>
-                    {data.pe_ratio?.toFixed(1) ?? '—'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    Revenue (TTM)
-                  </div>
-                  <div className="tabular-nums" style={{ fontWeight: 600 }}>
-                    {formatMoney(data.revenue_ttm, { compact: true })}
-                  </div>
-                  {data.revenue_yoy_pct !== null && (
-                    <div className={`tabular-nums ${data.revenue_yoy_pct >= 0 ? 'text-green' : 'text-red'}`} style={{ fontSize: 11 }}>
-                      {formatPct(data.revenue_yoy_pct)} YoY
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    EPS (TTM)
-                  </div>
-                  <div className="tabular-nums" style={{ fontWeight: 600 }}>
-                    {data.eps_ttm?.toFixed(2) ?? '—'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted" style={{ fontSize: 12 }}>
-                    52 Week Range
-                  </div>
-                  <Range52WBar low={data.week52_low} high={data.week52_high} price={data.price} />
-                </div>
-              </div>
-
               <div className="split-row">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="card">
@@ -551,7 +539,7 @@ function ResearchSection({ symbol, tab, setTab }: { symbol: string; tab: string;
                     <h3 style={{ marginBottom: 12 }}>Key Catalysts</h3>
                     <CatalystsList catalysts={data.catalysts} />
                   </div>
-                  <AiNoteCard label="AI Summary" provider={data.ai_provider} text={data.ai_summary} error={data.ai_error} />
+                  <CompanyAiNote label="AI note" provider={data.ai_provider} text={data.ai_summary} error={data.ai_error} />
                 </div>
               </div>
             </>
@@ -658,10 +646,9 @@ export function AnalysisPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
-        <h1>Company</h1>
+        <h1 className="page-title">Company</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <CompanyDropdown value={symbol ?? ''} onChange={(s) => navigate(`/stock/${encodeURIComponent(s)}`)} />
-          {symbol && <AlertMeButton symbol={symbol} />}
         </div>
       </div>
 
