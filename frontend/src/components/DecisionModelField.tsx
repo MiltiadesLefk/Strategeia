@@ -1,4 +1,4 @@
-// The "Decision model (AI overlay)" input shown under each AI provider's model
+// The "Decision model (AI Committee)" input shown under each AI provider's model
 // field in Settings. Blank means the provider's routine model answers the AI
 // overlay too, which is also what every existing install does.
 import { PATTERNS, decisionModelInvalid, type DecisionModelKind } from '../lib/decisionModel';
@@ -17,7 +17,7 @@ export function DecisionModelField({ kind, value, onChange, routineModel, placeh
   const invalid = decisionModelInvalid(kind, value);
   return (
     <div>
-      <label>Decision model (optional, for the AI overlay and committee verdicts)</label>
+      <label>Decision model (optional, for the AI Committee's verdicts)</label>
       {kind === 'claude' ? (
         <ModelSelect
           value={value}
@@ -38,8 +38,7 @@ export function DecisionModelField({ kind, value, onChange, routineModel, placeh
         />
       )}
       <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-        Answers the AI overlay's "would you take this trade?" question (the one call that can stop a trade) and the
-        AI Committee's manager, trader, risk and final-rating steps. It can be a stronger model than the everyday one
+        Used for the AI Committee's manager, trader, risk and final-rating steps (opinion only, never a trade). It can be a stronger model than the everyday one
         above. <strong>Blank = use the same model.</strong>
       </div>
       {invalid && (
