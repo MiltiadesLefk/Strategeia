@@ -348,6 +348,18 @@ class RebuyWatch(SQLModel, table=True):
     rebuy_position_id: Optional[int] = Field(default=None, foreign_key="paperposition.id")
 
 
+class RunUsage(SQLModel, table=True):
+    """What one Rate all run used of the Claude subscription: AI calls and tokens from the CLI's own reports, and the 5-hour
+    window percentage before and after (None when it could not be read). Other AI work running at the same time is counted too."""
+
+    run_id: str = Field(primary_key=True)
+    calls: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    five_hour_before: Optional[float] = None
+    five_hour_after: Optional[float] = None
+
+
 class RatingRecord(SQLModel, table=True):
     """One stock's evidence rating in one run (the morning hold scan or a manual run): the history page reads these."""
 

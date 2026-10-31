@@ -61,6 +61,7 @@ import type {
   RatingRunDetail,
   RatingRow,
   RatingRunSummary,
+  SessionUsage,
 } from './types';
 
 export const qk = {
@@ -1345,6 +1346,14 @@ export function useRatingRuns() {
     queryKey: ['rating-runs'] as const,
     queryFn: () => api.get<RatingRunSummary[]>('/api/ratings/runs'),
     refetchInterval: (q) => (q.state.data?.some((r) => r.running) ? 4000 : false),
+  });
+}
+
+export function useSessionUsage() {
+  return useQuery({
+    queryKey: ['session-usage'] as const,
+    queryFn: () => api.get<SessionUsage>('/api/usage/session'),
+    refetchInterval: 60_000,
   });
 }
 

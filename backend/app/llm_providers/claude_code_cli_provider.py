@@ -6,6 +6,7 @@ import subprocess
 import time
 
 from app.config import normalize_claude_cli_model
+from app.llm_providers import usage_meter
 from app.llm_providers.base import ROUTINE_TIER, LLMPurpose, LLMResult, LLMTier, extract_urls, model_for_tier, web_search_wanted
 
 # A research call with web search on may use exactly these two tools, named
@@ -189,6 +190,7 @@ class ClaudeCodeCLIProvider:
             if response_schema and isinstance(parsed, dict) and isinstance(parsed.get("structured_output"), dict):
                 text = json.dumps(parsed["structured_output"])
             served = _served_model(parsed)
+            usage_meter.record(parsed)
         except json.JSONDecodeError:
             text = proc.stdout.strip()
 

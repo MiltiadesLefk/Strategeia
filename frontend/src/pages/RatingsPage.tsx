@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useLatestRatings, useRateSymbol, useRatingRun, useRatingRuns, useStartRatingRun } from '../api/hooks';
 import type { ApiError } from '../api/client';
-import type { RatingRow } from '../api/types';
+import type { RatingRow, RunUsage } from '../api/types';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { RatingTable } from '../components/RatingTable';
 import { tickerHref } from '../components/TickerLink';
@@ -100,6 +100,14 @@ function OutsideRows({ rows }: { rows: RatingRow[] }) {
 
 function when(iso: string): string {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).toLocaleString();
+}
+
+/** "Used about 1.5% of the 5-hour window · 41 AI calls · 190k tokens": the AI part of one Rate all run. */
+function usageText(u: RunUsage | null | undefined): string | null {
+  if (!u || u.calls === 0) return null;
+  const tokens = Math.round((u.tokens_in + u.tokens_out) / 1000);
+  const window = u.five_hour_used_pct === null ? 'window % unreadable' : `${u.five_hour_used_pct}% of the 5-hour window`;
+  return `AI used ${window} · ${u.calls} calls · ${tokens}k tokens`;
 }
 
 function RatingRows({ rows, onRate, rating }: { rows: RatingRow[]; onRate?: (symbol: string) => void; rating?: string | null }) {
@@ -219,6 +227,7 @@ export function RatingsPage() {
                 <div className="text-muted" style={{ fontSize: 12 }}>
                   {r.source === 'scan' ? 'Morning scan' : r.source === 'replay' ? 'As-if replay' : r.source === 'find' ? 'Added to universe' : 'Manual'} · {r.rated} rated · {r.passed} passed · {r.bought} bought
                 </div>
+                {usageText(r.usage) && <div className="text-muted" style={{ fontSize: 12 }}>{usageText(r.usage)}</div>}
               </button>
             ))
           )}
@@ -234,6 +243,7 @@ export function RatingsPage() {
             <ErrorBanner message="Could not load this run" onRetry={() => run.refetch()} />
           ) : (
             <>
+              {usageText(run.data?.usage) && <div className="text-muted" style={{ padding: '0 8px 8px', fontSize: 13 }}>{usageText(run.data?.usage)}</div>}
               <RatingRows key={view} rows={(run.data?.ratings ?? []).filter((r) => !(r.lane in REPORT_LANES) && !OUTSIDE_LANES.includes(r.lane))} />
               <OutsideRows rows={(run.data?.ratings ?? []).filter((r) => OUTSIDE_LANES.includes(r.lane))} />
               <ReportSections rows={run.data?.ratings ?? []} />

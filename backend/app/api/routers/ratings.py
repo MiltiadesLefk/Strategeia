@@ -16,7 +16,9 @@ from app.llm_providers.base import LLMProvider
 from app.config import AppSettings
 from app.data_providers.base import DataProvider
 from app.database import engine
-from app.portfolio.models import RatingRecord
+from app.llm_providers import usage_meter
+from app.portfolio.models import RatingRecord, RunUsage
+from app.services.claude_usage_service import get_session_usage
 from app.timeutil import utcnow_naive
 from app.services.rating_service import REPORT_LANES, rate_stock, rate_universe, record_rating
 
@@ -36,7 +38,7 @@ def list_runs(limit: int = 30, session: Session = Depends(get_session)) -> list[
     ).all()
     out = [
         {"run_id": r[0], "run_at": r[1], "source": r[2], "rated": r[3], "passed": int(r[4] or 0), "bought": int(r[5] or 0),
-         "running": _running.get(r[0], False)}
+         "running": _running.get(r[0], False), "usage": _usage_json(session, r[0])}
         for r in rows
     ]
     # A run that has started but saved no row yet must still be listed, or the page cannot follow it.
@@ -44,6 +46,14 @@ def list_runs(limit: int = 30, session: Session = Depends(get_session)) -> list[
     started = [{"run_id": rid, "run_at": utcnow_naive(), "source": "manual", "rated": 0, "passed": 0, "bought": 0, "running": True}
                for rid, going in _running.items() if going and rid not in seen]
     return started + out
+
+
+def _usage_json(session: Session, run_id: str) -> dict | None:
+    u = session.get(RunUsage, run_id)
+    if u is None:
+        return None
+    used = None if u.five_hour_before is None or u.five_hour_after is None else round(max(u.five_hour_after - u.five_hour_before, 0), 1)
+    return {"calls": u.calls, "tokens_in": u.tokens_in, "tokens_out": u.tokens_out, "five_hour_used_pct": used}
 
 
 def _row_json(r: RatingRecord) -> dict:
@@ -95,7 +105,7 @@ def run_detail(run_id: str, session: Session = Depends(get_session)) -> dict:
     if not rows and run_id not in _running:
         raise HTTPException(status_code=404, detail="No such run")
     return {
-        "run_id": run_id, "running": _running.get(run_id, False),
+        "run_id": run_id, "running": _running.get(run_id, False), "usage": _usage_json(session, run_id),
         "ratings": [
             {"symbol": r.symbol, "lane": r.lane, "points": r.points, "max_points": r.max_points, "percent": r.percent,
              "passed": r.passed, "bought": r.bought, "dip": r.dip, "note": r.note, "run_at": r.run_at,
@@ -117,7 +127,14 @@ def start_run(settings: AppSettings = Depends(get_app_settings), data_provider: 
     def work() -> None:
         try:
             with Session(engine) as session:
+                before, window = usage_meter.snapshot(), get_session_usage(fresh=True)
                 rate_universe(settings, data_provider, session, run_id, "manual", llm_provider)
+                after, window_after = usage_meter.snapshot(), get_session_usage(fresh=True)
+                session.add(RunUsage(
+                    run_id=run_id, calls=after["calls"] - before["calls"], tokens_in=after["tokens_in"] - before["tokens_in"],
+                    tokens_out=after["tokens_out"] - before["tokens_out"],
+                    five_hour_before=window and window["five_hour_pct"], five_hour_after=window_after and window_after["five_hour_pct"]))
+                session.commit()
         finally:
             _running[run_id] = False
 

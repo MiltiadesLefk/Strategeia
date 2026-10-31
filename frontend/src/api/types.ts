@@ -2738,7 +2738,26 @@ export interface RebuyWatchItem {
   eligible_from: string;
 }
 
+/** What one Rate all run used: AI calls, tokens, and the points it moved the 5-hour window (null when unreadable). */
+export interface RunUsage {
+  calls: number;
+  tokens_in: number;
+  tokens_out: number;
+  five_hour_used_pct: number | null;
+}
+
+/** The Claude subscription's windows (display only) and what this app's AI calls used since it started. */
+export interface SessionUsage {
+  available: boolean;
+  five_hour_pct?: number;
+  five_hour_resets_at?: string | null;
+  seven_day_pct?: number;
+  seven_day_resets_at?: string | null;
+  since_start: { calls: number; tokens_in: number; tokens_out: number };
+}
+
 export interface RatingRunSummary {
+  usage: RunUsage | null;
   run_id: string;
   run_at: string;
   source: 'scan' | 'manual' | 'replay' | 'find';
@@ -2776,6 +2795,7 @@ export interface RatingRow {
 }
 
 export interface RatingRunDetail {
+  usage: RunUsage | null;
   run_id: string;
   running: boolean;
   ratings: RatingRow[];
