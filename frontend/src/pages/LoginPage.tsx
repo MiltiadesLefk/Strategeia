@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLogin } from '../api/hooks';
 import type { ApiError } from '../api/client';
 import logo from '../assets/logo.png';
+import './login.css';
 
 /** The one-user login screen AuthGate shows whenever /api/auth/status
  * reports not authenticated. No signup, no "forgot password" flow — by
@@ -14,6 +15,7 @@ import logo from '../assets/logo.png';
 export function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const { mutate: login, isPending, error } = useLogin();
 
   function handleSubmit(e: React.FormEvent) {
@@ -26,28 +28,21 @@ export function LoginPage() {
   const isLockedOut = apiError?.status === 429;
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        background: 'var(--canvas)',
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        className="card"
-        style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 16 }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <img src={logo} alt="" width={40} height={40} />
-          <div style={{ fontWeight: 700, fontSize: 18 }}>Strategeia</div>
-          <div className="text-muted" style={{ fontSize: 13 }}>
-            Sign in to continue
-          </div>
+    <div className="login-page">
+      <div className="card login-card">
+        <div className={`login-bar${isLockedOut ? ' login-bar-locked' : apiError ? ' login-bar-error' : ''}`} />
+        <form onSubmit={handleSubmit} className="login-form">
+        <div className="login-head">
+          <img src={logo} alt="" width={48} height={48} />
+          <h1 className="login-title">Strategeia</h1>
+          <div className="login-sub">Analyst Workstation</div>
         </div>
+
+        {apiError && (
+          <div className={`login-banner${isLockedOut ? ' login-banner-locked' : ''}`} role="alert">
+            {isLockedOut ? apiError.message : 'Incorrect username or password'}
+          </div>
+        )}
 
         <div>
           <label htmlFor="login-username">Username</label>
@@ -64,26 +59,36 @@ export function LoginPage() {
 
         <div>
           <label htmlFor="login-password">Password</label>
-          <input
-            id="login-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isLockedOut}
-          />
+          <div className="login-pw">
+            <input
+              id="login-password"
+              type={showPw ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLockedOut}
+              className={apiError && !isLockedOut ? 'login-invalid' : undefined}
+            />
+            <button
+              type="button"
+              className="login-toggle"
+              aria-pressed={showPw}
+              aria-label="Show password"
+              onClick={() => setShowPw((v) => !v)}
+              disabled={isLockedOut}
+            >
+              {showPw ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
 
-        {apiError && (
-          <div className="text-red" style={{ fontSize: 13 }}>
-            {isLockedOut ? apiError.message : 'Incorrect username or password.'}
-          </div>
-        )}
-
-        <button type="submit" className="btn btn-primary" disabled={!username || !password || isPending || isLockedOut}>
-          {isPending ? 'Signing in…' : 'Sign in'}
+        <button type="submit" className="btn btn-primary login-submit" disabled={!username || !password || isPending || isLockedOut}>
+          {isPending ? 'Logging in…' : isLockedOut ? 'Access restricted' : 'Log in'}
         </button>
-      </form>
+
+        <div className="login-foot">Paper trading only. No real money.</div>
+        </form>
+      </div>
     </div>
   );
 }
