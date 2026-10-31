@@ -2,15 +2,23 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCommitteeRun, useCommitteeRuns, useStartCommitteeRun } from '../api/hooks';
 import type { CommitteeRun, CommitteeStep } from '../api/types';
+import './committee.css';
 import { CompanyDropdown } from '../components/CompanyDropdown';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatRelativeTime } from '../components/common';
 
-const RATING_CLASS: Record<string, string> = {
-  Buy: 'badge badge-green',
-  Overweight: 'badge badge-green',
-  Hold: 'badge badge-neutral',
-  Underweight: 'badge badge-amber',
-  Sell: 'badge badge-red',
+const RATING_CHIP: Record<string, string> = {
+  Buy: 'chip chip-green',
+  Overweight: 'chip chip-green',
+  Hold: 'chip',
+  Underweight: 'chip chip-amber',
+  Sell: 'chip chip-red',
+};
+const RATING_BIG: Record<string, string> = {
+  Buy: 'r-green',
+  Overweight: 'r-green',
+  Hold: 'r-neutral',
+  Underweight: 'r-amber',
+  Sell: 'r-red',
 };
 
 const STATUS_LABEL: Record<CommitteeStep['status'], string> = {
@@ -20,70 +28,95 @@ const STATUS_LABEL: Record<CommitteeStep['status'], string> = {
   skipped: 'skipped',
   failed: 'failed',
 };
-const STATUS_CLASS: Record<CommitteeStep['status'], string> = {
-  pending: 'badge badge-neutral',
-  running: 'badge badge-amber',
-  done: 'badge badge-green',
-  skipped: 'badge badge-neutral',
-  failed: 'badge badge-red',
+const STATUS_CHIP: Record<CommitteeStep['status'], string> = {
+  pending: 'chip',
+  running: 'chip chip-amber',
+  done: 'chip chip-green',
+  skipped: 'chip',
+  failed: 'chip chip-red',
 };
 
 const STAGES: { role: CommitteeStep['role'][]; label: string }[] = [
-  { role: ['analyst'], label: '1. Analysts' },
-  { role: ['debate'], label: '2. Bull and bear debate' },
-  { role: ['manager', 'trader'], label: '3. Research manager and trader' },
-  { role: ['risk'], label: '4. Risk debate' },
-  { role: ['final'], label: '5. Final rating' },
+  { role: ['analyst'], label: 'Analysts' },
+  { role: ['debate'], label: 'Bull and bear debate' },
+  { role: ['manager', 'trader'], label: 'Research manager and trader' },
+  { role: ['risk'], label: 'Risk debate' },
+  { role: ['final'], label: 'Final rating' },
 ];
+
+function stageState(steps: CommitteeStep[]): 'pending' | 'running' | 'done' | 'failed' {
+  if (steps.some((s) => s.status === 'failed')) return 'failed';
+  if (steps.some((s) => s.status === 'running')) return 'running';
+  if (steps.length > 0 && steps.every((s) => s.status === 'done' || s.status === 'skipped')) return 'done';
+  return 'pending';
+}
 
 function StepCard({ step }: { step: CommitteeStep }) {
   const quiet = step.status === 'pending' || step.status === 'skipped';
   return (
-    <div className="card" style={{ background: 'var(--card-alt)', opacity: quiet ? 0.7 : 1 }} data-testid={`committee-step-${step.key}`}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+    <details
+      className="cm-step"
+      style={{ opacity: quiet ? 0.7 : 1 }}
+      open={step.status === 'running' || undefined}
+      data-testid={`committee-step-${step.key}`}
+    >
+      <summary>
         <strong>
           {step.title}
           {step.round > 0 ? ` (round ${step.round})` : ''}
         </strong>
-        <span className={STATUS_CLASS[step.status]}>{STATUS_LABEL[step.status]}</span>
-        <span className="text-muted" style={{ fontSize: 12 }}>
+        <span className={STATUS_CHIP[step.status]}>{STATUS_LABEL[step.status]}</span>
+        <span className="label-mono">
           {step.tier === 'decision' ? 'decision model' : 'routine model'}
           {step.model ? ` · ${step.model}` : ''}
         </span>
+      </summary>
+      <div className="cm-step-body">
+        {step.text && (
+          <div className="cm-step-text">
+            <span className="chip chip-ai">AI NOTE</span>
+            <div>{step.text}</div>
+          </div>
+        )}
+        {step.error && (
+          <div className="text-red" style={{ fontSize: 13, marginTop: 6 }}>
+            {step.error}
+          </div>
+        )}
+        {step.note && (
+          <div className="text-muted" style={{ fontSize: 13, marginTop: 6 }}>
+            {step.note}
+          </div>
+        )}
+        {step.ungrounded.length > 0 && (
+          <div style={{ fontSize: 12, marginTop: 6, color: 'var(--amber)' }}>
+            Figures not found in the data given (check them before relying on this text): {step.ungrounded.join('; ')}
+          </div>
+        )}
+        {!step.text && !step.error && !step.note && <div className="text-muted">Nothing written yet.</div>}
       </div>
-      {step.text && <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, marginTop: 8 }}>{step.text}</div>}
-      {step.error && (
-        <div className="text-red" style={{ fontSize: 13, marginTop: 6 }}>
-          {step.error}
-        </div>
-      )}
-      {step.note && (
-        <div className="text-muted" style={{ fontSize: 13, marginTop: 6 }}>
-          {step.note}
-        </div>
-      )}
-      {step.ungrounded.length > 0 && (
-        <div style={{ fontSize: 12, marginTop: 6, color: 'var(--amber)' }}>
-          Figures not found in the data given (check them before relying on this text): {step.ungrounded.join('; ')}
-        </div>
-      )}
-    </div>
+    </details>
   );
 }
 
 function RatingCard({ run }: { run: CommitteeRun }) {
   const active = run.status === 'queued' || run.status === 'running';
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="committee-rating">
-      <h2 style={{ margin: 0, fontSize: 18 }}>Committee rating for {run.symbol}</h2>
+    <div className="card ai-note" style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-testid="committee-rating">
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div>
+          <span className="chip chip-ai">AI NOTE</span>
+          <h2 style={{ margin: '6px 0 0', fontSize: 18 }}>
+            Committee rating for <span className="mono">{run.symbol}</span>
+          </h2>
+        </div>
+        {run.rating && <span className={`cm-rating ${RATING_BIG[run.rating]}`}>{run.rating}</span>}
+      </div>
       {run.rating ? (
         <>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className={RATING_CLASS[run.rating]} style={{ fontSize: 20, padding: '4px 14px' }}>
-              {run.rating}
-            </span>
-            {run.rating_conviction && <span className="text-muted">conviction: {run.rating_conviction}</span>}
-            {run.rating_parse === 'lenient' && <span className="text-muted">(reply read leniently)</span>}
+          <div className="label-mono">
+            {run.rating_conviction && <>conviction: {run.rating_conviction}</>}
+            {run.rating_parse === 'lenient' && <> · reply read leniently</>}
           </div>
           {run.rating_summary && <div style={{ whiteSpace: 'pre-wrap' }}>{run.rating_summary}</div>}
           {run.rating_key_risks && (
@@ -103,7 +136,7 @@ function RatingCard({ run }: { run: CommitteeRun }) {
           {run.error}
         </div>
       )}
-      <div className="text-muted" style={{ fontSize: 12 }}>
+      <div className="label-mono" style={{ textTransform: 'none' }}>
         AI calls used: {run.llm_calls_used} of {run.llm_calls_max} allowed · debate rounds {run.debate_rounds}, risk rounds{' '}
         {run.risk_rounds}
         {run.provider ? ` · ${run.provider}` : ''}
@@ -123,13 +156,31 @@ export function LiveRun({ id }: { id: number }) {
   const data = run.data;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="card">
+        <div className="panel-header">
+          <span className="label-mono">Deliberation pipeline</span>
+        </div>
+        <div className="cm-stages">
+          {STAGES.map((stage, i) => {
+            const st = stageState(data.steps.filter((s) => stage.role.includes(s.role)));
+            const chip = st === 'done' ? 'chip chip-green' : st === 'running' ? 'chip chip-amber' : st === 'failed' ? 'chip chip-red' : 'chip';
+            return (
+              <div key={stage.label} className={`cm-stage is-${st}`}>
+                <span className="label-mono">Stage {String(i + 1).padStart(2, '0')}</span>
+                <div className="cm-stage-title">{stage.label}</div>
+                <span className={chip}>{st === 'pending' ? 'waiting' : st}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       <RatingCard run={data} />
       {STAGES.map((stage) => {
         const steps = data.steps.filter((s) => stage.role.includes(s.role));
         if (steps.length === 0) return null;
         return (
           <section key={stage.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 15 }}>{stage.label}</h3>
+            <div className="label-mono">{stage.label}</div>
             {steps.map((s) => (
               <StepCard key={s.key} step={s} />
             ))}
@@ -164,19 +215,21 @@ export function CommitteePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="page-header">
-        <div>
-          <h1 style={{ margin: 0 }}>AI Committee</h1>
-          <div className="text-muted" style={{ fontSize: 14, maxWidth: 760 }}>
-            A panel of AI roles reads one symbol: analysts write reports, a bull and a bear argue, a trader leans one way, a
-            risk panel pushes back, and a final step gives a five-level rating from Buy to Sell. It is an opinion only. It never
-            opens, sizes or stops a trade, and the rules engine never reads it. Each run uses several calls on your AI provider
-            (capped in Settings).
-          </div>
+      <div className="cm-banner">
+        <span>Opinion only - never trades</span>
+        <span className="cm-banner-sub">The AI Committee does not open, size or stop a position, and the rules engine never reads it.</span>
+      </div>
+      <div>
+        <h1 className="page-title" style={{ margin: 0 }}>
+          AI Committee
+        </h1>
+        <div className="text-muted" style={{ fontSize: 13, maxWidth: 760 }}>
+          Analysts write reports, a bull and a bear argue, a trader leans one way, a risk panel pushes back, and a final step gives a
+          five-level rating from Buy to Sell. Each run uses several calls on your AI provider (capped in Settings).
         </div>
       </div>
 
-      <div className="card" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="card cm-run">
         <CompanyDropdown value={draft} onChange={setDraft} />
         <button className="btn" disabled={!draft.trim() || busy || start.isPending} onClick={submit}>
           {busy ? 'A run is in progress…' : 'Convene the committee'}
@@ -188,46 +241,53 @@ export function CommitteePage() {
         )}
       </div>
 
-      {selected !== null ? <LiveRun id={selected} /> : <EmptyState>Start a run, or open one from the history below.</EmptyState>}
-
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <h2 style={{ margin: '0 0 8px', fontSize: 18 }}>History</h2>
-        {runs.isLoading ? (
-          <LoadingSpinner />
-        ) : !runs.data || runs.data.length === 0 ? (
-          <div className="text-muted">No committee runs yet.</div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Symbol</th>
-                <th>Rating</th>
-                <th>Status</th>
-                <th>AI calls</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {runs.data.map((r) => (
-                <tr key={r.id}>
-                  <td>{formatRelativeTime(r.created_at)}</td>
-                  <td>{r.symbol}</td>
-                  <td>{r.rating ? <span className={RATING_CLASS[r.rating]}>{r.rating}</span> : <span className="text-muted">none</span>}</td>
-                  <td>{r.status}</td>
-                  <td>
-                    {r.llm_calls_used} / {r.llm_calls_max}
-                  </td>
-                  <td>
-                    <button className="btn btn-secondary" onClick={() => select(r.id)} aria-label={`Open run ${r.id}`}>
-                      Open
-                    </button>
-                  </td>
+      <div className="cm-layout">
+        <div>{selected !== null ? <LiveRun id={selected} /> : <EmptyState>Start a run, or open one from the history.</EmptyState>}</div>
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <div className="panel-header">
+            <span className="label-mono">History</span>
+          </div>
+          {runs.isLoading ? (
+            <LoadingSpinner />
+          ) : !runs.data || runs.data.length === 0 ? (
+            <div className="text-muted">No committee runs yet.</div>
+          ) : (
+            <table className="cm-hist">
+              <thead>
+                <tr>
+                  <th className="label-mono">When</th>
+                  <th className="label-mono">Symbol</th>
+                  <th className="label-mono">Rating</th>
+                  <th className="label-mono">Calls</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {runs.data.map((r) => (
+                  <tr key={r.id} className={r.id === selected ? 'is-sel' : undefined}>
+                    <td>{formatRelativeTime(r.created_at)}</td>
+                    <td className="mono">{r.symbol}</td>
+                    <td>
+                      {r.rating ? (
+                        <span className={RATING_CHIP[r.rating]}>{r.rating}</span>
+                      ) : (
+                        <span className="text-muted">{r.status === 'done' ? 'none' : r.status}</span>
+                      )}
+                    </td>
+                    <td className="mono">
+                      {r.llm_calls_used}/{r.llm_calls_max}
+                    </td>
+                    <td>
+                      <button className="btn btn-secondary" onClick={() => select(r.id)} aria-label={`Open run ${r.id}`}>
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );

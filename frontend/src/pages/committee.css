@@ -1,0 +1,26 @@
+.cm-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; background: var(--amber-bg); border: 1px solid var(--border); color: var(--amber); }
+.cm-banner span { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.cm-banner .cm-banner-sub { color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+.cm-run { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cm-stages { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.cm-stage { background: var(--surface-elevated); padding: 10px; border: 1px solid var(--border); min-width: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cm-stage.is-done { border-top: 2px solid var(--green); }
+.cm-stage.is-running { border-top: 2px solid var(--amber); }
+.cm-stage.is-failed { border-top: 2px solid var(--red); }
+.cm-stage-title { font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
+.cm-rating { font-family: var(--font-mono); font-size: 22px; font-weight: 600; padding: 6px 16px; text-transform: uppercase; letter-spacing: 0.04em; }
+.cm-rating.r-green { background: var(--green-bg); color: var(--green); }
+.cm-rating.r-red { background: var(--red-bg); color: var(--red); }
+.cm-rating.r-amber { background: var(--amber-bg); color: var(--amber); }
+.cm-rating.r-neutral { background: var(--surface-elevated); color: var(--text); }
+.cm-layout { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 16px; align-items: start; }
+.cm-step { background: var(--card); border: 1px solid var(--border); }
+.cm-step > summary { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; cursor: pointer; list-style: none; }
+.cm-step > summary::-webkit-details-marker { display: none; }
+.cm-step > summary:hover { background: var(--surface-elevated); }
+.cm-step-body { padding: 0 14px 14px; }
+.cm-step-text { white-space: pre-wrap; font-size: 13px; background: var(--canvas); padding: 10px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.cm-hist { width: 100%; border-collapse: collapse; }
+.cm-hist td, .cm-hist th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.cm-hist tr.is-sel { background: var(--surface-elevated); }
+@media (max-width: 1100px) { .cm-layout { grid-template-columns: minmax(0, 1fr); } .cm-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
