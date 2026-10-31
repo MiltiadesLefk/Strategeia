@@ -28,7 +28,7 @@ const REASON_LABEL: Record<string, string> = {
 
 function Points({ value }: { value: number }) {
   return (
-    <span className={value < 0 ? 'badge badge-red' : 'badge badge-green'} style={{ minWidth: 44, textAlign: 'center' }}>
+    <span className={value < 0 ? 'chip chip-red' : 'chip chip-green'} style={{ minWidth: 40, justifyContent: 'center' }}>
       {value > 0 ? '+' : ''}
       {value}
     </span>
@@ -64,33 +64,33 @@ function ReviewCard({ item }: { item: ReviewItem }) {
   };
 
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-testid="review-card">
-      <div className="split-row" style={{ gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+    <div className="card sm-review-card" data-testid="review-card">
+      <div className="sm-review-head">
+        <div className="sm-who">
           <TickerLink symbol={item.symbol} />
-          <span className="badge badge-neutral">{STATUS_LABEL[item.status] ?? item.status}</span>
+          <span className={`chip ${open ? 'chip-amber' : ''}`}>{STATUS_LABEL[item.status] ?? item.status}</span>
           {open && <span className="text-muted" style={{ fontSize: 12 }}>{expiryCountdown(item.expires_at)}</span>}
         </div>
-        <div className="tabular-nums" style={{ fontWeight: 700, fontSize: 18 }}>score {item.score}</div>
+        <div className="sm-score">SCORE {item.score}</div>
       </div>
 
       {item.delay_note && <div className="text-muted" style={{ fontSize: 12 }}>{item.delay_note}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {item.components.map((c, i) => (
-          <div key={`${c.source}-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <div key={`${c.source}-${i}`} className="sm-component">
             <Points value={c.points} />
-            <div style={{ fontSize: 13 }}>
+            <div>
               <strong>{SOURCE_LABEL[c.source] ?? c.source}:</strong> {c.reason}
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, fontSize: 13 }}>
+      <div className="sm-box">
         <strong>Plan rating: </strong>
         {r ? (
           <>
-            <span className="tabular-nums">
+            <span className="mono">
               {r.confidence_points}/{r.confidence_points_max} pts ({Math.round(r.confidence_score)}%)
             </span>
             {r.verdict_text && <div style={{ marginTop: 4 }}>{r.verdict_text}</div>}
@@ -131,7 +131,7 @@ function ReviewCard({ item }: { item: ReviewItem }) {
       )}
 
       {open && item.buy_queued && (
-        <div className="card" style={{ background: 'var(--canvas)', border: '1px solid var(--border)', fontSize: 13 }} data-testid="buy-queued">
+        <div className="sm-box sm-box-amber" data-testid="buy-queued">
           <strong>Buy queued.</strong> Waiting for the open: it will be bought from fresh data once the session is under way, if it
           still passes the checks then. Nothing fills at a stale price. No position exists yet.
         </div>
@@ -161,7 +161,7 @@ function ReviewCard({ item }: { item: ReviewItem }) {
                 : `Skip ${item.symbol}? It stays in the history and is counted as a missed trade.`}
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className="sm-actions">
             {confirm ? (
               <>
                 <button
@@ -210,13 +210,13 @@ function pct(v: number | null): string {
 function HindsightCard({ data }: { data: Hindsight }) {
   return (
     <div className="card" style={{ fontSize: 13 }} data-testid="hindsight">
-      <strong>In hindsight: what the items nobody bought would have done</strong>
+      <div className="panel-header"><span>In hindsight: what the items nobody bought would have done</span></div>
       <div className="text-muted" style={{ marginTop: 4 }}>
         {data.note} Counts are all items in the group; only the resolved ones enter the averages.
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginTop: 8 }}>
+      <div className="sm-hindsight-grid">
         {data.groups.map((g) => (
-          <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
+          <div key={g.key}>
             <div style={{ fontWeight: 600 }}>{g.label}</div>
             <div className="tabular-nums">n = {g.n}</div>
             <div className="text-muted tabular-nums" style={{ fontSize: 12 }}>
@@ -254,29 +254,35 @@ export function ReviewQueueTab() {
 
   return (
     <>
-      <div className="card" style={{ background: 'var(--canvas)', border: '1px solid var(--border)', fontSize: 13 }}>
-        <strong>What the review queue is.</strong> Symbols whose reported filings (as of the dates shown, up to 45 days late)
+      <div className="card sm-queue-intro">
+        <div className="panel-header"><span>Review queue</span></div>
+        <div><strong>What the review queue is.</strong> Symbols whose reported filings (as of the dates shown, up to 45 days late)
         triggered the tracker but which the auto sleeve did not buy: the normal trade plan was rated poorly, or it was tradeable
         and still not taken. You decide: Buy opens a simulated position in the smart-money-manual sleeve, Skip records your
         choice. Nothing here shows the signal works. {pendingQ.data?.disclaimer}
+        </div>
       </div>
       {pendingQ.isLoading && <LoadingSpinner />}
       {pendingQ.error && <ErrorBanner message={(pendingQ.error as ApiError).message} onRetry={() => pendingQ.refetch()} />}
-      {pendingQ.data && <h3 style={{ fontSize: 16 }}>Needs review ({pending.length})</h3>}
+      {pendingQ.data && <div className="label-mono">Needs review ({pending.length})</div>}
       {pendingQ.data && pending.length === 0 && (
         <EmptyState>Nothing needs review. An empty queue is a normal day, not an error.</EmptyState>
       )}
-      {pending.map((i) => (
-        <ReviewCard key={i.id} item={i} />
-      ))}
+      <div className="sm-queue-grid">
+        {pending.map((i) => (
+          <ReviewCard key={i.id} item={i} />
+        ))}
+      </div>
       {decidedQ.error && <ErrorBanner message={(decidedQ.error as ApiError).message} onRetry={() => decidedQ.refetch()} />}
       {hindsight && <HindsightCard data={hindsight} />}
       {decided.length > 0 && (
         <>
-          <h3 style={{ fontSize: 16, marginTop: 8 }}>Decided ({decided.length})</h3>
-          {decided.map((i) => (
-            <ReviewCard key={i.id} item={i} />
-          ))}
+          <div className="label-mono" style={{ marginTop: 8 }}>Decided ({decided.length})</div>
+          <div className="sm-queue-grid">
+            {decided.map((i) => (
+              <ReviewCard key={i.id} item={i} />
+            ))}
+          </div>
         </>
       )}
     </>

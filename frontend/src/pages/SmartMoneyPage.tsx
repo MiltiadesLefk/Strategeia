@@ -20,6 +20,7 @@ import { ActivistsTab } from '../components/smartmoney/ActivistsTab';
 import { FundsTab } from '../components/smartmoney/FundsTab';
 import { InsiderTradesTable, RoleBadges, formatAccepted } from '../components/smartmoney/InsiderTradesTable';
 import { Tabs } from '../components/Tabs';
+import './smartmoney.css';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, formatRelativeTime } from '../components/common';
 
 const DAY_OPTIONS = [30, 90, 180, 365];
@@ -54,7 +55,7 @@ function SourceTabs({ tab, onTab }: { tab: SourceTab; onTab: (tab: SourceTab) =>
 
 function ScoringNote() {
   return (
-    <div className="card" style={{ background: 'var(--canvas)', border: '1px solid var(--border)', fontSize: 13 }}>
+    <div className="sm-box" style={{ fontSize: 13 }}>
       <strong>How this is used.</strong> All four sources count, <strong>buying and selling</strong>, and each is worth
       up to 2 points on a trade plan (buying supports a long and argues against a short; selling does the reverse).{' '}
       <strong>Insiders:</strong> net buying counts, and so does selling, in full when it was the insider&apos;s own choice
@@ -250,11 +251,12 @@ export function SmartMoneyPage() {
   const [tab, setTab] = useState<SourceTab>('overview');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="sm-page">
       <div className="page-header">
         <div>
-          <h1>Smart Money</h1>
-          <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
+          <div className="label-mono sm-eyebrow">Discover // Public filings</div>
+          <h1 className="page-title">Smart Money</h1>
+          <div className="sm-sub">
             What people with inside knowledge or deep pockets have done, from public filings.
             {status.data?.has_data &&
               ` ${status.data.trade_rows} rows from ${status.data.symbols} symbols, newest filing ${formatRelativeTime(status.data.newest_filing)}.`}
