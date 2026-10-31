@@ -8,6 +8,7 @@ import type { ScreenerField, ScreenerFilter, ScreenerRunResponse, ScreenerSpec, 
 import { TickerLink } from '../components/TickerLink';
 import { EmptyState, ErrorBanner, LoadingSpinner, formatMoney, formatNumber } from '../components/common';
 import { toCsv } from '../lib/csv';
+import './screener.css';
 
 const OP_LABEL: Record<string, string> = { gt: '>', gte: '>=', lt: '<', lte: '<=', between: 'between', eq: 'equals', neq: 'not equal', contains: 'contains' };
 const DEFAULT_SPEC: ScreenerSpec = { filters: [], sort_field: 'scanner_score', sort_dir: 'desc', limit: 50, columns: [] };
@@ -23,11 +24,13 @@ function formatValue(field: ScreenerField | undefined, v: ScreenerValue | undefi
 }
 
 function FilterRow({
+  index,
   filter,
   fields,
   onChange,
   onRemove,
 }: {
+  index: number;
   filter: ScreenerFilter;
   fields: ScreenerField[];
   onChange: (f: ScreenerFilter) => void;
@@ -37,7 +40,8 @@ function FilterRow({
   const isNumber = spec?.kind === 'number';
   const toValue = (raw: string) => (isNumber ? (raw === '' ? null : Number(raw)) : raw);
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }} data-screener-filter>
+    <div className="scr-rule" data-screener-filter>
+      <span className="scr-rule-n">{String(index + 1).padStart(2, '0')}</span>
       <select
         aria-label="Field"
         value={filter.field}
@@ -87,7 +91,7 @@ function FilterRow({
         </span>
       )}
       {spec?.costly && (
-        <span className="badge badge-amber" title="Needs an extra fetch for every symbol read">
+        <span className="chip chip-amber" title="Needs an extra fetch for every symbol read">
           slower
         </span>
       )}
@@ -117,21 +121,24 @@ function ResultTable({ result, fields }: { result: ScreenerRunResponse; fields: 
 
   return (
     <div className="card" data-screener-results>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-        <div className="text-muted" style={{ fontSize: 13 }}>
+      <div className="panel-header">
+        <span>Results</span>
+        <button type="button" className="btn btn-secondary" onClick={exportCsv} disabled={result.rows.length === 0}>
+          Export CSV
+        </button>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <div className="scr-results-note">
           {result.scanned} of {result.universe_size} symbols scanned; {result.matched} matched, {result.rows.length} shown.
           {result.skipped_missing_data > 0 && ` ${result.skipped_missing_data} left out because a rule's value was missing for them.`}
           {result.missing.length > 0 && ` No price data for ${result.missing.length}: ${result.missing.slice(0, 8).join(', ')}${result.missing.length > 8 ? '…' : ''}.`}
         </div>
-        <button type="button" className="btn btn-secondary" onClick={exportCsv} disabled={result.rows.length === 0}>
-          Export CSV
-        </button>
       </div>
       {result.rows.length === 0 ? (
         <EmptyState>No symbol in the scanned set matches every rule.</EmptyState>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table>
+          <table className="scr-table">
             <thead>
               <tr>
                 <th>Symbol</th>
@@ -151,7 +158,7 @@ function ResultTable({ result, fields }: { result: ScreenerRunResponse; fields: 
                   </td>
                   <td className="text-muted">{r.name}</td>
                   {cols.map((c) => (
-                    <td key={c.name} className="tabular-nums" style={{ textAlign: c.kind === 'number' ? 'right' : 'left' }}>
+                    <td key={c.name} className="mono" style={{ textAlign: c.kind === 'number' ? 'right' : 'left' }}>
                       {formatValue(c, r.values[c.name])}
                     </td>
                   ))}
@@ -210,30 +217,33 @@ export function ScreenerPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="scr">
       <div className="page-header">
-        <h1 style={{ margin: 0 }}>Screener</h1>
-        <div className="text-muted" style={{ fontSize: 13 }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Screener</h1>
+        <div className="scr-sub">
           Your own rules over this app's symbol list, using daily bars and company data it already caches. Read-only: nothing here places a trade.
         </div>
       </div>
 
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="panel-header" style={{ marginBottom: 0 }}>
+          <span>Rule builder</span>
+          <button type="button" className="btn btn-secondary" onClick={() => patch({ filters: [] })} disabled={spec.filters.length === 0}>
+            Clear rules
+          </button>
+        </div>
         {saved.data && saved.data.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }} data-screener-saved>
-            <span className="text-muted" style={{ fontSize: 13 }}>
-              Saved screens
-            </span>
+          <div className="scr-saved" data-screener-saved>
+            <span className="label-mono">Saved screens</span>
             {saved.data.map((s) => (
-              <span key={s.id} style={{ display: 'inline-flex', gap: 4 }}>
+              <span key={s.id} className="scr-saved-item">
                 <button
                   type="button"
-                  className="btn btn-secondary"
                   onClick={() => setSpec({ filters: s.filters, sort_field: s.sort_field, sort_dir: s.sort_dir, limit: s.limit, columns: s.columns })}
                 >
                   {s.name}
                 </button>
-                <button type="button" className="btn btn-secondary" aria-label={`Delete ${s.name}`} onClick={() => del.mutate(s.id)}>
+                <button type="button" aria-label={`Delete ${s.name}`} onClick={() => del.mutate(s.id)}>
                   x
                 </button>
               </span>
@@ -242,25 +252,26 @@ export function ScreenerPage() {
         )}
 
         {spec.filters.length === 0 && (
-          <div className="text-muted" style={{ fontSize: 13 }}>
+          <div className="scr-empty">
             No rules yet: every symbol read is shown, sorted as chosen.
           </div>
         )}
         {spec.filters.map((f, i) => (
           <FilterRow
             key={i}
+            index={i}
             filter={f}
             fields={fields}
             onChange={(next) => patch({ filters: spec.filters.map((x, j) => (j === i ? next : x)) })}
             onRemove={() => patch({ filters: spec.filters.filter((_, j) => j !== i) })}
           />
         ))}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="scr-controls">
           <button type="button" className="btn btn-secondary" onClick={addFilter} disabled={spec.filters.length >= meta.max_filters}>
             Add rule
           </button>
-          <label className="text-muted" style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center' }}>
-            Sort by
+          <label className="scr-field">
+            <span>Sort by</span>
             <select value={spec.sort_field ?? ''} style={{ width: 'auto' }} onChange={(e) => patch({ sort_field: e.target.value || null })}>
               <option value="">(none)</option>
               {fields.map((f) => (
@@ -274,8 +285,8 @@ export function ScreenerPage() {
               <option value="asc">low to high</option>
             </select>
           </label>
-          <label className="text-muted" style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center' }}>
-            Show
+          <label className="scr-field">
+            <span>Show</span>
             <input
               type="number"
               min={1}
@@ -284,10 +295,10 @@ export function ScreenerPage() {
               value={spec.limit}
               onChange={(e) => patch({ limit: Math.max(1, Math.min(meta.max_symbols, Number(e.target.value) || 1)) })}
             />
-            rows
+            <span>rows</span>
           </label>
-          <label className="text-muted" style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center' }} title="Only this many symbols are read, in list order, to keep a run quick">
-            Read first
+          <label className="scr-field" title="Only this many symbols are read, in list order, to keep a run quick">
+            <span>Read first</span>
             <input
               type="number"
               min={1}
@@ -296,13 +307,14 @@ export function ScreenerPage() {
               value={cap}
               onChange={(e) => setScanCap(Math.max(1, Math.min(meta.max_symbols, Number(e.target.value) || 1)))}
             />
-            symbols
+            <span>symbols</span>
           </label>
-          <button type="button" className="btn" onClick={execute} disabled={run.isPending}>
+          <span className="scr-spacer" />
+          <button type="button" className="btn btn-primary" onClick={execute} disabled={run.isPending}>
             {run.isPending ? 'Running…' : 'Run screen'}
           </button>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="scr-controls">
           <input aria-label="Screen name" placeholder="Name this screen" maxLength={60} style={{ width: 200 }} value={name} onChange={(e) => setName(e.target.value)} />
           <button type="button" className="btn btn-secondary" onClick={saveCurrent} disabled={!name.trim() || save.isPending}>
             Save screen

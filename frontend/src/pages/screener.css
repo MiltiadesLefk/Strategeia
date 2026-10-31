@@ -1,0 +1,18 @@
+/* Screener page (Stitch look). Scoped under .scr. */
+.scr { display: flex; flex-direction: column; gap: 12px; }
+.scr-sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.scr-saved { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.scr-saved-item { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card-alt); overflow: hidden; }
+.scr-saved-item button { background: none; border: 0; color: var(--text-muted); padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.scr-saved-item button:hover { color: var(--text); background: var(--surface-elevated); }
+.scr-saved-item button + button { border-left: 1px solid var(--border); padding: 5px 8px; }
+.scr-rule { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 8px; background: var(--card-alt); border: 1px solid var(--border); border-radius: var(--radius); }
+.scr-rule-n { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); width: 22px; }
+.scr-empty { color: var(--text-muted); font-size: 12px; padding: 8px 0; }
+.scr-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding-top: 10px; border-top: 1px solid var(--border); }
+.scr-field { display: flex; gap: 6px; align-items: center; }
+.scr-field > span { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.scr-spacer { flex: 1; }
+.scr-results-note { color: var(--text-muted); font-size: 12px; }
+.scr-table th { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.scr-table td { padding-top: 6px; padding-bottom: 6px; white-space: nowrap; }
