@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from sqlmodel import Session, select
 
@@ -50,8 +51,24 @@ def _try(read, default=None):
         return default
 
 
+_FORM4_XML_RE = re.compile(r"^(https://www\.sec\.gov/Archives/edgar/data/\d+)/(\d{10})(\d{2})(\d{6})/[^/]+\.xml$")
+
+
+def filing_index_url(url: str) -> str:
+    """The readable filing page for a raw Form 4 XML address (the XML opens as unreadable markup); anything else unchanged."""
+    m = _FORM4_XML_RE.match(url or "")
+    return f"{m[1]}/{m[2]}{m[3]}{m[4]}/{m[2]}-{m[3]}-{m[4]}-index.htm" if m else url
+
+
 def _news_items(session: Session | None, symbol: str, news: list, ai_available: bool) -> list[dict]:
-    """The headlines the news part looked at, for the expandable row: the AI's labelled cards, else the raw headlines."""
+    """The headlines the news part looked at, for the expandable row (links checked, see news_link_service)."""
+    from app.services.news_link_service import resolve_item_links
+
+    return resolve_item_links(_raw_news_items(session, symbol, news, ai_available))
+
+
+def _raw_news_items(session: Session | None, symbol: str, news: list, ai_available: bool) -> list[dict]:
+    """The AI's labelled cards, else the raw headlines."""
     if ai_available and session is not None:
         from app.analysis.news_card_scoring import recent_cards
 
@@ -77,7 +94,7 @@ def _smart_money_items(session: Session | None, symbol: str) -> dict[str, list[d
     trades = _try(lambda: insider_trades_as_of(session, symbol, codes=(OPEN_MARKET_BUY, OPEN_MARKET_SELL)), [])
     out["insiders"] = [{"text": f"{'BOUGHT' if t.code == OPEN_MARKET_BUY else 'SOLD'} {_money(t.value)} — {t.owner_name or 'insider'}"
                                f"{' (' + t.officer_title + ')' if t.officer_title else ''}{' under a 10b5-1 plan' if t.is_10b5_1 else ''}",
-                        "meta": str(t.transaction_date or t.known_at.date()), "url": t.filing_url or ""} for t in trades[:25]]
+                        "meta": str(t.transaction_date or t.known_at.date()), "url": filing_index_url(t.filing_url or "")} for t in trades[:25]]
     cong = _try(lambda: congress_trades_as_of(session, symbol), [])
     out["Congress"] = [{"text": f"{t.side.upper()} {t.amount_text} — {t.member}", "meta": f"traded {t.trade_date}, filed {t.filed_date}",
                         "url": t.filing_url or ""} for t in cong[:25]]

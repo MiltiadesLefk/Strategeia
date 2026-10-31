@@ -21,14 +21,21 @@ _lock = threading.Lock()
 _cache: tuple[float, dict | None] = (0.0, None)
 
 
+def _credential_files() -> list[Path]:
+    """The login file the CLI keeps fresh: `CLAUDE_CREDENTIALS_FILE` (a read-only mount in Docker), else the home folder's."""
+    files = [Path(os.environ["CLAUDE_CREDENTIALS_FILE"])] if os.environ.get("CLAUDE_CREDENTIALS_FILE") else []
+    return files + [Path.home() / ".claude" / ".credentials.json"]
+
+
 def _tokens() -> list[str]:
     """The login file's token first (it can read usage), then the setup-token env var (may lack the scope)."""
     found: list[str] = []
-    try:
-        data = json.loads((Path.home() / ".claude" / ".credentials.json").read_text(encoding="utf-8"))
-        found.append(data["claudeAiOauth"]["accessToken"])
-    except (OSError, ValueError, KeyError, TypeError):
-        pass
+    for path in _credential_files():
+        try:
+            found.append(json.loads(path.read_text(encoding="utf-8"))["claudeAiOauth"]["accessToken"])
+            break
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
     if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
         found.append(os.environ["CLAUDE_CODE_OAUTH_TOKEN"])
     return found

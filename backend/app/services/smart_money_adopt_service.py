@@ -54,8 +54,7 @@ def adopt_smart_money_finds(
             _report(session, run_id, row, "not looked at (the per-run limit of new stocks was reached)")
             continue
         if row["total"] < settings.smart_money_adopt_min_score or in_saved_universe(symbol):
-            _report(session, run_id, row, "already in the universe" if in_saved_universe(symbol) else "score under the minimum to add")
-            continue  # ranked best first, but a sell-heavy or already-known stock is skipped, not a stop
+            continue  # ranked best first, but a sell-heavy or already-known stock is skipped, not a stop (and not listed: nothing happened to it)
         try:
             if rate:
                 from app.services.rating_service import rate_stock

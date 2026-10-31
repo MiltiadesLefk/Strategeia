@@ -48,6 +48,23 @@ _SUFFIXES = frozenset(
     "inc incorporated corp corporation co company ltd limited plc holdings holding group llc lp sa nv ag the de".split()
 )
 _name_map: tuple[float, dict[str, str]] | None = None
+# A release that opens with its own exchange tag ("NASDAQ: AUR Investigation Alert...") names the ticker itself; matching the
+# word "Nasdaq" against company names would pick Nasdaq Inc. (NDAQ).
+_EXCHANGE_WORDS = frozenset({"nasdaq", "nyse", "amex", "cboe", "tsx", "tsxv", "otc", "otcqb", "otcqx"})
+_LEADING_TAG_RE = re.compile(r"^\s*(?:NASDAQ|NYSE(?: American)?|AMEX|TSXV?|OTCQB|OTCQX)\s*:\s*([A-Z][A-Z.\-]{0,5})(?![A-Za-z])")
+# Headlines that are never news about the business: law-firm shareholder solicitations, equity-grant notices under the exchange's
+# inducement rule, annual-meeting results. Dropped before the AI reads them (each would cost a call and say "legal, low").
+NOISE_RE = re.compile(
+    r"investors?\s+(?:with|who\s+(?:lost|suffered|purchased|bought))\s|have\s+(?:the\s+)?opportunity\s+to\s+lead|lead\s+plaintiff|"
+    r"class\s+action|securities\s+(?:fraud|class)|shareholder\s+alert|investigation\s+(?:notice|alert)|claimsfiler|"
+    r"encourages\s+.{0,80}investors|contact\s+the\s+firm|levi\s*&\s*korsinsky|rosen\s+law|pomerantz|bragar|kessler\s+topaz|"
+    r"inducement\s+grant|listing\s+rule\s+5635|results\s+of\s+(?:the\s+)?(?:annual|special)|annual\s+(?:general\s+)?meeting",
+    re.IGNORECASE,
+)
+
+
+def is_noise_headline(title: str) -> bool:
+    return bool(NOISE_RE.search(title))
 
 
 @dataclass(frozen=True)
@@ -97,8 +114,15 @@ def _load_name_map() -> dict[str, str]:
 
 
 def ticker_for_headline(title: str, name_map: dict[str, str]) -> str | None:
-    """The ticker whose full company name opens the headline (longest name wins), else None."""
+    """The ticker the headline names: its own leading exchange tag when it has one (only if the SEC list knows that ticker),
+    else the ticker whose full company name opens it (longest name wins), else None."""
+    tag = _LEADING_TAG_RE.match(title)
+    if tag:
+        ticker = tag.group(1).replace(".", "-")
+        return ticker if ticker in set(name_map.values()) else None
     words = _tokens(title)
+    if words and words[0] in _EXCHANGE_WORDS:
+        return None
     for k in range(min(MAX_NAME_TOKENS, len(words)), 0, -1):
         ticker = name_map.get(_name_key(" ".join(words[:k])))
         if ticker and _name_key(" ".join(words[:k])) == " ".join(words[:k]):
@@ -135,7 +159,8 @@ def search_wire_headlines(lookback_hours: float) -> list[WireHeadline]:
         query = f'("NASDAQ:" OR "NYSE:") {WIRE_SITES} ({kw}) when:{days}d'
         try:
             for h in parse_results(fetch_feed_text(SEARCH_URL.format(q=quote_plus(query)))):
-                found.setdefault(h.title, h)
+                if not is_noise_headline(h.title):
+                    found.setdefault(h.title, h)
         except (DataProviderError, ValueError):
             logger.info("Big news: wire search %r skipped", kw)
     return list(found.values())

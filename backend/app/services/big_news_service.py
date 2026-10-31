@@ -46,6 +46,7 @@ def wire_news_headlines(settings: AppSettings, now: datetime | None = None, only
     from app.analysis.big_news import classify_headline, is_negative
     from app.data_providers.base import DataProviderError
     from app.data_providers.pr_newswire import FEED_URLS, fetch_feed_text, parse_feed, tickers_in_text
+    from app.data_providers.wire_search import is_noise_headline
 
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     found: dict[str, str] = {}
@@ -59,6 +60,8 @@ def wire_news_headlines(settings: AppSettings, now: datetime | None = None, only
             if r.published_at is None or (now - r.published_at).total_seconds() > settings.big_news_lookback_hours * 3600:
                 continue
             if only_big and (classify_headline(r.title) is None or is_negative(r.title)):
+                continue
+            if is_noise_headline(r.title):
                 continue
             for ticker in tickers_in_text(f"{r.title} {r.summary}"):
                 found.setdefault(ticker, r.title)

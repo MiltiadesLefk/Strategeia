@@ -17,6 +17,10 @@ const REPORT_LANES: Record<string, string> = {
   'market news': 'Market news read (stocks outside the universe)',
   'smart money trades': 'Smart money trades analysed',
 };
+const REPORT_INFO: Record<string, { kicker: string; blurb: string }> = {
+  'market news': { kicker: 'Section · News', blurb: "Headlines the AI read from the wires for companies you don't watch. Rating only: nothing is bought from this list." },
+  'smart money trades': { kicker: 'Section · Smart money', blurb: 'Companies with recent insider, Congress or fund trades that the scan scored. One joins the universe only if its score reaches the bar.' },
+};
 
 /** What the day's scan looked at beyond the universe's ratings: each item expands to what was read. */
 function ReportSections({ rows }: { rows: RatingRow[] }) {
@@ -27,13 +31,21 @@ function ReportSections({ rows }: { rows: RatingRow[] }) {
         const mine = rows.filter((r) => r.lane === lane);
         if (mine.length === 0) return null;
         return (
-          <div key={lane} className="ratings-section">
-            <div className="panel-header"><span>{title}</span><span className="chip">{mine.length}</span></div>
+          <section key={lane} className={`report-section report-${lane === 'market news' ? 'news' : 'smart'}`}>
+            <header className="report-section-head">
+              <div>
+                <div className="label-mono report-kicker">{REPORT_INFO[lane].kicker}</div>
+                <h3 className="report-title">{title}</h3>
+                <p className="report-blurb text-muted">{REPORT_INFO[lane].blurb}</p>
+              </div>
+              <span className="chip report-count">{mine.length} {mine.length === 1 ? 'stock' : 'stocks'}</span>
+            </header>
             {mine.map((r) => {
               const id = `${lane}:${r.symbol}`;
-              // shortcut: wire headlines are stored without their article url, so link a Google News search for the headline; replace with the real url once the wire fetch keeps it
+              // shortcut: wire headlines are stored without their article url, so link a Google News search for the headline; replace with the real url once the wire fetch keeps it.
+              // Smart-money rows are reasons ("insider bought ..."), not headlines: no link is made up for them.
               const items = (r.detail.items?.[lane] ?? []).map((it) => ({
-                ...it, url: it.url || `https://news.google.com/search?q=${encodeURIComponent(it.text)}`,
+                ...it, url: it.url || (lane === 'market news' ? `https://news.google.com/search?q=${encodeURIComponent(it.text)}` : ''),
               }));
               return (
                 <div key={id} className="report-row">
@@ -43,7 +55,7 @@ function ReportSections({ rows }: { rows: RatingRow[] }) {
                   <SentimentSummary items={items} />{' '}
                   {items.length > 0 && (
                     <button className="btn btn-secondary" style={{ padding: '0 6px', fontSize: 11 }} onClick={() => setOpen(open === id ? null : id)}>
-                      {open === id ? 'close' : `${items.length} items`}
+                      {open === id ? 'close' : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}
                     </button>
                   )}
                   {open === id && (
@@ -52,7 +64,7 @@ function ReportSections({ rows }: { rows: RatingRow[] }) {
                 </div>
               );
             })}
-          </div>
+          </section>
         );
       })}
     </>
@@ -64,8 +76,15 @@ function OutsideRows({ rows }: { rows: RatingRow[] }) {
   const [open, setOpen] = useState<string | null>(null);
   if (rows.length === 0) return null;
   return (
-    <div style={{ marginTop: 16 }}>
-      <div className="panel-header" style={{ padding: '12px 12px 8px', marginBottom: 0 }}><span>Scanned outside the universe</span><span className="chip">{rows.length}</span></div>
+    <section className="report-section report-outside">
+      <header className="report-section-head">
+        <div>
+          <div className="label-mono report-kicker">Section · Outside the universe</div>
+          <h3 className="report-title">Scanned outside the universe</h3>
+          <p className="report-blurb text-muted">Stocks you don't watch that a headline or a smart-money buy pointed at. Each was rated; a highlighted row reached the bar and joined the universe.</p>
+        </div>
+        <span className="chip report-count">{rows.length} {rows.length === 1 ? 'stock' : 'stocks'}</span>
+      </header>
       <div className="score-table-wrap">
         <table className="ratings-table">
           <thead>
@@ -95,7 +114,7 @@ function OutsideRows({ rows }: { rows: RatingRow[] }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -240,7 +259,7 @@ export function RatingsPage() {
             <ErrorBanner message="Could not load this run" onRetry={() => run.refetch()} />
           ) : (
             <>
-              {usageText(run.data?.usage) && <div className="text-muted" style={{ padding: '0 8px 8px', fontSize: 13 }}>{usageText(run.data?.usage)}</div>}
+              {usageText(run.data?.usage) && <div className="text-muted" style={{ padding: '10px 12px 8px', fontSize: 13 }}>{usageText(run.data?.usage)}</div>}
               <RatingRows key={view} rows={(run.data?.ratings ?? []).filter((r) => !(r.lane in REPORT_LANES) && !OUTSIDE_LANES.includes(r.lane))} />
               <OutsideRows rows={(run.data?.ratings ?? []).filter((r) => OUTSIDE_LANES.includes(r.lane))} />
               <ReportSections rows={run.data?.ratings ?? []} />
